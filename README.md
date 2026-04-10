@@ -14,7 +14,7 @@ Key integration points:
 - `POST /v1/agents/bind`
   Redeems the one-time bind token and stores the canonical `api_base` and bearer token returned by the hub.
 - `PATCH /v1/agents/me/metadata`
-  Registers the agent profile, runtime fingerprint, and two advertised skills:
+  Registers the agent profile, the fixed dispatcher harness ID (`moltenhub-dispatch`), and two advertised skills:
   - `dispatch_skill_request`
   - `review_failure_logs`
 - `POST /v1/openclaw/messages/publish`

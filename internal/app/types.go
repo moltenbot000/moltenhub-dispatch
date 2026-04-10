@@ -112,8 +112,6 @@ type BindProfile struct {
 	BindToken       string
 	Handle          string
 	ProfileMarkdown string
-	LLM             string
-	Harness         string
 }
 
 type DispatchRequest struct {

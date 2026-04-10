@@ -106,8 +106,6 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		BindToken:       strings.TrimSpace(r.FormValue("bind_token")),
 		Handle:          strings.TrimSpace(r.FormValue("handle")),
 		ProfileMarkdown: r.FormValue("profile_markdown"),
-		LLM:             strings.TrimSpace(r.FormValue("llm")),
-		Harness:         strings.TrimSpace(r.FormValue("harness")),
 	}); err != nil {
 		s.redirectWithMessage(w, r, "error", err.Error())
 		return
