@@ -572,6 +572,57 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 }
 
+func TestFailureFromErrorPreservesStructuredHubAPIErrorDetails(t *testing.T) {
+	t.Parallel()
+
+	report := failureFromError("Task dispatch failed before it reached a connected agent.", &hub.APIError{
+		StatusCode: 409,
+		Code:       "agent_exists",
+		Message:    "handle already claimed",
+		Retryable:  true,
+		NextAction: "retry_with_different_handle",
+		Detail:     map[string]any{"handle": "dispatch-agent"},
+	})
+
+	if report.Error != "hub API 409 agent_exists: handle already claimed" {
+		t.Fatalf("unexpected error string: %q", report.Error)
+	}
+	detail, ok := report.Detail.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected error detail type: %T", report.Detail)
+	}
+	if detail["status_code"] != 409 {
+		t.Fatalf("unexpected status code: %#v", detail)
+	}
+	if detail["next_action"] != "retry_with_different_handle" {
+		t.Fatalf("unexpected next action: %#v", detail)
+	}
+	nested, ok := detail["error_detail"].(map[string]any)
+	if !ok || nested["handle"] != "dispatch-agent" {
+		t.Fatalf("unexpected nested detail: %#v", detail["error_detail"])
+	}
+}
+
+func TestFailureFromMessageUsesDownstreamFailureEnvelope(t *testing.T) {
+	t.Parallel()
+
+	report := failureFromMessage(hub.OpenClawMessage{
+		Type:    "skill_result",
+		Payload: map[string]any{"status": "failed", "message": "Task failed in worker", "error": "panic: boom", "error_detail": map[string]any{"stderr": "stacktrace"}},
+	})
+
+	if report.Message != "Task failed in worker" {
+		t.Fatalf("unexpected failure message: %q", report.Message)
+	}
+	if report.Error != "panic: boom" {
+		t.Fatalf("unexpected failure error: %q", report.Error)
+	}
+	detail, ok := report.Detail.(map[string]any)
+	if !ok || detail["stderr"] != "stacktrace" {
+		t.Fatalf("unexpected failure detail: %#v", report.Detail)
+	}
+}
+
 func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	t.Parallel()
 

@@ -55,17 +55,21 @@
       <article class="panel">
         {{if .State.Session.AgentToken}}
         <h2>2. Agent Profile</h2>
-        <form method="post" action="/profile" class="stack">
-          <div class="profile-grid">
+        <form method="post" action="/profile" class="stack profile-shell">
+          <div class="profile-grid profile-grid-top">
             <label>Handle<input name="handle" value="{{.ProfileForm.Handle}}" readonly></label>
             <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Jef's Codex"></label>
-            <label>Emoji
-              <select name="emoji">
+            <fieldset class="emoji-fieldset">
+              <legend>Emoji</legend>
+              <div class="emoji-picker">
                 {{range .EmojiOptions}}
-                <option value="{{.}}" {{if eq $.ProfileForm.Emoji .}}selected{{end}}>{{.}}</option>
+                <label class="emoji-option">
+                  <input type="radio" name="emoji" value="{{.}}" {{if eq $.ProfileForm.Emoji .}}checked{{end}}>
+                  <span>{{.}}</span>
+                </label>
                 {{end}}
-              </select>
-            </label>
+              </div>
+            </fieldset>
           </div>
           <label>Bio<textarea name="profile_markdown" rows="4" placeholder="What this runtime is for">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           <p class="hint">The bind token is removed only after the agent is successfully bound. The bound handle stays visible but immutable here.</p>
@@ -73,18 +77,22 @@
         </form>
         {{else}}
         <h2>2. Bind Agent</h2>
-        <form method="post" action="/bind" class="stack">
+        <form method="post" action="/bind" class="stack profile-shell">
           <label>Bind Token<input name="bind_token" value="{{.ProfileForm.BindToken}}" required></label>
-          <div class="profile-grid">
-            <label>Preferred Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="dispatch-agent"></label>
+          <div class="profile-grid profile-grid-top">
+            <label>Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="codex-beast"></label>
             <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Jef's Codex"></label>
-            <label>Emoji
-              <select name="emoji">
+            <fieldset class="emoji-fieldset">
+              <legend>Emoji</legend>
+              <div class="emoji-picker">
                 {{range .EmojiOptions}}
-                <option value="{{.}}" {{if eq $.ProfileForm.Emoji .}}selected{{end}}>{{.}}</option>
+                <label class="emoji-option">
+                  <input type="radio" name="emoji" value="{{.}}" {{if eq $.ProfileForm.Emoji .}}checked{{end}}>
+                  <span>{{.}}</span>
+                </label>
                 {{end}}
-              </select>
-            </label>
+              </div>
+            </fieldset>
           </div>
           <label>Bio<textarea name="profile_markdown" rows="4" placeholder="What this runtime is for">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           <button type="submit">Bind And Register</button>
