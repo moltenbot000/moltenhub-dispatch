@@ -824,15 +824,25 @@ func failureFromError(message string, err error) failureReport {
 	if report.Message == "" {
 		report.Message = "Task failed while dispatching to a connected agent."
 	}
-	report.Detail = report.Error
+	report.Detail = errorDetail(err)
 	return report
 }
 
 func failureFromMessage(message hub.OpenClawMessage) failureReport {
+	payloadMap, _ := message.Payload.(map[string]any)
 	report := failureReport{
 		Message: "Task failed while dispatching to a connected agent.",
 		Error:   strings.TrimSpace(message.Error),
 		Detail:  message.ErrorDetail,
+	}
+	if payloadMessage := stringFromMap(payloadMap, "message"); payloadMessage != "" {
+		report.Message = payloadMessage
+	}
+	if report.Error == "" {
+		report.Error = stringFromMap(payloadMap, "error")
+	}
+	if detail, ok := payloadMap["error_detail"]; ok && detail != nil {
+		report.Detail = detail
 	}
 	if report.Error == "" {
 		report.Error = "downstream agent reported failure"
@@ -859,6 +869,38 @@ func failureDetailIsEmpty(detail any) bool {
 	}
 	value, ok := detail.(string)
 	return ok && strings.TrimSpace(value) == ""
+}
+
+func errorDetail(err error) any {
+	if err == nil {
+		return nil
+	}
+	var apiErr *hub.APIError
+	if errors.As(err, &apiErr) {
+		detail := map[string]any{
+			"status_code": apiErr.StatusCode,
+			"error":       apiErr.Code,
+			"message":     apiErr.Message,
+			"retryable":   apiErr.Retryable,
+			"next_action": apiErr.NextAction,
+		}
+		if apiErr.Detail != nil {
+			detail["error_detail"] = apiErr.Detail
+		}
+		return detail
+	}
+	return err.Error()
+}
+
+func stringFromMap(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, ok := values[key].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 func (s *Service) tryMarkTaskFailureOffline(ctx context.Context, pending PendingTask, report failureReport) {
