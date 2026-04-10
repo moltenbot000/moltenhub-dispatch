@@ -277,7 +277,7 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 
 	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
-		return PendingTask{}, s.failUIRequest(task, err)
+		return PendingTask{}, s.failUIRequest(ctx, state, task, err)
 	}
 	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 
@@ -611,8 +611,10 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 	}
 
 	failurePayload := map[string]any{
+		"ok":           false,
+		"failure":      true,
 		"status":       "failed",
-		"message":      report.Message,
+		"message":      explicitFailureMessage(report.Message),
 		"error":        report.Error,
 		"error_detail": report.Detail,
 		"log_paths":    logPaths,
@@ -746,13 +748,19 @@ func (s *Service) resolveDispatchTarget(state AppState, req DispatchRequest) (Co
 	return ConnectedAgent{}, fmt.Errorf("no connected agent advertises skill %q", req.SkillName)
 }
 
-func (s *Service) failUIRequest(task PendingTask, cause error) error {
+func (s *Service) failUIRequest(ctx context.Context, state AppState, task PendingTask, cause error) error {
+	report := failureFromError("Task failed before it reached the connected agent.", cause)
 	if err := s.writeTaskLog(task.LogPath, map[string]any{
 		"phase": "dispatch_failed",
-		"error": cause.Error(),
+		"error": report.Error,
+		"detail": report.Detail,
 	}); err != nil {
-		return err
+		return fmt.Errorf("%w; task log write failed: %v", cause, err)
 	}
+	if _, err := s.queueFollowUp(ctx, state, task, report); err != nil {
+		return fmt.Errorf("%w; follow-up queue failed: %v", cause, err)
+	}
+	s.tryMarkTaskFailureOffline(ctx, task, report)
 	return cause
 }
 
@@ -922,6 +930,18 @@ func formatFailureSummary(report failureReport) string {
 		return report.Error
 	}
 	return fmt.Sprintf("%s | detail=%v", report.Error, report.Detail)
+}
+
+func explicitFailureMessage(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return "Task failed."
+	}
+	lower := strings.ToLower(message)
+	if strings.HasPrefix(lower, "task failed") || strings.HasPrefix(lower, "failed") {
+		return message
+	}
+	return "Task failed: " + message
 }
 
 func failureDetailIsEmpty(detail any) bool {

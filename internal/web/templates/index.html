@@ -38,13 +38,13 @@
     <section class="grid two-up">
       <article class="panel">
         <h2>1. Global Settings</h2>
-        <form method="post" action="/settings" class="stack">
+        <form method="post" action="/settings" class="stack" id="global-settings-form">
           <fieldset class="runtime-toggle">
             <legend>Global Hub Runtime</legend>
             <div class="runtime-toggle-options">
               {{range .RuntimeOptions}}
               <label class="runtime-option">
-                <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
+                <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}} data-auto-save-setting>
                 <span>
                   <strong>{{.Label}} ({{.Description}})</strong>
                   <small>{{.HubURL}}</small>
@@ -53,8 +53,6 @@
               {{end}}
             </div>
           </fieldset>
-          <p class="hint">Failure-review follow-ups always target the first connected agent marked as a failure reviewer.</p>
-          <button type="submit">Save Global Settings</button>
         </form>
       </article>
 
@@ -248,10 +246,23 @@
       const indicator = document.getElementById("connection-indicator");
       const label = document.getElementById("connection-label");
       const description = document.getElementById("connection-description");
+      const globalSettingsForm = document.getElementById("global-settings-form");
       const subActions = document.getElementById("sub-actions");
       const subActionsNotice = document.getElementById("sub-actions-notice");
       if (!shell || !indicator || !label || !description || !subActions || !subActionsNotice) {
         return;
+      }
+
+      if (globalSettingsForm) {
+        const runtimeInputs = globalSettingsForm.querySelectorAll("[data-auto-save-setting]");
+        runtimeInputs.forEach((input) => {
+          input.addEventListener("change", () => {
+            if (!(input instanceof HTMLInputElement) || !input.checked) {
+              return;
+            }
+            globalSettingsForm.submit();
+          });
+        });
       }
 
       const bound = shell.dataset.bound === "true";

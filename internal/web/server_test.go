@@ -134,6 +134,18 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, ">Runtime<") {
 		t.Fatalf("did not expect removed runtime panel, body=%s", body)
 	}
+	if strings.Contains(body, "Save Global Settings") {
+		t.Fatalf("did not expect save button for global settings, body=%s", body)
+	}
+	if strings.Contains(body, "Failure-review follow-ups always target the first connected agent marked as a failure reviewer.") {
+		t.Fatalf("did not expect removed failure reviewer hint, body=%s", body)
+	}
+	if !strings.Contains(body, `id="global-settings-form"`) {
+		t.Fatalf("expected global settings form id for auto-save, body=%s", body)
+	}
+	if !strings.Contains(body, `data-auto-save-setting`) {
+		t.Fatalf("expected runtime inputs to opt into auto-save, body=%s", body)
+	}
 	if !strings.Contains(body, ">4. Manual Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
 	}
@@ -178,6 +190,9 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	}
 	if !strings.Contains(body, "until this runtime is bound to Molten Hub and connectivity is working") {
 		t.Fatalf("expected unbound gating reason, body=%s", body)
+	}
+	if strings.Contains(body, "Save Global Settings") {
+		t.Fatalf("did not expect save button for global settings, body=%s", body)
 	}
 }
 
