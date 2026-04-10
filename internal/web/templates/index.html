@@ -8,22 +8,8 @@
 </head>
 <body>
   <main class="shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">MoltenHub Agent Console</p>
-        <h1>Register once, route skill calls, keep failures actionable.</h1>
-        <p class="lede">This app binds to Molten Hub, advertises dispatch skills, forwards work to connected agents, returns explicit failure results, and queues log-review follow-ups when tasks break.</p>
-      </div>
-      <aside class="status-card">
-        <h2>Runtime</h2>
-        <dl>
-          <div><dt>Region</dt><dd>{{.SelectedRuntime.Label}} ({{.SelectedRuntime.Description}})</dd></div>
-          <div><dt>Hub</dt><dd>{{if .State.Session.APIBase}}{{.State.Session.APIBase}}{{else}}{{.State.Settings.HubURL}}{{end}}</dd></div>
-          <div><dt>Handle</dt><dd>{{if .State.Session.Handle}}{{.State.Session.Handle}}{{else}}Not bound{{end}}</dd></div>
-          <div><dt>Agent UUID</dt><dd>{{if .State.Session.AgentUUID}}{{.State.Session.AgentUUID}}{{else}}-{{end}}</dd></div>
-          <div><dt>Follow-up reviewer</dt><dd>{{if .State.Settings.FollowUpAgentRef}}{{.State.Settings.FollowUpAgentRef}}{{else}}Auto-detect flagged agent{{end}}</dd></div>
-        </dl>
-      </aside>
+    <header class="page-header">
+      <p class="eyebrow">Molten Hub Console</p>
     </header>
 
     {{if .Flash}}
@@ -33,6 +19,17 @@
     {{end}}
 
     <section class="grid two-up">
+      <article class="panel">
+        <h2>Runtime</h2>
+        <dl class="status-list">
+          <div><dt>Region</dt><dd>{{.SelectedRuntime.Label}} ({{.SelectedRuntime.Description}})</dd></div>
+          <div><dt>Hub</dt><dd>{{if .State.Session.APIBase}}{{.State.Session.APIBase}}{{else}}{{.State.Settings.HubURL}}{{end}}</dd></div>
+          <div><dt>Handle</dt><dd>{{if .State.Session.Handle}}{{.State.Session.Handle}}{{else}}Not bound{{end}}</dd></div>
+          <div><dt>Agent UUID</dt><dd>{{if .State.Session.AgentUUID}}{{.State.Session.AgentUUID}}{{else}}-{{end}}</dd></div>
+          <div><dt>Follow-up reviewer</dt><dd>{{if .State.Settings.FollowUpAgentRef}}{{.State.Settings.FollowUpAgentRef}}{{else}}Auto-detect flagged agent{{end}}</dd></div>
+        </dl>
+      </article>
+
       <article class="panel">
         <h2>1. Global Settings</h2>
         <form method="post" action="/settings" class="stack">

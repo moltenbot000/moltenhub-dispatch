@@ -31,11 +31,7 @@ body {
   padding: 28px 0 48px;
 }
 
-.hero {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-  align-items: start;
+.page-header {
   margin-bottom: 20px;
 }
 
@@ -44,16 +40,12 @@ body {
   letter-spacing: 0.16em;
   font-size: 0.78rem;
   color: var(--muted);
+  margin: 0;
 }
 
 h1, h2, h3 {
   margin: 0 0 12px;
   line-height: 1.05;
-}
-
-h1 {
-  font-size: clamp(2.4rem, 5vw, 4.5rem);
-  max-width: 11ch;
 }
 
 .lede,
@@ -63,7 +55,6 @@ p {
   line-height: 1.5;
 }
 
-.status-card,
 .panel,
 .flash {
   background: var(--surface);
@@ -72,27 +63,26 @@ p {
   box-shadow: var(--shadow);
 }
 
-.status-card,
 .panel {
   padding: 20px;
 }
 
-.status-card dl {
+.status-list {
   margin: 0;
 }
 
-.status-card div + div {
+.status-list div + div {
   margin-top: 12px;
 }
 
-.status-card dt {
+.status-list dt {
   font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
-.status-card dd {
+.status-list dd {
   margin: 4px 0 0;
   font-size: 1rem;
   word-break: break-word;
@@ -256,7 +246,6 @@ pre {
 }
 
 @media (max-width: 900px) {
-  .hero,
   .two-up {
     grid-template-columns: 1fr;
   }

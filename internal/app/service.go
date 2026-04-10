@@ -374,6 +374,7 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 		if _, err := s.queueFollowUp(ctx, state, pending, failureFromMessage(message.OpenClawMessage)); err != nil {
 			return err
 		}
+		s.tryMarkTaskFailureOffline(ctx, pending, failureFromMessage(message.OpenClawMessage))
 	}
 
 	if err := s.store.Update(func(current *AppState) error {
@@ -409,6 +410,11 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 		}); queueErr != nil {
 			return queueErr
 		}
+		s.tryMarkTaskFailureOffline(ctx, pending, failureReport{
+			Message: "Task failed because the downstream agent did not reply before the timeout.",
+			Error:   err.Error(),
+			Detail:  map[string]any{"timeout": true},
+		})
 		if updateErr := s.store.Update(func(current *AppState) error {
 			current.PendingTasks = RemovePendingTask(current.PendingTasks, pending.ChildRequestID)
 			return nil
@@ -426,7 +432,11 @@ func (s *Service) failDispatchedTask(ctx context.Context, state AppState, pendin
 		}
 	}
 	_, err := s.queueFollowUp(ctx, state, pending, report)
-	return err
+	if err != nil {
+		return err
+	}
+	s.tryMarkTaskFailureOffline(ctx, pending, report)
+	return nil
 }
 
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
@@ -521,6 +531,14 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		return err
 	}
 
+	failurePayload := map[string]any{
+		"status":       "failed",
+		"message":      report.Message,
+		"error":        report.Error,
+		"error_detail": report.Detail,
+		"log_paths":    logPaths,
+	}
+
 	message := hub.OpenClawMessage{
 		Protocol:      "openclaw.http.v1",
 		Type:          "skill_result",
@@ -529,20 +547,11 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		RequestID:     pending.ParentRequestID,
 		ReplyTo:       pending.CallerRequestID,
 		PayloadFormat: "json",
-		Payload: map[string]any{
-			"status":       "failed",
-			"message":      report.Message,
-			"error":        report.Error,
-			"error_detail": report.Detail,
-			"log_paths":    logPaths,
-		},
-		Error: report.Error,
-		ErrorDetail: map[string]any{
-			"error_detail": report.Detail,
-			"log_paths":    logPaths,
-		},
-		OK:     boolPtr(false),
-		Status: "failed",
+		Payload:       failurePayload,
+		Error:         report.Error,
+		ErrorDetail:   failurePayload,
+		OK:            boolPtr(false),
+		Status:        "failed",
 	}
 	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
 		ToAgentUUID: pending.CallerAgentUUID,
@@ -820,6 +829,26 @@ func failureDetailIsEmpty(detail any) bool {
 	}
 	value, ok := detail.(string)
 	return ok && strings.TrimSpace(value) == ""
+}
+
+func (s *Service) tryMarkTaskFailureOffline(ctx context.Context, pending PendingTask, report failureReport) {
+	if err := s.MarkOffline(ctx, failureOfflineReason(pending, report)); err != nil {
+		_ = s.logEvent("error", "Offline mark failed", err.Error(), pending.ID, pending.LogPath)
+	}
+}
+
+func failureOfflineReason(pending PendingTask, report failureReport) string {
+	parts := []string{"task failure"}
+	if pending.ID != "" {
+		parts = append(parts, "id="+pending.ID)
+	}
+	if pending.OriginalSkillName != "" {
+		parts = append(parts, "skill="+pending.OriginalSkillName)
+	}
+	if report.Error != "" {
+		parts = append(parts, "error="+report.Error)
+	}
+	return strings.Join(parts, " ")
 }
 
 func fallbackRepo(repo string) string {

@@ -271,6 +271,12 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if len(fake.publishCalls) != 2 {
 		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
 	}
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].Reason == "" {
+		t.Fatal("expected offline reason to describe the task failure")
+	}
 
 	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
 	if !ok {
@@ -281,6 +287,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	}
 	if failurePayload["error"] != "no connected agent matched \"missing-agent\"" {
 		t.Fatalf("unexpected caller error: %#v", failurePayload["error"])
+	}
+	if got := fake.publishCalls[0].Message.ErrorDetail.(map[string]any)["message"]; got != "Task dispatch failed before it reached a connected agent." {
+		t.Fatalf("unexpected caller error detail payload: %#v", fake.publishCalls[0].Message.ErrorDetail)
 	}
 
 	state := service.store.Snapshot()
@@ -365,6 +374,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if len(fake.publishCalls) != 2 {
 		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
 	}
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
 
 	failureMessage := fake.publishCalls[0].Message
 	if failureMessage.Type != "skill_result" {
@@ -382,6 +394,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 	if got := failurePayload["error_detail"].(map[string]any)["stderr"]; got != "panic: boom" {
 		t.Fatalf("unexpected caller failure detail: %#v", failurePayload["error_detail"])
+	}
+	if got := failureMessage.ErrorDetail.(map[string]any)["status"]; got != "failed" {
+		t.Fatalf("unexpected caller error detail envelope: %#v", failureMessage.ErrorDetail)
 	}
 
 	followUpMessage := fake.publishCalls[1].Message
