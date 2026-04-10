@@ -133,3 +133,82 @@ func TestUpdateMetadataUsesAPIBasePathWithoutDoublingVersionPrefix(t *testing.T)
 		t.Fatalf("unexpected request path: %s", requestPath)
 	}
 }
+
+func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testing.T) {
+	t.Parallel()
+
+	var metadataCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/agents/me/metadata":
+			metadataCalls++
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":   "not_found",
+				"message": "route not found",
+			})
+		case "/v1/agents/me":
+			if r.Method != http.MethodPatch {
+				t.Fatalf("unexpected method: %s", r.Method)
+			}
+			var request hub.UpdateMetadataRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if request.Handle != "dispatch-agent" {
+				t.Fatalf("unexpected handle: %q", request.Handle)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":     true,
+				"result": map[string]any{"status": "ok"},
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	_, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
+		Handle:   "dispatch-agent",
+		Metadata: map[string]any{"agent_type": "dispatch"},
+	})
+	if err != nil {
+		t.Fatalf("update metadata: %v", err)
+	}
+	if metadataCalls != 1 {
+		t.Fatalf("expected one metadata route attempt, got %d", metadataCalls)
+	}
+}
+
+func TestUpdateMetadataUsesCanonicalMetadataEndpointWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/runtime/profile" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPatch {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": map[string]any{"status": "ok"},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
+		MetadataURL: server.URL + "/runtime/profile",
+	})
+
+	_, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
+		Metadata: map[string]any{"agent_type": "dispatch"},
+	})
+	if err != nil {
+		t.Fatalf("update metadata: %v", err)
+	}
+}

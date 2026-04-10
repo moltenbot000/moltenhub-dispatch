@@ -131,6 +131,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="connection-indicator"`) {
 		t.Fatalf("expected connection indicator in page, body=%s", body)
 	}
+	if strings.Contains(body, ">Runtime<") {
+		t.Fatalf("did not expect removed runtime panel, body=%s", body)
+	}
 	if !strings.Contains(body, ">4. Manual Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
 	}

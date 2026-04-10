@@ -37,17 +37,6 @@
 
     <section class="grid two-up">
       <article class="panel">
-        <h2>Runtime</h2>
-        <dl class="status-list">
-          <div><dt>Region</dt><dd>{{.SelectedRuntime.Label}} ({{.SelectedRuntime.Description}})</dd></div>
-          <div><dt>Hub</dt><dd>{{if .State.Session.APIBase}}{{.State.Session.APIBase}}{{else}}{{.State.Settings.HubURL}}{{end}}</dd></div>
-          <div><dt>Handle</dt><dd>{{if .State.Session.Handle}}{{.State.Session.Handle}}{{else}}Not bound{{end}}</dd></div>
-          <div><dt>Agent UUID</dt><dd>{{if .State.Session.AgentUUID}}{{.State.Session.AgentUUID}}{{else}}-{{end}}</dd></div>
-          <div><dt>Follow-up reviewer</dt><dd>Auto-detect first flagged connected agent</dd></div>
-        </dl>
-      </article>
-
-      <article class="panel">
         <h2>1. Global Settings</h2>
         <form method="post" action="/settings" class="stack">
           <fieldset class="runtime-toggle">

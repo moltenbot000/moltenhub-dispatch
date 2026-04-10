@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,7 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	userAgent  string
+	endpoints  RuntimeEndpoints
 }
 
 type APIError struct {
@@ -64,6 +66,15 @@ type BindResponse struct {
 		OpenClawPush string `json:"openclaw_messages_publish"`
 		Offline      string `json:"openclaw_offline"`
 	} `json:"endpoints"`
+}
+
+type RuntimeEndpoints struct {
+	ManifestURL       string
+	CapabilitiesURL   string
+	MetadataURL       string
+	OpenClawPullURL   string
+	OpenClawPushURL   string
+	OpenClawOfflineURL string
 }
 
 type SkillMetadata struct {
@@ -132,6 +143,10 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
+func (c *Client) SetRuntimeEndpoints(endpoints RuntimeEndpoints) {
+	c.endpoints = endpoints
+}
+
 func (c *Client) SetBaseURL(baseURL string) {
 	c.baseURL = strings.TrimRight(baseURL, "/")
 }
@@ -150,19 +165,29 @@ func (c *Client) BindAgent(ctx context.Context, req BindRequest) (BindResponse, 
 
 func (c *Client) UpdateMetadata(ctx context.Context, token string, req UpdateMetadataRequest) (map[string]any, error) {
 	var out map[string]any
-	err := c.doJSON(ctx, http.MethodPatch, "/v1/agents/me/metadata", token, req, &out)
+	endpoint := c.runtimeEndpoint(c.endpoints.MetadataURL, "/v1/agents/me/metadata")
+	err := c.doJSON(ctx, http.MethodPatch, endpoint, token, req, &out)
+	if err == nil {
+		return out, nil
+	}
+	if c.endpoints.MetadataURL != "" || !isRouteNotFound(err) {
+		return out, err
+	}
+
+	out = nil
+	err = c.doJSON(ctx, http.MethodPatch, "/v1/agents/me", token, req, &out)
 	return out, err
 }
 
 func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]any, error) {
 	var out map[string]any
-	err := c.doJSON(ctx, http.MethodGet, "/v1/agents/me/capabilities", token, nil, &out)
+	err := c.doJSON(ctx, http.MethodGet, c.runtimeEndpoint(c.endpoints.CapabilitiesURL, "/v1/agents/me/capabilities"), token, nil, &out)
 	return out, err
 }
 
 func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	var out PublishResponse
-	err := c.doJSON(ctx, http.MethodPost, "/v1/openclaw/messages/publish", token, req, &out)
+	err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &out)
 	return out, err
 }
 
@@ -171,7 +196,7 @@ func (c *Client) PullOpenClaw(ctx context.Context, token string, timeout time.Du
 	if timeout > 0 {
 		values.Set("timeout_ms", fmt.Sprintf("%d", timeout.Milliseconds()))
 	}
-	endpoint := "/v1/openclaw/messages/pull"
+	endpoint := c.runtimeEndpoint(c.endpoints.OpenClawPullURL, "/v1/openclaw/messages/pull")
 	if len(values) > 0 {
 		endpoint += "?" + values.Encode()
 	}
@@ -217,7 +242,23 @@ func (c *Client) NackOpenClaw(ctx context.Context, token, deliveryID string) err
 }
 
 func (c *Client) MarkOffline(ctx context.Context, token string, req OfflineRequest) error {
-	return c.doJSON(ctx, http.MethodPost, "/v1/openclaw/messages/offline", token, req, nil)
+	return c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawOfflineURL, "/v1/openclaw/messages/offline"), token, req, nil)
+}
+
+func (c *Client) runtimeEndpoint(override, fallback string) string {
+	override = strings.TrimSpace(override)
+	if override != "" {
+		return override
+	}
+	return fallback
+}
+
+func isRouteNotFound(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusNotFound && strings.EqualFold(strings.TrimSpace(apiErr.Code), "not_found")
 }
 
 func (c *Client) doJSON(ctx context.Context, method, endpoint, token string, body any, out any) error {

@@ -19,6 +19,7 @@ type fakeHubClient struct {
 	publishCalls        []hub.PublishRequest
 	offlineCalls        []hub.OfflineRequest
 	baseURLCalls        []string
+	runtimeEndpoints    []hub.RuntimeEndpoints
 	currentBaseURL      string
 	expectedMetadataURL string
 	expectedPullURL     string
@@ -133,6 +134,10 @@ func (f *fakeRealtimeSession) Close() error {
 	return nil
 }
 
+func (f *fakeHubClient) SetRuntimeEndpoints(endpoints hub.RuntimeEndpoints) {
+	f.runtimeEndpoints = append(f.runtimeEndpoints, endpoints)
+}
+
 func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	t.Parallel()
 
@@ -144,6 +149,10 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 		Handle:     "dispatch-agent",
 		APIBase:    "https://na.hub.molten.bot",
 	}
+	fake.bindResponse.Endpoints.Metadata = "https://runtime.na.hub.molten.bot/profile"
+	fake.bindResponse.Endpoints.OpenClawPull = "https://runtime.na.hub.molten.bot/openclaw/pull"
+	fake.bindResponse.Endpoints.OpenClawPush = "https://runtime.na.hub.molten.bot/openclaw/publish"
+	fake.bindResponse.Endpoints.Offline = "https://runtime.na.hub.molten.bot/openclaw/offline"
 
 	err := service.BindAndRegister(context.Background(), BindProfile{
 		BindToken:       "bind-token",
@@ -195,6 +204,13 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	if len(fake.bindRequests) != 1 || fake.bindRequests[0].HubURL != "https://na.hub.molten.bot" {
 		t.Fatalf("expected bind request against na runtime, got %#v", fake.bindRequests)
 	}
+	if len(fake.runtimeEndpoints) < 2 {
+		t.Fatalf("expected runtime endpoints to be configured from bind response, got %#v", fake.runtimeEndpoints)
+	}
+	lastEndpoints := fake.runtimeEndpoints[len(fake.runtimeEndpoints)-1]
+	if lastEndpoints.MetadataURL != "https://runtime.na.hub.molten.bot/profile" {
+		t.Fatalf("unexpected metadata endpoint: %#v", lastEndpoints)
+	}
 }
 
 func TestBindAndRegisterWithTemporaryHandleKeepsFinalizationOpen(t *testing.T) {
@@ -245,6 +261,7 @@ func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 		Handle:     "dispatch-agent",
 		APIBase:    "https://runtime.na.hub.molten.bot",
 	}
+	fake.bindResponse.Endpoints.Metadata = "https://runtime.na.hub.molten.bot/profile"
 	fake.expectedMetadataURL = fake.bindResponse.APIBase
 
 	err := service.BindAndRegister(context.Background(), BindProfile{
@@ -268,6 +285,9 @@ func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 	}
 	if fake.baseURLCalls[2] != fake.bindResponse.APIBase {
 		t.Fatalf("expected metadata to use api_base, got %#v", fake.baseURLCalls)
+	}
+	if len(fake.runtimeEndpoints) == 0 || fake.runtimeEndpoints[len(fake.runtimeEndpoints)-1].MetadataURL != "https://runtime.na.hub.molten.bot/profile" {
+		t.Fatalf("expected metadata endpoint from bind response, got %#v", fake.runtimeEndpoints)
 	}
 }
 
@@ -789,6 +809,10 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 		state.Session.AgentToken = "agent-token"
 		state.Session.APIBase = "https://runtime.na.hub.molten.bot"
 		state.Settings.HubURL = "https://na.hub.molten.bot"
+		state.Session.MetadataURL = "https://runtime.na.hub.molten.bot/profile"
+		state.Session.OpenClawPullURL = "https://runtime.na.hub.molten.bot/openclaw/pull"
+		state.Session.OpenClawPushURL = "https://runtime.na.hub.molten.bot/openclaw/publish"
+		state.Session.OfflineURL = "https://runtime.na.hub.molten.bot/openclaw/offline"
 		return nil
 	})
 	if err != nil {
@@ -812,6 +836,9 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	}
 	if len(fake.baseURLCalls) != 1 || fake.baseURLCalls[0] != "https://runtime.na.hub.molten.bot" {
 		t.Fatalf("expected service to initialize client with persisted api_base, got %#v", fake.baseURLCalls)
+	}
+	if len(fake.runtimeEndpoints) != 1 || fake.runtimeEndpoints[0].MetadataURL != "https://runtime.na.hub.molten.bot/profile" {
+		t.Fatalf("expected service to initialize runtime endpoints from persisted session, got %#v", fake.runtimeEndpoints)
 	}
 
 	state := service.store.Snapshot()

@@ -41,7 +41,11 @@ type Session struct {
 	Emoji           string    `json:"emoji"`
 	ProfileBio      string    `json:"profile_bio"`
 	ManifestURL     string    `json:"manifest_url"`
+	MetadataURL     string    `json:"metadata_url"`
 	Capabilities    string    `json:"capabilities_url"`
+	OpenClawPullURL string    `json:"openclaw_pull_url"`
+	OpenClawPushURL string    `json:"openclaw_push_url"`
+	OfflineURL      string    `json:"offline_url"`
 	OfflineMarked   bool      `json:"offline_marked"`
 }
 

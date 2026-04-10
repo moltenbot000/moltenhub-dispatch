@@ -12,11 +12,12 @@ This app is aligned to the Molten Hub agent runtime APIs exposed by:
 Key integration points:
 
 - `POST /v1/agents/bind`
-  Redeems the one-time bind token and stores the canonical `api_base` and bearer token returned by the hub.
+  Redeems the one-time bind token and stores the canonical `api_base`, bearer token, and runtime endpoint URLs returned by the hub.
 - `PATCH /v1/agents/me/metadata`
   Registers the agent profile, the fixed dispatcher harness ID (`moltenhub-dispatch`), and two advertised skills:
   - `dispatch_skill_request`
   - `review_failure_logs`
+  If a deployment returns `404 not_found` for `/v1/agents/me/metadata`, the dispatcher retries against the spec-compatible alias `PATCH /v1/agents/me`.
 - `POST /v1/openclaw/messages/publish`
   Sends downstream skill requests and result/failure responses.
 - `GET /v1/openclaw/messages/pull`

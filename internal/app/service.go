@@ -63,6 +63,10 @@ type baseURLSetter interface {
 	SetBaseURL(baseURL string)
 }
 
+type runtimeEndpointSetter interface {
+	SetRuntimeEndpoints(endpoints hub.RuntimeEndpoints)
+}
+
 func NewService(store *Store, hubClient HubClient) *Service {
 	snapshot := store.Snapshot()
 	if setter, ok := hubClient.(baseURLSetter); ok {
@@ -73,6 +77,9 @@ func NewService(store *Store, hubClient HubClient) *Service {
 		if baseURL != "" {
 			setter.SetBaseURL(baseURL)
 		}
+	}
+	if setter, ok := hubClient.(runtimeEndpointSetter); ok {
+		setter.SetRuntimeEndpoints(runtimeEndpointsFromSession(snapshot.Session))
 	}
 	return &Service{
 		store:    store,
@@ -112,6 +119,9 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if setter, ok := s.hub.(baseURLSetter); ok && strings.TrimSpace(result.APIBase) != "" {
 		setter.SetBaseURL(result.APIBase)
 	}
+	if setter, ok := s.hub.(runtimeEndpointSetter); ok {
+		setter.SetRuntimeEndpoints(runtimeEndpointsFromBind(result))
+	}
 	if strings.TrimSpace(result.Handle) != "" {
 		agentProfile.Handle = strings.TrimSpace(result.Handle)
 	}
@@ -132,7 +142,11 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			Emoji:           agentProfile.Emoji,
 			ProfileBio:      agentProfile.ProfileMarkdown,
 			ManifestURL:     result.Endpoints.Manifest,
+			MetadataURL:     result.Endpoints.Metadata,
 			Capabilities:    result.Endpoints.Capabilities,
+			OpenClawPullURL: result.Endpoints.OpenClawPull,
+			OpenClawPushURL: result.Endpoints.OpenClawPush,
+			OfflineURL:      result.Endpoints.Offline,
 			OfflineMarked:   false,
 		}
 		state.Connection = ConnectionState{
@@ -237,6 +251,9 @@ func (s *Service) UpdateSettings(mutator func(*Settings) error) error {
 		if baseURL != "" {
 			setter.SetBaseURL(baseURL)
 		}
+	}
+	if setter, ok := s.hub.(runtimeEndpointSetter); ok {
+		setter.SetRuntimeEndpoints(runtimeEndpointsFromSession(s.store.Snapshot().Session))
 	}
 	return nil
 }
@@ -1124,6 +1141,28 @@ func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any 
 		delete(metadata, "profile_markdown")
 	}
 	return metadata
+}
+
+func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
+	return hub.RuntimeEndpoints{
+		ManifestURL:        strings.TrimSpace(result.Endpoints.Manifest),
+		CapabilitiesURL:    strings.TrimSpace(result.Endpoints.Capabilities),
+		MetadataURL:        strings.TrimSpace(result.Endpoints.Metadata),
+		OpenClawPullURL:    strings.TrimSpace(result.Endpoints.OpenClawPull),
+		OpenClawPushURL:    strings.TrimSpace(result.Endpoints.OpenClawPush),
+		OpenClawOfflineURL: strings.TrimSpace(result.Endpoints.Offline),
+	}
+}
+
+func runtimeEndpointsFromSession(session Session) hub.RuntimeEndpoints {
+	return hub.RuntimeEndpoints{
+		ManifestURL:        strings.TrimSpace(session.ManifestURL),
+		CapabilitiesURL:    strings.TrimSpace(session.Capabilities),
+		MetadataURL:        strings.TrimSpace(session.MetadataURL),
+		OpenClawPullURL:    strings.TrimSpace(session.OpenClawPullURL),
+		OpenClawPushURL:    strings.TrimSpace(session.OpenClawPushURL),
+		OpenClawOfflineURL: strings.TrimSpace(session.OfflineURL),
+	}
 }
 
 func (s *Service) noteHubInteraction(err error, transport string) {
