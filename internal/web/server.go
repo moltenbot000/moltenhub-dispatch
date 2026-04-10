@@ -209,11 +209,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			settings.HubRegion = runtime.ID
 			settings.HubURL = runtime.HubURL
 		}
-		if ref := strings.TrimSpace(r.FormValue("follow_up_agent_ref")); ref != "" {
-			settings.FollowUpAgentRef = ref
-		} else {
-			settings.FollowUpAgentRef = ""
-		}
 		return nil
 	})
 	if err != nil {

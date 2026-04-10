@@ -21,7 +21,7 @@
           <div><dt>Hub</dt><dd>{{if .State.Session.APIBase}}{{.State.Session.APIBase}}{{else}}{{.State.Settings.HubURL}}{{end}}</dd></div>
           <div><dt>Handle</dt><dd>{{if .State.Session.Handle}}{{.State.Session.Handle}}{{else}}Not bound{{end}}</dd></div>
           <div><dt>Agent UUID</dt><dd>{{if .State.Session.AgentUUID}}{{.State.Session.AgentUUID}}{{else}}-{{end}}</dd></div>
-          <div><dt>Follow-up reviewer</dt><dd>{{if .State.Settings.FollowUpAgentRef}}{{.State.Settings.FollowUpAgentRef}}{{else}}Auto-detect flagged agent{{end}}</dd></div>
+          <div><dt>Follow-up reviewer</dt><dd>Auto-detect first flagged connected agent</dd></div>
         </dl>
       </aside>
     </header>
@@ -41,7 +41,7 @@
             <div class="runtime-toggle-options">
               {{range .RuntimeOptions}}
               <label class="runtime-option">
-                <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
+                <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}} onchange="this.form.submit()">
                 <span>
                   <strong>{{.Label}} ({{.Description}})</strong>
                   <small>{{.HubURL}}</small>
@@ -50,9 +50,6 @@
               {{end}}
             </div>
           </fieldset>
-          <label>Follow-up Agent Ref<input name="follow_up_agent_ref" value="{{.State.Settings.FollowUpAgentRef}}" placeholder="reviewer UUID, URI, id, or name"></label>
-          <p class="hint">Leave blank to use the first connected agent marked as a failure reviewer.</p>
-          <button type="submit">Save Global Settings</button>
         </form>
       </article>
 

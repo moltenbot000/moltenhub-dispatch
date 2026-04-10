@@ -10,7 +10,6 @@ type Settings struct {
 	PollInterval     time.Duration `json:"poll_interval"`
 	TaskTimeout      time.Duration `json:"task_timeout"`
 	DataDir          string        `json:"data_dir"`
-	FollowUpAgentRef string        `json:"follow_up_agent_ref"`
 }
 
 type Session struct {

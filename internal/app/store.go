@@ -124,11 +124,6 @@ func FindConnectedAgent(agents []ConnectedAgent, ref string) (ConnectedAgent, bo
 }
 
 func SelectFailureReviewer(state AppState) (ConnectedAgent, bool) {
-	if state.Settings.FollowUpAgentRef != "" {
-		if agent, ok := FindConnectedAgent(state.ConnectedAgents, state.Settings.FollowUpAgentRef); ok {
-			return agent, true
-		}
-	}
 	for _, agent := range state.ConnectedAgents {
 		if agent.FailureReviewer {
 			return agent, true

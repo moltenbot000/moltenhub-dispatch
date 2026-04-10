@@ -45,7 +45,7 @@ When a dispatched task fails, the app does all of the following:
 }
 ```
 
-If a failure-reviewer agent is configured, the follow-up task is published immediately via `review_failure_logs`. The follow-up includes the original request payload and both the upstream failing log paths and the dispatcher log path, so the reviewer can verify the real failure instead of reconstructing it from terminal output alone. Otherwise it remains queued locally with status `pending_reviewer`.
+If a connected agent is marked as a failure reviewer, the first such agent is selected automatically and the follow-up task is published immediately via `review_failure_logs`. The follow-up includes the original request payload and both the upstream failing log paths and the dispatcher log path, so the reviewer can verify the real failure instead of reconstructing it from terminal output alone. Otherwise it remains queued locally with status `pending_reviewer`.
 
 ## Web Interface
 
@@ -54,7 +54,7 @@ The bundled UI provides:
 - A top-level global NA/EU runtime selector that applies to bind/register operations
 - Connected-agent management
 - Manual dispatch of skill requests
-- Follow-up reviewer selection
+- Automatic failure-reviewer selection from flagged connected agents
 - Live visibility into pending tasks, queued remediation work, and recent runtime events
 
 ## Local Development
