@@ -162,13 +162,16 @@ func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 		t.Fatalf("bind and register: %v", err)
 	}
 
-	if len(fake.baseURLCalls) < 2 {
+	if len(fake.baseURLCalls) < 3 {
 		t.Fatalf("expected base URL to switch from hub URL to api_base, got %#v", fake.baseURLCalls)
 	}
 	if fake.baseURLCalls[0] != "https://na.hub.molten.bot" {
-		t.Fatalf("expected bind against runtime hub URL, got %#v", fake.baseURLCalls)
+		t.Fatalf("expected initial client base URL to use the selected hub runtime, got %#v", fake.baseURLCalls)
 	}
-	if fake.baseURLCalls[1] != fake.bindResponse.APIBase {
+	if fake.baseURLCalls[1] != "https://na.hub.molten.bot" {
+		t.Fatalf("expected bind request against runtime hub URL, got %#v", fake.baseURLCalls)
+	}
+	if fake.baseURLCalls[2] != fake.bindResponse.APIBase {
 		t.Fatalf("expected metadata to use api_base, got %#v", fake.baseURLCalls)
 	}
 }
