@@ -34,10 +34,10 @@
 
     <section class="grid two-up">
       <article class="panel">
-        <h2>1. Bind Agent</h2>
-        <form method="post" action="/bind" class="stack">
+        <h2>1. Global Settings</h2>
+        <form method="post" action="/settings" class="stack">
           <fieldset class="runtime-toggle">
-            <legend>Hub Runtime</legend>
+            <legend>Global Hub Runtime</legend>
             <div class="runtime-toggle-options">
               {{range .RuntimeOptions}}
               <label class="runtime-option">
@@ -50,19 +50,19 @@
               {{end}}
             </div>
           </fieldset>
-          <label>Bind Token<input name="bind_token" required></label>
-          <label>Preferred Handle<input name="handle" placeholder="dispatch-agent"></label>
-          <label>Profile Markdown<textarea name="profile_markdown" rows="4">Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks.</textarea></label>
-          <button type="submit">Bind And Register</button>
+          <label>Follow-up Agent Ref<input name="follow_up_agent_ref" value="{{.State.Settings.FollowUpAgentRef}}" placeholder="reviewer UUID, URI, id, or name"></label>
+          <p class="hint">Leave blank to use the first connected agent marked as a failure reviewer.</p>
+          <button type="submit">Save Global Settings</button>
         </form>
       </article>
 
       <article class="panel">
-        <h2>2. Dispatcher Settings</h2>
-        <form method="post" action="/settings" class="stack">
-          <label>Follow-up Agent Ref<input name="follow_up_agent_ref" value="{{.State.Settings.FollowUpAgentRef}}" placeholder="reviewer UUID, URI, id, or name"></label>
-          <p class="hint">Leave blank to use the first connected agent marked as a failure reviewer.</p>
-          <button type="submit">Save Settings</button>
+        <h2>2. Bind Agent</h2>
+        <form method="post" action="/bind" class="stack">
+          <label>Bind Token<input name="bind_token" required></label>
+          <label>Preferred Handle<input name="handle" placeholder="dispatch-agent"></label>
+          <label>Profile Markdown<textarea name="profile_markdown" rows="4">Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks.</textarea></label>
+          <button type="submit">Bind And Register</button>
         </form>
       </article>
     </section>

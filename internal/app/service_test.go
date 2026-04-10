@@ -105,7 +105,6 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	}
 
 	err := service.BindAndRegister(context.Background(), BindProfile{
-		HubRegion:       HubRegionNA,
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
@@ -157,7 +156,6 @@ func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 	fake.expectedMetadataURL = fake.bindResponse.APIBase
 
 	err := service.BindAndRegister(context.Background(), BindProfile{
-		HubRegion:       HubRegionNA,
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
@@ -184,6 +182,14 @@ func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
+	err := service.UpdateSettings(func(settings *Settings) error {
+		settings.HubRegion = HubRegionEU
+		settings.HubURL = "https://eu.hub.molten.bot"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update settings: %v", err)
+	}
 	fake.bindResponse = hub.BindResponse{
 		AgentToken: "agent-token",
 		AgentUUID:  "agent-uuid",
@@ -192,8 +198,7 @@ func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 		APIBase:    "https://eu.hub.molten.bot",
 	}
 
-	err := service.BindAndRegister(context.Background(), BindProfile{
-		HubRegion:       HubRegionEU,
+	err = service.BindAndRegister(context.Background(), BindProfile{
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
@@ -214,6 +219,82 @@ func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	}
 	if len(fake.bindRequests) != 1 || fake.bindRequests[0].HubURL != "https://eu.hub.molten.bot" {
 		t.Fatalf("expected bind request against eu runtime, got %#v", fake.bindRequests)
+	}
+}
+
+func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://dispatch/self"
+		state.ConnectedAgents = []ConnectedAgent{
+			{
+				ID:              "reviewer",
+				Name:            "reviewer",
+				AgentUUID:       "reviewer-uuid",
+				FailureReviewer: true,
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	message := hub.PullResponse{
+		DeliveryID:    "delivery-1",
+		FromAgentUUID: "caller-uuid",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_request",
+			SkillName: dispatchSkillName,
+			RequestID: "parent-req",
+			Payload: map[string]any{
+				"target_agent_uuid": "missing-agent",
+				"skill_name":        "run_task",
+				"repo":              "/tmp/repo",
+				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
+				"payload": map[string]any{
+					"input": "Issue an offline to moltenbot hub",
+				},
+				"payload_format": "json",
+			},
+		},
+	}
+
+	if err := service.handleInboundMessage(context.Background(), message); err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 2 {
+		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
+	}
+
+	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected caller failure payload type: %T", fake.publishCalls[0].Message.Payload)
+	}
+	if failurePayload["status"] != "failed" {
+		t.Fatalf("unexpected caller failure status: %#v", failurePayload)
+	}
+	if failurePayload["error"] != "no connected agent matched \"missing-agent\"" {
+		t.Fatalf("unexpected caller error: %#v", failurePayload["error"])
+	}
+
+	state := service.store.Snapshot()
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
+	}
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+		t.Fatalf("unexpected run config repos: %#v", got)
+	}
+	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
+		t.Fatalf("unexpected follow-up log paths: %#v", got)
+	}
+	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub" {
+		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
 	}
 }
 
