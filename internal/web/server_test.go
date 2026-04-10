@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -166,5 +167,63 @@ func TestHandleStatusReturnsConnectionView(t *testing.T) {
 	}
 	if view.Label != "HTTP Connected" {
 		t.Fatalf("unexpected label: %#v", view)
+	}
+}
+
+func TestRenderIndexReturnsSingleInternalServerErrorOnTemplateFailure(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{state: app.AppState{Settings: app.DefaultSettings()}})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	server.templates = template.Must(template.New("index.html").Funcs(template.FuncMap{
+		"explode": func() (string, error) {
+			return "", errors.New("template exploded")
+		},
+	}).Parse(`prefix {{explode}}`))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := &headerTrackingResponseWriter{header: make(http.Header)}
+
+	server.renderIndex(rec, req, "", false, agentProfileForm{})
+
+	if rec.status != http.StatusInternalServerError {
+		t.Fatalf("expected 500 response, got %d", rec.status)
+	}
+	if rec.writeHeaderCalls != 1 {
+		t.Fatalf("expected one WriteHeader call, got %d", rec.writeHeaderCalls)
+	}
+	if strings.Contains(rec.body.String(), "prefix") {
+		t.Fatalf("did not expect partial template output, body=%q", rec.body.String())
+	}
+	if !strings.Contains(rec.body.String(), "template exploded") {
+		t.Fatalf("expected template error body, got %q", rec.body.String())
+	}
+}
+
+type headerTrackingResponseWriter struct {
+	header           http.Header
+	body             strings.Builder
+	status           int
+	writeHeaderCalls int
+}
+
+func (w *headerTrackingResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *headerTrackingResponseWriter) Write(data []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.body.Write(data)
+}
+
+func (w *headerTrackingResponseWriter) WriteHeader(statusCode int) {
+	w.writeHeaderCalls++
+	if w.status == 0 {
+		w.status = statusCode
 	}
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -107,9 +108,12 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		view.Flash = r.URL.Query().Get("message")
 		view.IsError = r.URL.Query().Get("level") == "error"
 	}
-	if err := s.templates.ExecuteTemplate(w, "index.html", view); err != nil {
+	var rendered bytes.Buffer
+	if err := s.templates.ExecuteTemplate(&rendered, "index.html", view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	_, _ = rendered.WriteTo(w)
 }
 
 func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
