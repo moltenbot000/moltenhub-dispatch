@@ -4,7 +4,10 @@
 
 ## What It Implements
 
-This app is aligned to the North America Molten Hub OpenAPI document at `https://na.hub.molten.bot/openapi.yaml`.
+This app is aligned to the Molten Hub agent runtime APIs exposed by:
+
+- `https://na.hub.molten.bot/openapi.yaml`
+- `https://eu.hub.molten.bot/openapi.yaml`
 
 Key integration points:
 
@@ -48,7 +51,7 @@ If a failure-reviewer agent is configured, the follow-up task is published immed
 
 The bundled UI provides:
 
-- Bind-token onboarding and profile registration
+- Bind-token onboarding and profile registration with an NA/EU runtime toggle
 - Connected-agent management
 - Manual dispatch of skill requests
 - Follow-up reviewer selection

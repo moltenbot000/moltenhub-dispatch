@@ -75,10 +75,16 @@ func (s *Server) routes() {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	state := s.service.Snapshot()
+	selectedRuntime, err := app.ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
+	if err != nil {
+		selectedRuntime = app.DefaultHubRuntime()
+	}
 	view := pageData{
-		State:   state,
-		Flash:   r.URL.Query().Get("message"),
-		IsError: r.URL.Query().Get("level") == "error",
+		State:            state,
+		Flash:            r.URL.Query().Get("message"),
+		IsError:          r.URL.Query().Get("level") == "error",
+		RuntimeOptions:   app.SupportedHubRuntimes(),
+		SelectedRuntime:  selectedRuntime,
 	}
 	if err := s.templates.ExecuteTemplate(w, "index.html", view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -95,6 +101,7 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.service.BindAndRegister(r.Context(), app.BindProfile{
+		HubRegion:       strings.TrimSpace(r.FormValue("hub_region")),
 		HubURL:          strings.TrimSpace(r.FormValue("hub_url")),
 		BindToken:       strings.TrimSpace(r.FormValue("bind_token")),
 		Handle:          strings.TrimSpace(r.FormValue("handle")),
@@ -261,7 +268,9 @@ func splitLines(raw string) []string {
 }
 
 type pageData struct {
-	State   app.AppState
-	Flash   string
-	IsError bool
+	State           app.AppState
+	Flash           string
+	IsError         bool
+	RuntimeOptions  []app.HubRuntime
+	SelectedRuntime app.HubRuntime
 }

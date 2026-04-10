@@ -12,6 +12,7 @@ import (
 
 type fakeHubClient struct {
 	bindResponse        hub.BindResponse
+	bindRequests        []hub.BindRequest
 	updateMetadataCalls []hub.UpdateMetadataRequest
 	publishCalls        []hub.PublishRequest
 	offlineCalls        []hub.OfflineRequest
@@ -22,6 +23,7 @@ type fakeHubClient struct {
 }
 
 func (f *fakeHubClient) BindAgent(_ context.Context, req hub.BindRequest) (hub.BindResponse, error) {
+	f.bindRequests = append(f.bindRequests, req)
 	return f.bindResponse, nil
 }
 
@@ -72,7 +74,7 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	}
 
 	err := service.BindAndRegister(context.Background(), BindProfile{
-		HubURL:          "https://na.hub.molten.bot",
+		HubRegion:       HubRegionNA,
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
@@ -97,6 +99,49 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	state := service.store.Snapshot()
 	if state.Session.AgentToken != "agent-token" {
 		t.Fatalf("expected persisted token, got %q", state.Session.AgentToken)
+	}
+	if state.Settings.HubRegion != HubRegionNA {
+		t.Fatalf("expected hub region %q, got %q", HubRegionNA, state.Settings.HubRegion)
+	}
+	if len(fake.bindRequests) != 1 || fake.bindRequests[0].HubURL != "https://na.hub.molten.bot" {
+		t.Fatalf("expected bind request against na runtime, got %#v", fake.bindRequests)
+	}
+}
+
+func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentToken: "agent-token",
+		AgentUUID:  "agent-uuid",
+		AgentURI:   "molten://dispatch/agent",
+		Handle:     "dispatch-agent",
+		APIBase:    "https://eu.hub.molten.bot",
+	}
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		HubRegion:       HubRegionEU,
+		BindToken:       "bind-token",
+		Handle:          "dispatch-agent",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err != nil {
+		t.Fatalf("bind and register: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if state.Settings.HubRegion != HubRegionEU {
+		t.Fatalf("expected hub region %q, got %q", HubRegionEU, state.Settings.HubRegion)
+	}
+	if state.Settings.HubURL != "https://eu.hub.molten.bot" {
+		t.Fatalf("expected eu hub url, got %q", state.Settings.HubURL)
+	}
+	if state.Session.HubURL != "https://eu.hub.molten.bot" {
+		t.Fatalf("expected session eu hub url, got %q", state.Session.HubURL)
+	}
+	if len(fake.bindRequests) != 1 || fake.bindRequests[0].HubURL != "https://eu.hub.molten.bot" {
+		t.Fatalf("expected bind request against eu runtime, got %#v", fake.bindRequests)
 	}
 }
 

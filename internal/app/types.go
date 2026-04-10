@@ -4,6 +4,7 @@ import "time"
 
 type Settings struct {
 	ListenAddr       string        `json:"listen_addr"`
+	HubRegion        string        `json:"hub_region"`
 	HubURL           string        `json:"hub_url"`
 	SessionKey       string        `json:"session_key"`
 	PollInterval     time.Duration `json:"poll_interval"`
@@ -106,6 +107,7 @@ type AppState struct {
 }
 
 type BindProfile struct {
+	HubRegion       string
 	HubURL          string
 	BindToken       string
 	Handle          string

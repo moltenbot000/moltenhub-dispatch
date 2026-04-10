@@ -30,7 +30,7 @@ var advertisedSkills = []map[string]string{
 	},
 }
 
-type HubRuntime interface {
+type HubClient interface {
 	BindAgent(ctx context.Context, req hub.BindRequest) (hub.BindResponse, error)
 	UpdateMetadata(ctx context.Context, token string, req hub.UpdateMetadataRequest) (map[string]any, error)
 	GetCapabilities(ctx context.Context, token string) (map[string]any, error)
@@ -43,7 +43,7 @@ type HubRuntime interface {
 
 type Service struct {
 	store    *Store
-	hub      HubRuntime
+	hub      HubClient
 	settings Settings
 	mu       sync.Mutex
 }
@@ -52,7 +52,7 @@ type baseURLSetter interface {
 	SetBaseURL(baseURL string)
 }
 
-func NewService(store *Store, hubClient HubRuntime) *Service {
+func NewService(store *Store, hubClient HubClient) *Service {
 	snapshot := store.Snapshot()
 	return &Service{
 		store:    store,
@@ -66,11 +66,15 @@ func (s *Service) Snapshot() AppState {
 }
 
 func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) error {
+	runtime, err := ResolveHubRuntime(profile.HubRegion, profile.HubURL)
+	if err != nil {
+		return err
+	}
 	if setter, ok := s.hub.(baseURLSetter); ok {
-		setter.SetBaseURL(profile.HubURL)
+		setter.SetBaseURL(runtime.HubURL)
 	}
 	result, err := s.hub.BindAgent(ctx, hub.BindRequest{
-		HubURL:    profile.HubURL,
+		HubURL:    runtime.HubURL,
 		BindToken: profile.BindToken,
 		Handle:    profile.Handle,
 	})
@@ -104,10 +108,11 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}
 
 	if err := s.store.Update(func(state *AppState) error {
-		state.Settings.HubURL = profile.HubURL
+		state.Settings.HubRegion = runtime.ID
+		state.Settings.HubURL = runtime.HubURL
 		state.Session = Session{
 			BoundAt:       time.Now().UTC(),
-			HubURL:        profile.HubURL,
+			HubURL:        runtime.HubURL,
 			APIBase:       result.APIBase,
 			AgentToken:    result.AgentToken,
 			AgentUUID:     result.AgentUUID,
@@ -121,6 +126,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}); err != nil {
 		return err
 	}
+	s.settings = s.store.Snapshot().Settings
 
 	return s.logEvent("info", "Agent bound", fmt.Sprintf("Bound handle %q against %s", result.Handle, result.APIBase), "", "")
 }

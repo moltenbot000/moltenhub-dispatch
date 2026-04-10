@@ -21,9 +21,14 @@ type Store struct {
 }
 
 func DefaultSettings() Settings {
+	runtime, err := ResolveHubRuntime("", envOrDefault("MOLTENHUB_URL", DefaultHubRuntime().HubURL))
+	if err != nil {
+		runtime = DefaultHubRuntime()
+	}
 	return Settings{
 		ListenAddr:   envOrDefault("LISTEN_ADDR", ":8080"),
-		HubURL:       envOrDefault("MOLTENHUB_URL", "https://na.hub.molten.bot"),
+		HubRegion:    runtime.ID,
+		HubURL:       runtime.HubURL,
 		SessionKey:   envOrDefault("MOLTENHUB_SESSION_KEY", "main"),
 		PollInterval: 2 * time.Second,
 		TaskTimeout:  5 * time.Minute,
@@ -181,8 +186,15 @@ func NewID(prefix string) string {
 }
 
 func mergeDefaultSettings(settings *Settings, defaults Settings) {
+	if runtime, err := ResolveHubRuntime(settings.HubRegion, settings.HubURL); err == nil {
+		settings.HubRegion = runtime.ID
+		settings.HubURL = runtime.HubURL
+	}
 	if settings.ListenAddr == "" {
 		settings.ListenAddr = defaults.ListenAddr
+	}
+	if settings.HubRegion == "" {
+		settings.HubRegion = defaults.HubRegion
 	}
 	if settings.HubURL == "" {
 		settings.HubURL = defaults.HubURL

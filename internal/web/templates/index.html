@@ -17,6 +17,7 @@
       <aside class="status-card">
         <h2>Runtime</h2>
         <dl>
+          <div><dt>Region</dt><dd>{{.SelectedRuntime.Label}} ({{.SelectedRuntime.Description}})</dd></div>
           <div><dt>Hub</dt><dd>{{if .State.Session.APIBase}}{{.State.Session.APIBase}}{{else}}{{.State.Settings.HubURL}}{{end}}</dd></div>
           <div><dt>Handle</dt><dd>{{if .State.Session.Handle}}{{.State.Session.Handle}}{{else}}Not bound{{end}}</dd></div>
           <div><dt>Agent UUID</dt><dd>{{if .State.Session.AgentUUID}}{{.State.Session.AgentUUID}}{{else}}-{{end}}</dd></div>
@@ -35,7 +36,20 @@
       <article class="panel">
         <h2>1. Bind Agent</h2>
         <form method="post" action="/bind" class="stack">
-          <label>Hub URL<input name="hub_url" value="{{.State.Settings.HubURL}}" required></label>
+          <fieldset class="runtime-toggle">
+            <legend>Hub Runtime</legend>
+            <div class="runtime-toggle-options">
+              {{range .RuntimeOptions}}
+              <label class="runtime-option">
+                <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
+                <span>
+                  <strong>{{.Label}} ({{.Description}})</strong>
+                  <small>{{.HubURL}}</small>
+                </span>
+              </label>
+              {{end}}
+            </div>
+          </fieldset>
           <label>Bind Token<input name="bind_token" required></label>
           <label>Preferred Handle<input name="handle" placeholder="dispatch-agent"></label>
           <label>Profile Markdown<textarea name="profile_markdown" rows="4">Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks.</textarea></label>
