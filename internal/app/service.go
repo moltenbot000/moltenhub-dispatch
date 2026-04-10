@@ -170,7 +170,7 @@ func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) 
 		return fmt.Errorf("bound handle is immutable in this console: %s", current)
 	}
 	finalizingHandle := !state.Session.HandleFinalized && normalized.Handle != "" && normalized.Handle != current
-	if !finalizingHandle && normalized.Handle == current {
+	if !state.Session.HandleFinalized && !finalizingHandle && normalized.Handle == current {
 		normalized.Handle = ""
 	}
 
