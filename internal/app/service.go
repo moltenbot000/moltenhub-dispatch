@@ -17,6 +17,7 @@ import (
 const (
 	dispatchSkillName      = "dispatch_skill_request"
 	failureReviewSkillName = "review_failure_logs"
+	dispatcherHarness      = "moltenhub-dispatch"
 )
 
 var advertisedSkills = []map[string]string{
@@ -46,6 +47,12 @@ type Service struct {
 	hub      HubRuntime
 	settings Settings
 	mu       sync.Mutex
+}
+
+type failureReport struct {
+	Message string
+	Error   string
+	Detail  any
 }
 
 type baseURLSetter interface {
@@ -81,8 +88,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	metadata := map[string]any{
 		"agent_type":       "dispatch",
 		"profile_markdown": strings.TrimSpace(profile.ProfileMarkdown),
-		"llm":              strings.TrimSpace(profile.LLM),
-		"harness":          strings.TrimSpace(profile.Harness),
+		"harness":          dispatcherHarness,
 		"skills":           advertisedSkills,
 		"presence": map[string]any{
 			"status":      "online",
@@ -253,7 +259,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 			CallerAgentURI:  message.FromAgentURI,
 			CallerRequestID: message.OpenClawMessage.RequestID,
 			LogPath:         filepath.Join(s.settings.DataDir, "logs", NewID("task")+".log"),
-		}, fmt.Errorf("decode dispatch payload: %w", err))
+		}, failureFromError("Failed to decode the dispatch request payload.", fmt.Errorf("decode dispatch payload: %w", err)))
 	}
 
 	req := DispatchRequest{
@@ -275,7 +281,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 			OriginalSkillName: req.SkillName,
 			Repo:              req.Repo,
 			LogPath:           filepath.Join(s.settings.DataDir, "logs", NewID("task")+".log"),
-		}, err)
+		}, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
 
 	task, publishReq := s.buildPendingTask(state, target, req, message.FromAgentUUID, message.FromAgentURI)
@@ -290,7 +296,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 	}
 
 	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
-		return s.publishFailureToCaller(ctx, state, task, err)
+		return s.publishFailureToCaller(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
 
 	if err := s.store.Update(func(current *AppState) error {
@@ -319,7 +325,7 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 	isFailure := !messageSucceeded(message.OpenClawMessage)
 	if pending.CallerAgentUUID != "" || pending.CallerAgentURI != "" {
 		if isFailure {
-			if err := s.publishFailureToCaller(ctx, state, pending, fmt.Errorf("%s: %v", message.OpenClawMessage.Error, message.OpenClawMessage.ErrorDetail)); err != nil {
+			if err := s.publishFailureToCaller(ctx, state, pending, failureFromMessage(message.OpenClawMessage)); err != nil {
 				return err
 			}
 		} else {
@@ -330,7 +336,7 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 	}
 
 	if isFailure {
-		if _, err := s.queueFollowUp(ctx, state, pending, message.OpenClawMessage.Error, message.OpenClawMessage.ErrorDetail); err != nil {
+		if _, err := s.queueFollowUp(ctx, state, pending, failureFromMessage(message.OpenClawMessage)); err != nil {
 			return err
 		}
 	}
@@ -357,11 +363,15 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 		}
 		err := fmt.Errorf("task timed out waiting for %s", pending.OriginalSkillName)
 		if pending.CallerAgentUUID != "" || pending.CallerAgentURI != "" {
-			if publishErr := s.publishFailureToCaller(ctx, state, pending, err); publishErr != nil {
+			if publishErr := s.publishFailureToCaller(ctx, state, pending, failureFromError("Task failed because the downstream agent did not reply before the timeout.", err)); publishErr != nil {
 				return publishErr
 			}
 		}
-		if _, queueErr := s.queueFollowUp(ctx, state, pending, err.Error(), map[string]any{"timeout": true}); queueErr != nil {
+		if _, queueErr := s.queueFollowUp(ctx, state, pending, failureReport{
+			Message: "Task failed because the downstream agent did not reply before the timeout.",
+			Error:   err.Error(),
+			Detail:  map[string]any{"timeout": true},
+		}); queueErr != nil {
 			return queueErr
 		}
 		if updateErr := s.store.Update(func(current *AppState) error {
@@ -374,7 +384,7 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, reason string, detail any) (FollowUpTask, error) {
+func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
 	logPaths := followUpLogPaths(pending)
 	originalRequest := cloneMap(pending.DispatchPayload)
 	task := FollowUpTask{
@@ -392,7 +402,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 			TargetSubdir: ".",
 			Prompt:       "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results.",
 		},
-		OriginalError:    fmt.Sprintf("%s | detail=%v", reason, detail),
+		OriginalError:    formatFailureSummary(report),
 		OriginalRequest:  originalRequest,
 		RequestedByAgent: pending.CallerAgentUUID,
 	}
@@ -405,7 +415,12 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 			"failed_task_id": pending.ID,
 			"log_paths":      task.LogPaths,
 			"run_config":     task.RunConfig,
-			"error":          task.OriginalError,
+			"failure": map[string]any{
+				"status":       "failed",
+				"message":      report.Message,
+				"error":        report.Error,
+				"error_detail": report.Detail,
+			},
 			"original_request": map[string]any{
 				"skill_name":     pending.OriginalSkillName,
 				"repo":           fallbackRepo(pending.Repo),
@@ -448,14 +463,15 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 	return task, nil
 }
 
-func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pending PendingTask, cause error) error {
+func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
 	if pending.LogPath == "" {
 		pending.LogPath = filepath.Join(s.settings.DataDir, "logs", pending.ID+".log")
 	}
 	logPaths := followUpLogPaths(pending)
 	if err := s.writeTaskLog(pending.LogPath, map[string]any{
 		"phase": "failed",
-		"error": cause.Error(),
+		"error": report.Error,
+		"detail": report.Detail,
 	}); err != nil {
 		return err
 	}
@@ -470,13 +486,16 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		PayloadFormat: "json",
 		Payload: map[string]any{
 			"status":       "failed",
-			"message":      "Task failed while dispatching to a connected agent.",
-			"error":        cause.Error(),
-			"error_detail": cause.Error(),
+			"message":      report.Message,
+			"error":        report.Error,
+			"error_detail": report.Detail,
 			"log_paths":    logPaths,
 		},
-		Error:       cause.Error(),
-		ErrorDetail: map[string]any{"log_paths": logPaths},
+		Error: report.Error,
+		ErrorDetail: map[string]any{
+			"error_detail": report.Detail,
+			"log_paths":    logPaths,
+		},
 		OK:          boolPtr(false),
 		Status:      "failed",
 	}
@@ -708,6 +727,54 @@ func messageSucceeded(message hub.OpenClawMessage) bool {
 		return okValue
 	}
 	return true
+}
+
+func failureFromError(message string, err error) failureReport {
+	report := failureReport{
+		Message: strings.TrimSpace(message),
+		Error:   "task failed",
+	}
+	if err != nil {
+		report.Error = err.Error()
+	}
+	if report.Message == "" {
+		report.Message = "Task failed while dispatching to a connected agent."
+	}
+	report.Detail = report.Error
+	return report
+}
+
+func failureFromMessage(message hub.OpenClawMessage) failureReport {
+	report := failureReport{
+		Message: "Task failed while dispatching to a connected agent.",
+		Error:   strings.TrimSpace(message.Error),
+		Detail:  message.ErrorDetail,
+	}
+	if report.Error == "" {
+		report.Error = "downstream agent reported failure"
+	}
+	if report.Detail == nil {
+		report.Detail = message.Payload
+	}
+	if report.Detail == nil {
+		report.Detail = report.Error
+	}
+	return report
+}
+
+func formatFailureSummary(report failureReport) string {
+	if failureDetailIsEmpty(report.Detail) {
+		return report.Error
+	}
+	return fmt.Sprintf("%s | detail=%v", report.Error, report.Detail)
+}
+
+func failureDetailIsEmpty(detail any) bool {
+	if detail == nil {
+		return true
+	}
+	value, ok := detail.(string)
+	return ok && strings.TrimSpace(value) == ""
 }
 
 func fallbackRepo(repo string) string {

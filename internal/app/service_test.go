@@ -76,8 +76,6 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
-		LLM:             "openai/gpt-5.4",
-		Harness:         "moltenhub-dispatch@test",
 	})
 	if err != nil {
 		t.Fatalf("bind and register: %v", err)
@@ -92,6 +90,12 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	}
 	if len(skills) != 2 {
 		t.Fatalf("expected 2 advertised skills, got %d", len(skills))
+	}
+	if _, ok := fake.updateMetadataCalls[0].Metadata["llm"]; ok {
+		t.Fatal("expected llm to be omitted from metadata")
+	}
+	if got := fake.updateMetadataCalls[0].Metadata["harness"]; got != dispatcherHarness {
+		t.Fatalf("unexpected harness: %#v", got)
 	}
 
 	state := service.store.Snapshot()
@@ -182,6 +186,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if got := failurePayload["log_paths"].([]string); len(got) != 2 || got[0] != "/tmp/original.log" {
 		t.Fatalf("unexpected caller failure log paths: %#v", failurePayload["log_paths"])
 	}
+	if got := failurePayload["error_detail"].(map[string]any)["stderr"]; got != "panic: boom" {
+		t.Fatalf("unexpected caller failure detail: %#v", failurePayload["error_detail"])
+	}
 
 	followUpMessage := fake.publishCalls[1].Message
 	if followUpMessage.SkillName != failureReviewSkillName {
@@ -211,6 +218,13 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 	if got := payload["log_paths"].([]string); len(got) != 2 || got[0] != "/tmp/original.log" {
 		t.Fatalf("unexpected published follow-up log paths: %#v", payload["log_paths"])
+	}
+	failureContext, ok := payload["failure"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected follow-up failure payload type: %T", payload["failure"])
+	}
+	if got := failureContext["error_detail"].(map[string]any)["stderr"]; got != "panic: boom" {
+		t.Fatalf("unexpected published follow-up failure detail: %#v", failureContext["error_detail"])
 	}
 	originalRequest, ok := payload["original_request"].(map[string]any)
 	if !ok {
