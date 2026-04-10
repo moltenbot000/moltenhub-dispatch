@@ -166,6 +166,12 @@ select {
   color: var(--ink);
 }
 
+input[readonly] {
+  color: rgba(28, 27, 24, 0.72);
+  background: rgba(28, 27, 24, 0.08);
+  cursor: default;
+}
+
 textarea {
   resize: vertical;
 }
@@ -227,6 +233,12 @@ button:hover {
   word-break: break-word;
 }
 
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(140px, 0.7fr);
+  gap: 12px;
+}
+
 .list {
   display: grid;
   gap: 12px;
@@ -262,6 +274,10 @@ pre {
   }
 
   .runtime-toggle-options {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-grid {
     grid-template-columns: 1fr;
   }
 }
