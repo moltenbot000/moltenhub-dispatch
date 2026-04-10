@@ -30,6 +30,7 @@ func (s *stubService) BindAndRegister(_ context.Context, profile app.BindProfile
 	}
 	s.state.Session.AgentToken = "agent-token"
 	s.state.Session.Handle = profile.Handle
+	s.state.Session.HandleFinalized = profile.Handle != ""
 	s.state.Session.DisplayName = profile.DisplayName
 	s.state.Session.Emoji = profile.Emoji
 	s.state.Session.ProfileBio = profile.ProfileMarkdown
@@ -92,11 +93,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
 			Session: app.Session{
-				AgentToken:  "agent-token",
-				Handle:      "codex-beast",
-				DisplayName: "Jef's Codex",
-				Emoji:       "💯",
-				ProfileBio:  "What this runtime is for",
+				AgentToken:      "agent-token",
+				Handle:          "codex-beast",
+				HandleFinalized: true,
+				DisplayName:     "Jef's Codex",
+				Emoji:           "💯",
+				ProfileBio:      "What this runtime is for",
 			},
 		},
 	})
@@ -124,6 +126,37 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="connection-indicator"`) {
 		t.Fatalf("expected connection indicator in page, body=%s", body)
+	}
+}
+
+func TestHandleIndexAllowsFinalizingTemporaryHandle(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken:  "agent-token",
+				Handle:      "tmp-agent-123",
+				DisplayName: "Dispatch Agent",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, `name="handle" value="tmp-agent-123" readonly`) {
+		t.Fatalf("expected temporary handle to remain editable, body=%s", body)
+	}
+	if !strings.Contains(body, "temporary handle") {
+		t.Fatalf("expected temporary-handle onboarding hint, body=%s", body)
 	}
 }
 

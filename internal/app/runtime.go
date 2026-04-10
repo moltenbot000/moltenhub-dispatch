@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -66,11 +67,25 @@ func hubRuntimeByID(region string) (HubRuntime, bool) {
 }
 
 func hubRuntimeByURL(hubURL string) (HubRuntime, bool) {
-	hubURL = strings.TrimRight(strings.TrimSpace(strings.ToLower(hubURL)), "/")
+	hubURL = normalizeHubRuntimeURL(hubURL)
 	for _, runtime := range supportedHubRuntimes {
-		if strings.TrimRight(strings.ToLower(runtime.HubURL), "/") == hubURL {
+		if normalizeHubRuntimeURL(runtime.HubURL) == hubURL {
 			return runtime, true
 		}
 	}
 	return HubRuntime{}, false
+}
+
+func normalizeHubRuntimeURL(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return strings.TrimRight(raw, "/")
+	}
+
+	return strings.TrimRight(parsed.Scheme+"://"+parsed.Host, "/")
 }

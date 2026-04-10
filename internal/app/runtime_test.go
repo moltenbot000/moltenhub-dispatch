@@ -27,6 +27,12 @@ func TestResolveHubRuntime(t *testing.T) {
 			wantURL: "https://na.hub.molten.bot",
 		},
 		{
+			name:    "canonical api base maps to runtime",
+			hubURL:  "https://eu.hub.molten.bot/v1",
+			wantID:  HubRegionEU,
+			wantURL: "https://eu.hub.molten.bot",
+		},
+		{
 			name:    "empty selection defaults to na",
 			wantID:  HubRegionNA,
 			wantURL: "https://na.hub.molten.bot",

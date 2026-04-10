@@ -93,6 +93,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 		Emoji:           profile.Emoji,
 		ProfileMarkdown: profile.ProfileMarkdown,
 	})
+	handleRequestedDuringBind := agentProfile.Handle != ""
 	if setter, ok := s.hub.(baseURLSetter); ok {
 		setter.SetBaseURL(runtime.HubURL)
 	}
@@ -115,19 +116,20 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 		state.Settings.HubRegion = runtime.ID
 		state.Settings.HubURL = runtime.HubURL
 		state.Session = Session{
-			BoundAt:       time.Now().UTC(),
-			HubURL:        runtime.HubURL,
-			APIBase:       result.APIBase,
-			AgentToken:    result.AgentToken,
-			AgentUUID:     result.AgentUUID,
-			AgentURI:      result.AgentURI,
-			Handle:        agentProfile.Handle,
-			DisplayName:   agentProfile.DisplayName,
-			Emoji:         agentProfile.Emoji,
-			ProfileBio:    agentProfile.ProfileMarkdown,
-			ManifestURL:   result.Endpoints.Manifest,
-			Capabilities:  result.Endpoints.Capabilities,
-			OfflineMarked: false,
+			BoundAt:         time.Now().UTC(),
+			HubURL:          runtime.HubURL,
+			APIBase:         result.APIBase,
+			AgentToken:      result.AgentToken,
+			AgentUUID:       result.AgentUUID,
+			AgentURI:        result.AgentURI,
+			Handle:          agentProfile.Handle,
+			HandleFinalized: handleRequestedDuringBind,
+			DisplayName:     agentProfile.DisplayName,
+			Emoji:           agentProfile.Emoji,
+			ProfileBio:      agentProfile.ProfileMarkdown,
+			ManifestURL:     result.Endpoints.Manifest,
+			Capabilities:    result.Endpoints.Capabilities,
+			OfflineMarked:   false,
 		}
 		state.Connection = ConnectionState{
 			Status:        ConnectionStatusConnected,
@@ -140,7 +142,11 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}
 	s.settings = s.store.Snapshot().Settings
 
-	if err := s.updateAgentProfile(ctx, result.AgentToken, agentProfile); err != nil {
+	registrationProfile := agentProfile
+	if !handleRequestedDuringBind {
+		registrationProfile.Handle = ""
+	}
+	if err := s.updateAgentProfile(ctx, result.AgentToken, registrationProfile); err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return fmt.Errorf("agent bound, but profile registration failed: %w", err)
 	}
@@ -159,8 +165,13 @@ func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) 
 	if normalized.Handle == "" {
 		normalized.Handle = strings.TrimSpace(state.Session.Handle)
 	}
-	if current := strings.TrimSpace(state.Session.Handle); current != "" && normalized.Handle != current {
+	current := strings.TrimSpace(state.Session.Handle)
+	if state.Session.HandleFinalized && current != "" && normalized.Handle != current {
 		return fmt.Errorf("bound handle is immutable in this console: %s", current)
+	}
+	finalizingHandle := !state.Session.HandleFinalized && normalized.Handle != "" && normalized.Handle != current
+	if !state.Session.HandleFinalized && !finalizingHandle && normalized.Handle == current {
+		normalized.Handle = ""
 	}
 
 	if err := s.updateAgentProfile(ctx, state.Session.AgentToken, normalized); err != nil {
@@ -169,6 +180,10 @@ func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) 
 	}
 	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 	return s.store.Update(func(current *AppState) error {
+		if finalizingHandle {
+			current.Session.Handle = normalized.Handle
+			current.Session.HandleFinalized = true
+		}
 		current.Session.DisplayName = normalized.DisplayName
 		current.Session.Emoji = normalized.Emoji
 		current.Session.ProfileBio = normalized.ProfileMarkdown

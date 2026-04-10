@@ -29,19 +29,20 @@ type ConnectionState struct {
 }
 
 type Session struct {
-	BoundAt       time.Time `json:"bound_at"`
-	HubURL        string    `json:"hub_url"`
-	APIBase       string    `json:"api_base"`
-	AgentToken    string    `json:"agent_token"`
-	AgentUUID     string    `json:"agent_uuid"`
-	AgentURI      string    `json:"agent_uri"`
-	Handle        string    `json:"handle"`
-	DisplayName   string    `json:"display_name"`
-	Emoji         string    `json:"emoji"`
-	ProfileBio    string    `json:"profile_bio"`
-	ManifestURL   string    `json:"manifest_url"`
-	Capabilities  string    `json:"capabilities_url"`
-	OfflineMarked bool      `json:"offline_marked"`
+	BoundAt         time.Time `json:"bound_at"`
+	HubURL          string    `json:"hub_url"`
+	APIBase         string    `json:"api_base"`
+	AgentToken      string    `json:"agent_token"`
+	AgentUUID       string    `json:"agent_uuid"`
+	AgentURI        string    `json:"agent_uri"`
+	Handle          string    `json:"handle"`
+	HandleFinalized bool    `json:"handle_finalized"`
+	DisplayName     string    `json:"display_name"`
+	Emoji           string    `json:"emoji"`
+	ProfileBio      string    `json:"profile_bio"`
+	ManifestURL     string    `json:"manifest_url"`
+	Capabilities    string    `json:"capabilities_url"`
+	OfflineMarked   bool      `json:"offline_marked"`
 }
 
 type Skill struct {

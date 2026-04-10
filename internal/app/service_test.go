@@ -161,6 +161,43 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	}
 }
 
+func TestBindAndRegisterWithTemporaryHandleKeepsFinalizationOpen(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentToken: "agent-token",
+		AgentUUID:  "agent-uuid",
+		AgentURI:   "molten://dispatch/agent",
+		Handle:     "tmp-agent-123",
+		APIBase:    "https://na.hub.molten.bot",
+	}
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		BindToken:       "bind-token",
+		DisplayName:     "Dispatch Agent",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err != nil {
+		t.Fatalf("bind and register: %v", err)
+	}
+
+	if len(fake.updateMetadataCalls) != 1 {
+		t.Fatalf("expected metadata update, got %d", len(fake.updateMetadataCalls))
+	}
+	if fake.updateMetadataCalls[0].Handle != "" {
+		t.Fatalf("expected temporary bind to omit handle finalization, got %q", fake.updateMetadataCalls[0].Handle)
+	}
+
+	state := service.store.Snapshot()
+	if state.Session.Handle != "tmp-agent-123" {
+		t.Fatalf("expected temporary handle to persist, got %q", state.Session.Handle)
+	}
+	if state.Session.HandleFinalized {
+		t.Fatal("did not expect temporary bind to finalize the handle")
+	}
+}
+
 func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -286,6 +323,7 @@ func TestUpdateAgentProfileUpdatesMetadataAndStoredProfile(t *testing.T) {
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
 		state.Session.Handle = "dispatch-agent"
+		state.Session.HandleFinalized = true
 		return nil
 	})
 	if err != nil {
@@ -327,6 +365,7 @@ func TestUpdateAgentProfileRejectsHandleChangeAfterBind(t *testing.T) {
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
 		state.Session.Handle = "dispatch-agent"
+		state.Session.HandleFinalized = true
 		return nil
 	})
 	if err != nil {
@@ -338,6 +377,82 @@ func TestUpdateAgentProfileRejectsHandleChangeAfterBind(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected immutable handle error")
+	}
+}
+
+func TestUpdateAgentProfileFinalizesTemporaryHandle(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.Handle = "tmp-agent-123"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.UpdateAgentProfile(context.Background(), AgentProfile{
+		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
+		ProfileMarkdown: "Finalized handle.",
+	})
+	if err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+
+	if len(fake.updateMetadataCalls) != 1 {
+		t.Fatalf("expected one metadata update, got %d", len(fake.updateMetadataCalls))
+	}
+	if fake.updateMetadataCalls[0].Handle != "dispatch-agent" {
+		t.Fatalf("expected finalized handle in metadata update, got %q", fake.updateMetadataCalls[0].Handle)
+	}
+
+	state := service.store.Snapshot()
+	if state.Session.Handle != "dispatch-agent" {
+		t.Fatalf("expected finalized handle to persist, got %q", state.Session.Handle)
+	}
+	if !state.Session.HandleFinalized {
+		t.Fatal("expected finalized handle flag to persist")
+	}
+}
+
+func TestUpdateAgentProfileDoesNotResubmitUnchangedTemporaryHandle(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.Handle = "tmp-agent-123"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.UpdateAgentProfile(context.Background(), AgentProfile{
+		Handle:          "tmp-agent-123",
+		DisplayName:     "Dispatch Agent",
+		ProfileMarkdown: "Still temporary.",
+	})
+	if err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+
+	if len(fake.updateMetadataCalls) != 1 {
+		t.Fatalf("expected one metadata update, got %d", len(fake.updateMetadataCalls))
+	}
+	if fake.updateMetadataCalls[0].Handle != "" {
+		t.Fatalf("expected unchanged temporary handle to be omitted, got %q", fake.updateMetadataCalls[0].Handle)
+	}
+
+	state := service.store.Snapshot()
+	if state.Session.Handle != "tmp-agent-123" {
+		t.Fatalf("expected temporary handle to remain unchanged, got %q", state.Session.Handle)
+	}
+	if state.Session.HandleFinalized {
+		t.Fatal("did not expect unchanged temporary handle to become finalized")
 	}
 }
 
