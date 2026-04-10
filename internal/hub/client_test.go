@@ -108,6 +108,32 @@ func TestBindAgentReturnsCanonicalError(t *testing.T) {
 	}
 }
 
+func TestUpdateMetadataUsesAPIBasePathWithoutDoublingVersionPrefix(t *testing.T) {
+	t.Parallel()
+
+	var requestPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": map[string]any{"status": "ok"},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL + "/v1")
+	if _, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
+		Metadata: map[string]any{"display_name": "Dispatch Agent"},
+	}); err != nil {
+		t.Fatalf("update metadata: %v", err)
+	}
+
+	if requestPath != "/v1/agents/me/metadata" {
+		t.Fatalf("unexpected request path: %s", requestPath)
+	}
+}
+
 func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testing.T) {
 	t.Parallel()
 

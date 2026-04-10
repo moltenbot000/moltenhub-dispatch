@@ -44,7 +44,7 @@ func main() {
 	rootCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	go runPoller(rootCtx, service)
+	go service.RunHubLoop(rootCtx)
 
 	go func() {
 		log.Printf("listening on %s", httpServer.Addr)
@@ -62,23 +62,5 @@ func main() {
 	}
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown http server: %v", err)
-	}
-}
-
-func runPoller(ctx context.Context, service *app.Service) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			pollCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
-			if err := service.PollOnce(pollCtx); err != nil {
-				log.Printf("poll error: %v", err)
-			}
-			cancel()
-		}
 	}
 }

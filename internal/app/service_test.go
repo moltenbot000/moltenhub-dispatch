@@ -30,6 +30,12 @@ type fakeHubClient struct {
 	publishErr          error
 }
 
+type fakeRealtimeSession struct {
+	messages []hub.PullResponse
+	acked    []string
+	nacked   []string
+}
+
 func (f *fakeHubClient) BindAgent(_ context.Context, req hub.BindRequest) (hub.BindResponse, error) {
 	f.bindRequests = append(f.bindRequests, req)
 	return f.bindResponse, nil
@@ -96,6 +102,36 @@ func (f *fakeHubClient) MarkOffline(_ context.Context, _ string, req hub.Offline
 func (f *fakeHubClient) SetBaseURL(baseURL string) {
 	f.currentBaseURL = baseURL
 	f.baseURLCalls = append(f.baseURLCalls, baseURL)
+}
+
+func (f *fakeHubClient) ConnectOpenClaw(_ context.Context, _ string, _ string) (hub.RealtimeSession, error) {
+	if len(f.baseURLCalls) == 0 {
+		f.baseURLCalls = append(f.baseURLCalls, f.currentBaseURL)
+	}
+	return &fakeRealtimeSession{}, errors.New("websocket unavailable")
+}
+
+func (f *fakeRealtimeSession) Receive(_ context.Context) (hub.PullResponse, error) {
+	if len(f.messages) == 0 {
+		return hub.PullResponse{}, context.Canceled
+	}
+	message := f.messages[0]
+	f.messages = f.messages[1:]
+	return message, nil
+}
+
+func (f *fakeRealtimeSession) Ack(_ context.Context, deliveryID string) error {
+	f.acked = append(f.acked, deliveryID)
+	return nil
+}
+
+func (f *fakeRealtimeSession) Nack(_ context.Context, deliveryID string) error {
+	f.nacked = append(f.nacked, deliveryID)
+	return nil
+}
+
+func (f *fakeRealtimeSession) Close() error {
+	return nil
 }
 
 func (f *fakeHubClient) SetRuntimeEndpoints(endpoints hub.RuntimeEndpoints) {
@@ -586,6 +622,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
+				ParentRequestID:   "parent-req",
 				ChildRequestID:    "child-req",
 				OriginalSkillName: "run_task",
 				CallerAgentUUID:   "caller-uuid",
@@ -938,6 +975,113 @@ func TestPollOnceMarksDisconnectedWhenHubIsUnreachable(t *testing.T) {
 	}
 	if state.Connection.Error == "" {
 		t.Fatalf("expected connection error detail, got %#v", state.Connection)
+	}
+}
+
+func TestHandleInboundMessageAcceptsKindWhenTypeIsOmitted(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.PendingTasks = []PendingTask{
+			{
+				ID:                "task-1",
+				ParentRequestID:   "parent-req",
+				ChildRequestID:    "child-req",
+				OriginalSkillName: "run_task",
+				CallerAgentUUID:   "caller-uuid",
+				CallerRequestID:   "parent-req",
+				Repo:              "/tmp/repo",
+				LogPath:           filepath.Join(service.settings.DataDir, "logs", "task-1.log"),
+				CreatedAt:         time.Now().Add(-time.Minute),
+				ExpiresAt:         time.Now().Add(time.Minute),
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-1",
+		OpenClawMessage: hub.OpenClawMessage{
+			Kind:      "skill_result",
+			RequestID: "child-req",
+			OK:        boolPtr(true),
+			Payload:   map[string]any{"status": "ok"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one caller publish, got %d", len(fake.publishCalls))
+	}
+	if fake.publishCalls[0].Message.RequestID != "parent-req" {
+		t.Fatalf("unexpected reply request id: %q", fake.publishCalls[0].Message.RequestID)
+	}
+}
+
+func TestConsumeRealtimeSessionMarksWebsocketConnectivityAndAcksDeliveries(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.PendingTasks = []PendingTask{
+			{
+				ID:                "task-1",
+				ParentRequestID:   "parent-req",
+				ChildRequestID:    "child-req",
+				OriginalSkillName: "run_task",
+				CallerAgentUUID:   "caller-uuid",
+				CallerRequestID:   "parent-req",
+				Repo:              "/tmp/repo",
+				LogPath:           filepath.Join(service.settings.DataDir, "logs", "task-1.log"),
+				CreatedAt:         time.Now().Add(-time.Minute),
+				ExpiresAt:         time.Now().Add(time.Minute),
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	session := &fakeRealtimeSession{
+		messages: []hub.PullResponse{
+			{
+				DeliveryID: "delivery-1",
+				OpenClawMessage: hub.OpenClawMessage{
+					Kind:      "skill_result",
+					RequestID: "child-req",
+					OK:        boolPtr(true),
+					Payload:   map[string]any{"status": "ok"},
+				},
+			},
+		},
+	}
+
+	err = service.consumeRealtimeSession(context.Background(), session)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled sentinel from fake session drain, got %v", err)
+	}
+
+	if len(session.acked) != 1 || session.acked[0] != "delivery-1" {
+		t.Fatalf("unexpected ack calls: %#v", session.acked)
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusConnected {
+		t.Fatalf("expected connected status, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportWebSocket {
+		t.Fatalf("expected websocket transport, got %#v", state.Connection)
 	}
 }
 

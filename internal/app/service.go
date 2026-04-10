@@ -42,6 +42,10 @@ type HubClient interface {
 	MarkOffline(ctx context.Context, token string, req hub.OfflineRequest) error
 }
 
+type realtimeHubClient interface {
+	ConnectOpenClaw(ctx context.Context, token, sessionKey string) (hub.RealtimeSession, error)
+}
+
 type Service struct {
 	store    *Store
 	hub      HubClient
@@ -318,6 +322,48 @@ func (s *Service) PollOnce(ctx context.Context) error {
 	return s.expirePendingTasks(ctx)
 }
 
+func (s *Service) RunHubLoop(ctx context.Context) {
+	ticker := time.NewTicker(s.pollInterval())
+	defer ticker.Stop()
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		state := s.store.Snapshot()
+		if strings.TrimSpace(state.Session.AgentToken) == "" {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			continue
+		}
+
+		if realtime, ok := s.hub.(realtimeHubClient); ok {
+			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
+			if err == nil {
+				s.noteHubInteraction(nil, ConnectionTransportWebSocket)
+				if err := s.consumeRealtimeSession(ctx, session); err != nil && ctx.Err() == nil {
+					s.noteHubInteraction(err, ConnectionTransportWebSocket)
+				}
+				continue
+			}
+		}
+
+		pollCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
+		_ = s.PollOnce(pollCtx)
+		cancel()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 	state := s.store.Snapshot()
 	if state.Session.AgentToken == "" || state.Session.OfflineMarked {
@@ -343,13 +389,17 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 }
 
 func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResponse) error {
-	switch message.OpenClawMessage.Type {
+	messageType := strings.TrimSpace(message.OpenClawMessage.Type)
+	if messageType == "" {
+		messageType = strings.TrimSpace(message.OpenClawMessage.Kind)
+	}
+	switch messageType {
 	case "skill_result":
 		return s.handleSkillResult(ctx, message)
 	case "skill_request":
 		return s.handleSkillRequest(ctx, message)
 	default:
-		return s.logEvent("info", "Ignored message", "Received unsupported message type "+message.OpenClawMessage.Type, "", "")
+		return s.logEvent("info", "Ignored message", "Received unsupported message type "+messageType, "", "")
 	}
 }
 
@@ -1162,6 +1212,42 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 		state.Session.OfflineMarked = false
 		return nil
 	})
+}
+
+func (s *Service) consumeRealtimeSession(ctx context.Context, session hub.RealtimeSession) error {
+	defer session.Close()
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		message, err := session.Receive(ctx)
+		if err != nil {
+			return err
+		}
+
+		handleErr := s.handleInboundMessage(ctx, message)
+		if handleErr != nil {
+			_ = session.Nack(ctx, message.DeliveryID)
+			return handleErr
+		}
+		if err := session.Ack(ctx, message.DeliveryID); err != nil {
+			return err
+		}
+		s.noteHubInteraction(nil, ConnectionTransportWebSocket)
+		if err := s.expirePendingTasks(ctx); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *Service) pollInterval() time.Duration {
+	interval := s.store.Snapshot().Settings.PollInterval
+	if interval <= 0 {
+		return 2 * time.Second
+	}
+	return interval
 }
 
 func hubReachable(err error) bool {

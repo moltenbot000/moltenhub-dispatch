@@ -321,7 +321,7 @@ func (c *Client) newRequest(ctx context.Context, method, endpoint, token string,
 			query = endpoint[idx+1:]
 			endpoint = endpoint[:idx]
 		}
-		u.Path = path.Join(u.Path, endpoint)
+		u.Path = joinURLPath(u.Path, endpoint)
 		u.RawQuery = query
 	}
 
@@ -338,6 +338,24 @@ func (c *Client) newRequest(ctx context.Context, method, endpoint, token string,
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	return req, nil
+}
+
+func joinURLPath(basePath, endpoint string) string {
+	base := strings.Trim(basePath, "/")
+	next := strings.Trim(endpoint, "/")
+
+	switch {
+	case base == "" && next == "":
+		return "/"
+	case base == "":
+		return "/" + next
+	case next == "":
+		return "/" + base
+	case next == base || strings.HasPrefix(next, base+"/"):
+		return "/" + next
+	default:
+		return "/" + path.Join(base, next)
+	}
 }
 
 func decodeAPIError(resp *http.Response) error {
