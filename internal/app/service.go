@@ -129,6 +129,11 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			Capabilities:  result.Endpoints.Capabilities,
 			OfflineMarked: false,
 		}
+		state.Connection = ConnectionState{
+			Status:        ConnectionStatusConnected,
+			Transport:     ConnectionTransportHTTP,
+			LastChangedAt: time.Now().UTC(),
+		}
 		return nil
 	}); err != nil {
 		return err
@@ -136,8 +141,10 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	s.settings = s.store.Snapshot().Settings
 
 	if err := s.updateAgentProfile(ctx, result.AgentToken, agentProfile); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return fmt.Errorf("agent bound, but profile registration failed: %w", err)
 	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 
 	return s.logEvent("info", "Agent bound", fmt.Sprintf("Bound handle %q against %s", result.Handle, result.APIBase), "", "")
 }
@@ -157,8 +164,10 @@ func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) 
 	}
 
 	if err := s.updateAgentProfile(ctx, state.Session.AgentToken, normalized); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return err
 	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 	return s.store.Update(func(current *AppState) error {
 		current.Session.DisplayName = normalized.DisplayName
 		current.Session.Emoji = normalized.Emoji
@@ -235,8 +244,10 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 	}
 
 	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return PendingTask{}, s.failUIRequest(task, err)
 	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 
 	if err := s.store.Update(func(current *AppState) error {
 		current.PendingTasks = append(current.PendingTasks, task)
@@ -256,8 +267,10 @@ func (s *Service) PollOnce(ctx context.Context) error {
 
 	message, ok, err := s.hub.PullOpenClaw(ctx, state.Session.AgentToken, 25*time.Second)
 	if err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return err
 	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 	if !ok {
 		return s.expirePendingTasks(ctx)
 	}
@@ -282,10 +295,17 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 		SessionKey: state.Settings.SessionKey,
 		Reason:     reason,
 	}); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return err
 	}
 	return s.store.Update(func(current *AppState) error {
 		current.Session.OfflineMarked = true
+		current.Connection = ConnectionState{
+			Status:        ConnectionStatusDisconnected,
+			Transport:     ConnectionTransportOffline,
+			LastChangedAt: time.Now().UTC(),
+			Error:         strings.TrimSpace(reason),
+		}
 		return nil
 	})
 }
@@ -353,8 +373,10 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 	}
 
 	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return s.failDispatchedTask(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 
 	if err := s.store.Update(func(current *AppState) error {
 		current.PendingTasks = append(current.PendingTasks, task)
@@ -519,8 +541,11 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 				RequestID:     task.ID,
 			},
 		}); err != nil {
+			s.noteHubInteraction(err, ConnectionTransportHTTP)
 			task.Status = "queued_local_only"
 			task.LastDispatchErr = err.Error()
+		} else {
+			s.noteHubInteraction(nil, ConnectionTransportHTTP)
 		}
 	} else {
 		task.Status = "pending_reviewer"
@@ -581,6 +606,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		ClientMsgID: NewID("result"),
 		Message:     message,
 	})
+	s.noteHubInteraction(err, ConnectionTransportHTTP)
 	return err
 }
 
@@ -594,6 +620,7 @@ func (s *Service) publishResultToCaller(ctx context.Context, state AppState, pen
 		ClientMsgID: NewID("result"),
 		Message:     forwarded,
 	})
+	s.noteHubInteraction(err, ConnectionTransportHTTP)
 	return err
 }
 
@@ -975,7 +1002,7 @@ func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any 
 		"presence": map[string]any{
 			"status":      "online",
 			"ready":       true,
-			"transport":   "polling+web",
+			"transport":   "http",
 			"session_key": sessionKey,
 			"updated_at":  time.Now().UTC().Format(time.RFC3339),
 		},
@@ -990,4 +1017,41 @@ func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any 
 		delete(metadata, "profile_markdown")
 	}
 	return metadata
+}
+
+func (s *Service) noteHubInteraction(err error, transport string) {
+	if transport == "" {
+		transport = ConnectionTransportHTTP
+	}
+	now := time.Now().UTC()
+	if !hubReachable(err) {
+		_ = s.store.Update(func(state *AppState) error {
+			state.Connection = ConnectionState{
+				Status:        ConnectionStatusDisconnected,
+				Transport:     ConnectionTransportOffline,
+				LastChangedAt: now,
+				Error:         strings.TrimSpace(err.Error()),
+			}
+			return nil
+		})
+		return
+	}
+
+	_ = s.store.Update(func(state *AppState) error {
+		state.Connection = ConnectionState{
+			Status:        ConnectionStatusConnected,
+			Transport:     transport,
+			LastChangedAt: now,
+		}
+		state.Session.OfflineMarked = false
+		return nil
+	})
+}
+
+func hubReachable(err error) bool {
+	if err == nil {
+		return true
+	}
+	var apiErr *hub.APIError
+	return errors.As(err, &apiErr)
 }

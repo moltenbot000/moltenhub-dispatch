@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -119,5 +120,51 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `name="display_name" value="Jef&#39;s Codex"`) {
 		t.Fatalf("expected display name field, body=%s", body)
+	}
+	if !strings.Contains(body, `id="connection-indicator"`) {
+		t.Fatalf("expected connection indicator in page, body=%s", body)
+	}
+}
+
+func TestHandleStatusReturnsConnectionView(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	var view struct {
+		Status    string `json:"status"`
+		Transport string `json:"transport"`
+		Label     string `json:"label"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode status response: %v", err)
+	}
+	if view.Status != app.ConnectionStatusConnected {
+		t.Fatalf("unexpected status: %#v", view)
+	}
+	if view.Transport != app.ConnectionTransportHTTP {
+		t.Fatalf("unexpected transport: %#v", view)
+	}
+	if view.Label != "HTTP Connected" {
+		t.Fatalf("unexpected label: %#v", view)
 	}
 }

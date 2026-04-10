@@ -10,6 +10,23 @@
   <main class="shell">
     <header class="page-header">
       <p class="eyebrow">Molten Hub Console</p>
+      <div
+        class="connection-indicator connection-{{.Connection.Status}} connection-transport-{{.Connection.Transport}}"
+        id="connection-indicator"
+        data-status="{{.Connection.Status}}"
+        data-transport="{{.Connection.Transport}}"
+        title="{{.Connection.Description}}"
+        aria-live="polite"
+      >
+        <span class="connection-icon" aria-hidden="true">
+          <span class="connection-ring"></span>
+          <span class="connection-core"></span>
+        </span>
+        <span class="connection-text">
+          <strong id="connection-label">{{.Connection.Label}}</strong>
+          <small id="connection-description">{{.Connection.Description}}</small>
+        </span>
+      </div>
     </header>
 
     {{if .Flash}}
@@ -218,5 +235,46 @@
       </article>
     </section>
   </main>
+  <script>
+    (() => {
+      const indicator = document.getElementById("connection-indicator");
+      const label = document.getElementById("connection-label");
+      const description = document.getElementById("connection-description");
+      if (!indicator || !label || !description) {
+        return;
+      }
+
+      const applyState = (state) => {
+        const status = state.status || "disconnected";
+        const transport = state.transport || "offline";
+        indicator.dataset.status = status;
+        indicator.dataset.transport = transport;
+        indicator.className = `connection-indicator connection-${status} connection-transport-${transport}`;
+        indicator.title = state.description || "";
+        label.textContent = state.label || "Offline";
+        description.textContent = state.description || "Not currently connected to the hub.";
+      };
+
+      const refreshState = async () => {
+        try {
+          const response = await fetch("/status", { headers: { Accept: "application/json" } });
+          if (!response.ok) {
+            throw new Error(`status request failed with ${response.status}`);
+          }
+          applyState(await response.json());
+        } catch (error) {
+          applyState({
+            status: "disconnected",
+            transport: "offline",
+            label: "Offline",
+            description: error instanceof Error ? error.message : "Unable to refresh hub status.",
+          });
+        }
+      };
+
+      refreshState();
+      window.setInterval(refreshState, 3000);
+    })();
+  </script>
 </body>
 </html>

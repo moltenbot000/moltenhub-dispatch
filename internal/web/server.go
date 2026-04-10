@@ -67,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.handleIndex)
+	s.mux.HandleFunc("/status", s.handleStatus)
 	s.mux.HandleFunc("/bind", s.handleBind)
 	s.mux.HandleFunc("/profile", s.handleProfile)
 	s.mux.HandleFunc("/agents", s.handleAgents)
@@ -77,6 +78,13 @@ func (s *Server) routes() {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	s.renderIndex(w, r, "", false, agentProfileForm{})
+}
+
+func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
+	state := s.service.Snapshot()
+	view := connectionStatusView(state.Connection)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(view)
 }
 
 func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash string, isError bool, form agentProfileForm) {
@@ -93,6 +101,7 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		SelectedRuntime: selectedRuntime,
 		ProfileForm:     defaultProfileForm(state, form),
 		EmojiOptions:    emojiOptions(),
+		Connection:      connectionStatusView(state.Connection),
 	}
 	if view.Flash == "" {
 		view.Flash = r.URL.Query().Get("message")
@@ -316,6 +325,15 @@ type pageData struct {
 	SelectedRuntime app.HubRuntime
 	ProfileForm     agentProfileForm
 	EmojiOptions    []string
+	Connection      connectionView
+}
+
+type connectionView struct {
+	Status      string `json:"status"`
+	Transport   string `json:"transport"`
+	Label       string `json:"label"`
+	Description string `json:"description"`
+	Error       string `json:"error,omitempty"`
 }
 
 type agentProfileForm struct {
@@ -367,4 +385,36 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 
 func emojiOptions() []string {
 	return []string{"🤖", "💯", "🛠️", "⚙️", "🚀", "🧠"}
+}
+
+func connectionStatusView(state app.ConnectionState) connectionView {
+	status := strings.TrimSpace(state.Status)
+	if status == "" {
+		status = app.ConnectionStatusDisconnected
+	}
+	transport := strings.TrimSpace(state.Transport)
+	if transport == "" {
+		transport = app.ConnectionTransportOffline
+	}
+
+	view := connectionView{
+		Status:    status,
+		Transport: transport,
+		Error:     strings.TrimSpace(state.Error),
+	}
+	switch {
+	case status == app.ConnectionStatusConnected && transport == app.ConnectionTransportWebSocket:
+		view.Label = "WS Connected"
+		view.Description = "Connected to the hub over WebSocket."
+	case status == app.ConnectionStatusConnected:
+		view.Label = "HTTP Connected"
+		view.Description = "Connected to the hub over HTTP polling."
+	default:
+		view.Label = "Offline"
+		view.Description = "Not currently connected to the hub."
+		if view.Error != "" {
+			view.Description = view.Error
+		}
+	}
+	return view
 }

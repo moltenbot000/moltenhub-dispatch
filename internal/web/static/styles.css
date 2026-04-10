@@ -32,6 +32,10 @@ body {
 }
 
 .page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
@@ -41,6 +45,77 @@ body {
   font-size: 0.78rem;
   color: var(--muted);
   margin: 0;
+}
+
+.connection-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(28, 27, 24, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.82);
+  box-shadow: 0 14px 32px rgba(54, 39, 24, 0.12);
+  text-align: right;
+}
+
+.connection-text {
+  display: grid;
+  gap: 2px;
+}
+
+.connection-text strong,
+.connection-text small {
+  display: block;
+}
+
+.connection-text small {
+  color: var(--muted);
+}
+
+.connection-icon {
+  --connection-color: #c94d4d;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+
+.connection-ring,
+.connection-core {
+  border-radius: 999px;
+}
+
+.connection-ring {
+  width: 40px;
+  height: 40px;
+  border: 1px solid color-mix(in srgb, var(--connection-color) 28%, transparent);
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--connection-color) 18%, transparent);
+}
+
+.connection-core {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--connection-color);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--connection-color) 14%, transparent),
+    0 0 18px color-mix(in srgb, var(--connection-color) 42%, transparent);
+}
+
+.connection-connected.connection-transport-http .connection-icon {
+  --connection-color: #df8a2d;
+}
+
+.connection-connected.connection-transport-ws .connection-icon {
+  --connection-color: #22a765;
+}
+
+.connection-disconnected .connection-icon,
+.connection-transport-offline .connection-icon {
+  --connection-color: #d1495b;
 }
 
 h1, h2, h3 {
@@ -258,6 +333,16 @@ pre {
 }
 
 @media (max-width: 900px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .connection-indicator {
+    justify-content: center;
+    text-align: left;
+  }
+
   .two-up {
     grid-template-columns: 1fr;
   }

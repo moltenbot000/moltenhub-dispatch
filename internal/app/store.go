@@ -45,6 +45,10 @@ func NewStore(path string, defaults Settings) (*Store, error) {
 		path: path,
 		state: AppState{
 			Settings: defaults,
+			Connection: ConnectionState{
+				Status:    ConnectionStatusDisconnected,
+				Transport: ConnectionTransportOffline,
+			},
 		},
 	}
 
@@ -68,6 +72,12 @@ func NewStore(path string, defaults Settings) (*Store, error) {
 	}
 
 	mergeDefaultSettings(&store.state.Settings, defaults)
+	if strings.TrimSpace(store.state.Connection.Status) == "" {
+		store.state.Connection.Status = ConnectionStatusDisconnected
+	}
+	if strings.TrimSpace(store.state.Connection.Transport) == "" {
+		store.state.Connection.Transport = ConnectionTransportOffline
+	}
 	return store, nil
 }
 

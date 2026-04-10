@@ -610,6 +610,67 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	if len(fake.baseURLCalls) != 1 || fake.baseURLCalls[0] != "https://runtime.na.hub.molten.bot" {
 		t.Fatalf("expected service to initialize client with persisted api_base, got %#v", fake.baseURLCalls)
 	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusDisconnected || state.Connection.Transport != ConnectionTransportOffline {
+		t.Fatalf("expected offline connection state after explicit offline mark, got %#v", state.Connection)
+	}
+}
+
+func TestPollOnceMarksHTTPConnectivityAfterSuccessfulPull(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	fake.pullOK = false
+
+	if err := service.PollOnce(context.Background()); err != nil {
+		t.Fatalf("poll once: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusConnected {
+		t.Fatalf("expected connected status, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportHTTP {
+		t.Fatalf("expected http transport, got %#v", state.Connection)
+	}
+}
+
+func TestPollOnceMarksDisconnectedWhenHubIsUnreachable(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	fake.pullErr = errors.New("dial tcp 10.0.0.1:443: connect: connection refused")
+
+	err = service.PollOnce(context.Background())
+	if err == nil {
+		t.Fatal("expected poll failure")
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusDisconnected {
+		t.Fatalf("expected disconnected status, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportOffline {
+		t.Fatalf("expected offline transport, got %#v", state.Connection)
+	}
+	if state.Connection.Error == "" {
+		t.Fatalf("expected connection error detail, got %#v", state.Connection)
+	}
 }
 
 func newTestService(t *testing.T) (*Service, *fakeHubClient) {
