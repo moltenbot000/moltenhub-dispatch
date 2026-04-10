@@ -18,6 +18,7 @@ type stubService struct {
 	state            app.AppState
 	bindErr          error
 	updateProfileErr error
+	bindStateOnError bool
 }
 
 func (s *stubService) Snapshot() app.AppState {
@@ -25,6 +26,15 @@ func (s *stubService) Snapshot() app.AppState {
 }
 
 func (s *stubService) BindAndRegister(_ context.Context, profile app.BindProfile) error {
+	if s.bindStateOnError {
+		s.state.Session.AgentToken = "agent-token"
+		s.state.Session.Handle = profile.Handle
+		s.state.Session.HandleFinalized = profile.Handle != ""
+		s.state.Session.DisplayName = profile.DisplayName
+		s.state.Session.Emoji = profile.Emoji
+		s.state.Session.ProfileBio = profile.ProfileMarkdown
+		s.state.Session.BoundAt = time.Now().UTC()
+	}
 	if s.bindErr != nil {
 		return s.bindErr
 	}
@@ -116,7 +126,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "Agent Profile") {
+	if !strings.Contains(body, "Edit Agent Profile") {
 		t.Fatalf("expected bound profile panel, body=%s", body)
 	}
 	if strings.Contains(body, `name="bind_token"`) {
@@ -130,6 +140,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="connection-indicator"`) {
 		t.Fatalf("expected connection indicator in page, body=%s", body)
+	}
+	if !strings.Contains(body, "Bound Session") {
+		t.Fatalf("expected bound session summary, body=%s", body)
+	}
+	if !strings.Contains(body, "The one-time bind token is no longer needed here.") {
+		t.Fatalf("expected bound-state explanation, body=%s", body)
 	}
 	if strings.Contains(body, ">Runtime<") {
 		t.Fatalf("did not expect removed runtime panel, body=%s", body)
@@ -224,6 +240,48 @@ func TestHandleIndexAllowsFinalizingTemporaryHandle(t *testing.T) {
 	}
 	if !strings.Contains(body, "temporary handle") {
 		t.Fatalf("expected temporary-handle onboarding hint, body=%s", body)
+	}
+}
+
+func TestHandleBindShowsEditProfileAfterSessionBecomesBound(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportOffline,
+			},
+		},
+		bindErr:          errors.New("agent bound, but profile registration failed"),
+		bindStateOnError: true,
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/bind", strings.NewReader("bind_token=bind-123&handle=codex-beast&display_name=Jef%27s+Codex&emoji=%F0%9F%92%AF&profile_markdown=What+this+runtime+is+for"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if strings.Contains(body, `name="bind_token"`) {
+		t.Fatalf("did not expect bind token field after session became bound, body=%s", body)
+	}
+	if !strings.Contains(body, "Edit Agent Profile") {
+		t.Fatalf("expected edit profile panel after bound session, body=%s", body)
+	}
+	if !strings.Contains(body, "live connection is currently offline") {
+		t.Fatalf("expected offline bound-state summary, body=%s", body)
+	}
+	if !strings.Contains(body, "agent bound, but profile registration failed") {
+		t.Fatalf("expected surfaced bind error, body=%s", body)
 	}
 }
 

@@ -103,6 +103,7 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		ProfileForm:     defaultProfileForm(state, form),
 		EmojiOptions:    emojiOptions(),
 		Connection:      connectionStatusView(state.Connection),
+		Binding:         bindingStateView(state, selectedRuntime),
 		SubActions:      subActionState(state),
 	}
 	if view.Flash == "" {
@@ -326,6 +327,7 @@ type pageData struct {
 	ProfileForm     agentProfileForm
 	EmojiOptions    []string
 	Connection      connectionView
+	Binding         bindingView
 	SubActions      subActionView
 }
 
@@ -340,6 +342,12 @@ type connectionView struct {
 type subActionView struct {
 	Visible bool
 	Reason  string
+}
+
+type bindingView struct {
+	Bound       bool
+	Label       string
+	Description string
 }
 
 type agentProfileForm struct {
@@ -439,4 +447,27 @@ func subActionState(state app.AppState) subActionView {
 		}
 	}
 	return subActionView{Visible: true}
+}
+
+func bindingStateView(state app.AppState, runtime app.HubRuntime) bindingView {
+	if strings.TrimSpace(state.Session.AgentToken) == "" {
+		return bindingView{
+			Bound:       false,
+			Label:       "Awaiting Bind",
+			Description: fmt.Sprintf("Enter a one-time bind token to register this runtime with the %s hub.", runtime.Label),
+		}
+	}
+
+	description := fmt.Sprintf("This runtime is already bound to the %s hub.", runtime.Label)
+	if state.Connection.Status == app.ConnectionStatusConnected {
+		description += " The one-time bind token is no longer needed here."
+	} else {
+		description += " The one-time bind token is no longer needed here, but the live connection is currently offline."
+	}
+
+	return bindingView{
+		Bound:       true,
+		Label:       "Bound Session",
+		Description: description,
+	}
 }
