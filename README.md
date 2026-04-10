@@ -51,7 +51,7 @@ If a failure-reviewer agent is configured, the follow-up task is published immed
 
 The bundled UI provides:
 
-- Bind-token onboarding and profile registration with an NA/EU runtime toggle
+- A top-level global NA/EU runtime selector that applies to bind/register operations
 - Connected-agent management
 - Manual dispatch of skill requests
 - Follow-up reviewer selection

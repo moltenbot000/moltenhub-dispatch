@@ -82,7 +82,8 @@ func (s *Service) Snapshot() AppState {
 }
 
 func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) error {
-	runtime, err := ResolveHubRuntime(profile.HubRegion, profile.HubURL)
+	state := s.store.Snapshot()
+	runtime, err := ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
 	if err != nil {
 		return err
 	}
@@ -168,10 +169,26 @@ func (s *Service) UpdateSettings(mutator func(*Settings) error) error {
 		if err := mutator(&state.Settings); err != nil {
 			return err
 		}
+		runtime, err := ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
+		if err != nil {
+			return err
+		}
+		state.Settings.HubRegion = runtime.ID
+		state.Settings.HubURL = runtime.HubURL
 		s.settings = state.Settings
 		return nil
 	}); err != nil {
 		return err
+	}
+	if setter, ok := s.hub.(baseURLSetter); ok {
+		snapshot := s.store.Snapshot()
+		baseURL := strings.TrimSpace(snapshot.Session.APIBase)
+		if baseURL == "" {
+			baseURL = strings.TrimSpace(snapshot.Settings.HubURL)
+		}
+		if baseURL != "" {
+			setter.SetBaseURL(baseURL)
+		}
 	}
 	return nil
 }
@@ -268,13 +285,14 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 	state := s.store.Snapshot()
 	var payload dispatchPayload
 	if err := payload.FromAny(message.OpenClawMessage.Payload); err != nil {
-		return s.publishFailureToCaller(ctx, state, PendingTask{
+		pending := PendingTask{
 			ID:              NewID("task"),
 			CallerAgentUUID: message.FromAgentUUID,
 			CallerAgentURI:  message.FromAgentURI,
 			CallerRequestID: message.OpenClawMessage.RequestID,
 			LogPath:         filepath.Join(s.settings.DataDir, "logs", NewID("task")+".log"),
-		}, failureFromError("Failed to decode the dispatch request payload.", fmt.Errorf("decode dispatch payload: %w", err)))
+		}
+		return s.failDispatchedTask(ctx, state, pending, failureFromError("Failed to decode the dispatch request payload.", fmt.Errorf("decode dispatch payload: %w", err)))
 	}
 
 	req := DispatchRequest{
@@ -288,7 +306,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 	}
 	target, err := s.resolveDispatchTarget(state, req)
 	if err != nil {
-		return s.publishFailureToCaller(ctx, state, PendingTask{
+		pending := PendingTask{
 			ID:                NewID("task"),
 			CallerAgentUUID:   message.FromAgentUUID,
 			CallerAgentURI:    message.FromAgentURI,
@@ -296,7 +314,9 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 			OriginalSkillName: req.SkillName,
 			Repo:              req.Repo,
 			LogPath:           filepath.Join(s.settings.DataDir, "logs", NewID("task")+".log"),
-		}, failureFromError("Task dispatch failed before it reached a connected agent.", err))
+			DispatchPayload:   normalizePayload(req.Payload, req.Repo, req.LogPaths),
+		}
+		return s.failDispatchedTask(ctx, state, pending, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
 
 	task, publishReq := s.buildPendingTask(state, target, req, message.FromAgentUUID, message.FromAgentURI)
@@ -311,7 +331,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 	}
 
 	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
-		return s.publishFailureToCaller(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
+		return s.failDispatchedTask(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
 
 	if err := s.store.Update(func(current *AppState) error {
@@ -399,6 +419,16 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 	return nil
 }
 
+func (s *Service) failDispatchedTask(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
+	if pending.CallerAgentUUID != "" || pending.CallerAgentURI != "" {
+		if err := s.publishFailureToCaller(ctx, state, pending, report); err != nil {
+			return err
+		}
+	}
+	_, err := s.queueFollowUp(ctx, state, pending, report)
+	return err
+}
+
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
 	logPaths := followUpLogPaths(pending)
 	originalRequest := cloneMap(pending.DispatchPayload)
@@ -484,8 +514,8 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 	}
 	logPaths := followUpLogPaths(pending)
 	if err := s.writeTaskLog(pending.LogPath, map[string]any{
-		"phase": "failed",
-		"error": report.Error,
+		"phase":  "failed",
+		"error":  report.Error,
 		"detail": report.Detail,
 	}); err != nil {
 		return err
@@ -511,8 +541,8 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 			"error_detail": report.Detail,
 			"log_paths":    logPaths,
 		},
-		OK:          boolPtr(false),
-		Status:      "failed",
+		OK:     boolPtr(false),
+		Status: "failed",
 	}
 	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
 		ToAgentUUID: pending.CallerAgentUUID,

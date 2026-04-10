@@ -80,11 +80,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		selectedRuntime = app.DefaultHubRuntime()
 	}
 	view := pageData{
-		State:            state,
-		Flash:            r.URL.Query().Get("message"),
-		IsError:          r.URL.Query().Get("level") == "error",
-		RuntimeOptions:   app.SupportedHubRuntimes(),
-		SelectedRuntime:  selectedRuntime,
+		State:           state,
+		Flash:           r.URL.Query().Get("message"),
+		IsError:         r.URL.Query().Get("level") == "error",
+		RuntimeOptions:  app.SupportedHubRuntimes(),
+		SelectedRuntime: selectedRuntime,
 	}
 	if err := s.templates.ExecuteTemplate(w, "index.html", view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -101,8 +101,6 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.service.BindAndRegister(r.Context(), app.BindProfile{
-		HubRegion:       strings.TrimSpace(r.FormValue("hub_region")),
-		HubURL:          strings.TrimSpace(r.FormValue("hub_url")),
 		BindToken:       strings.TrimSpace(r.FormValue("bind_token")),
 		Handle:          strings.TrimSpace(r.FormValue("handle")),
 		ProfileMarkdown: r.FormValue("profile_markdown"),
@@ -203,6 +201,14 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := s.service.UpdateSettings(func(settings *app.Settings) error {
+		if runtimeID := strings.TrimSpace(r.FormValue("hub_region")); runtimeID != "" {
+			runtime, err := app.ResolveHubRuntime(runtimeID, "")
+			if err != nil {
+				return err
+			}
+			settings.HubRegion = runtime.ID
+			settings.HubURL = runtime.HubURL
+		}
 		if ref := strings.TrimSpace(r.FormValue("follow_up_agent_ref")); ref != "" {
 			settings.FollowUpAgentRef = ref
 		} else {

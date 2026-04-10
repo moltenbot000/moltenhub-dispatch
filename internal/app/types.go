@@ -107,8 +107,6 @@ type AppState struct {
 }
 
 type BindProfile struct {
-	HubRegion       string
-	HubURL          string
 	BindToken       string
 	Handle          string
 	ProfileMarkdown string
