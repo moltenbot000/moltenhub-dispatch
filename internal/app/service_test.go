@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +15,7 @@ type fakeHubClient struct {
 	bindResponse        hub.BindResponse
 	bindRequests        []hub.BindRequest
 	updateMetadataCalls []hub.UpdateMetadataRequest
+	updateMetadataErr   error
 	publishCalls        []hub.PublishRequest
 	offlineCalls        []hub.OfflineRequest
 	baseURLCalls        []string
@@ -39,6 +41,9 @@ func (f *fakeHubClient) UpdateMetadata(_ context.Context, _ string, req hub.Upda
 			Code:       "unauthorized",
 			Message:    "missing or invalid bearer token",
 		}
+	}
+	if f.updateMetadataErr != nil {
+		return nil, f.updateMetadataErr
 	}
 	f.updateMetadataCalls = append(f.updateMetadataCalls, req)
 	return map[string]any{"status": "ok"}, nil
@@ -107,6 +112,8 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	err := service.BindAndRegister(context.Background(), BindProfile{
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
+		Emoji:           "🤖",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
 	})
 	if err != nil {
@@ -129,10 +136,22 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	if got := fake.updateMetadataCalls[0].Metadata["harness"]; got != dispatcherHarness {
 		t.Fatalf("unexpected harness: %#v", got)
 	}
+	if got := fake.updateMetadataCalls[0].Metadata["display_name"]; got != "Dispatch Agent" {
+		t.Fatalf("unexpected display name: %#v", got)
+	}
+	if got := fake.updateMetadataCalls[0].Metadata["emoji"]; got != "🤖" {
+		t.Fatalf("unexpected emoji: %#v", got)
+	}
 
 	state := service.store.Snapshot()
 	if state.Session.AgentToken != "agent-token" {
 		t.Fatalf("expected persisted token, got %q", state.Session.AgentToken)
+	}
+	if state.Session.DisplayName != "Dispatch Agent" {
+		t.Fatalf("expected persisted display name, got %q", state.Session.DisplayName)
+	}
+	if state.Session.Emoji != "🤖" {
+		t.Fatalf("expected persisted emoji, got %q", state.Session.Emoji)
 	}
 	if state.Settings.HubRegion != HubRegionNA {
 		t.Fatalf("expected hub region %q, got %q", HubRegionNA, state.Settings.HubRegion)
@@ -158,6 +177,7 @@ func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 	err := service.BindAndRegister(context.Background(), BindProfile{
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
 	})
 	if err != nil {
@@ -201,6 +221,7 @@ func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	err = service.BindAndRegister(context.Background(), BindProfile{
 		BindToken:       "bind-token",
 		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
 		ProfileMarkdown: "Dispatches skill requests to connected agents.",
 	})
 	if err != nil {
@@ -219,6 +240,104 @@ func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	}
 	if len(fake.bindRequests) != 1 || fake.bindRequests[0].HubURL != "https://eu.hub.molten.bot" {
 		t.Fatalf("expected bind request against eu runtime, got %#v", fake.bindRequests)
+	}
+}
+
+func TestBindAndRegisterPersistsBoundSessionWhenMetadataUpdateFails(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentToken: "agent-token",
+		AgentUUID:  "agent-uuid",
+		AgentURI:   "molten://dispatch/agent",
+		Handle:     "dispatch-agent",
+		APIBase:    "https://na.hub.molten.bot",
+	}
+	fake.updateMetadataErr = errors.New("hub metadata unavailable")
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		BindToken:       "bind-token",
+		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
+		Emoji:           "🤖",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err == nil {
+		t.Fatal("expected metadata failure")
+	}
+
+	state := service.store.Snapshot()
+	if state.Session.AgentToken != "agent-token" {
+		t.Fatalf("expected token to persist after bind success, got %q", state.Session.AgentToken)
+	}
+	if state.Session.Handle != "dispatch-agent" {
+		t.Fatalf("expected handle to persist after bind success, got %q", state.Session.Handle)
+	}
+	if state.Session.DisplayName != "Dispatch Agent" {
+		t.Fatalf("expected display name to persist after bind success, got %q", state.Session.DisplayName)
+	}
+}
+
+func TestUpdateAgentProfileUpdatesMetadataAndStoredProfile(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.Handle = "dispatch-agent"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.UpdateAgentProfile(context.Background(), AgentProfile{
+		DisplayName:     "Jef's Codex",
+		Emoji:           "💯",
+		ProfileMarkdown: "What this runtime is for",
+	})
+	if err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+
+	if len(fake.updateMetadataCalls) != 1 {
+		t.Fatalf("expected one metadata update, got %d", len(fake.updateMetadataCalls))
+	}
+	if fake.updateMetadataCalls[0].Handle != "dispatch-agent" {
+		t.Fatalf("expected stored handle to be reused, got %q", fake.updateMetadataCalls[0].Handle)
+	}
+
+	state := service.store.Snapshot()
+	if state.Session.DisplayName != "Jef's Codex" {
+		t.Fatalf("unexpected persisted display name: %q", state.Session.DisplayName)
+	}
+	if state.Session.Emoji != "💯" {
+		t.Fatalf("unexpected persisted emoji: %q", state.Session.Emoji)
+	}
+	if state.Session.ProfileBio != "What this runtime is for" {
+		t.Fatalf("unexpected persisted bio: %q", state.Session.ProfileBio)
+	}
+}
+
+func TestUpdateAgentProfileRejectsHandleChangeAfterBind(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.Handle = "dispatch-agent"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.UpdateAgentProfile(context.Background(), AgentProfile{
+		Handle: "other-handle",
+	})
+	if err == nil {
+		t.Fatal("expected immutable handle error")
 	}
 }
 
@@ -271,6 +390,12 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if len(fake.publishCalls) != 2 {
 		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
 	}
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].Reason == "" {
+		t.Fatal("expected offline reason to describe the task failure")
+	}
 
 	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
 	if !ok {
@@ -281,6 +406,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	}
 	if failurePayload["error"] != "no connected agent matched \"missing-agent\"" {
 		t.Fatalf("unexpected caller error: %#v", failurePayload["error"])
+	}
+	if got := fake.publishCalls[0].Message.ErrorDetail.(map[string]any)["message"]; got != "Task dispatch failed before it reached a connected agent." {
+		t.Fatalf("unexpected caller error detail payload: %#v", fake.publishCalls[0].Message.ErrorDetail)
 	}
 
 	state := service.store.Snapshot()
@@ -365,6 +493,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if len(fake.publishCalls) != 2 {
 		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
 	}
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
 
 	failureMessage := fake.publishCalls[0].Message
 	if failureMessage.Type != "skill_result" {
@@ -382,6 +513,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 	if got := failurePayload["error_detail"].(map[string]any)["stderr"]; got != "panic: boom" {
 		t.Fatalf("unexpected caller failure detail: %#v", failurePayload["error_detail"])
+	}
+	if got := failureMessage.ErrorDetail.(map[string]any)["status"]; got != "failed" {
+		t.Fatalf("unexpected caller error detail envelope: %#v", failureMessage.ErrorDetail)
 	}
 
 	followUpMessage := fake.publishCalls[1].Message

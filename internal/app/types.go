@@ -20,6 +20,9 @@ type Session struct {
 	AgentUUID     string    `json:"agent_uuid"`
 	AgentURI      string    `json:"agent_uri"`
 	Handle        string    `json:"handle"`
+	DisplayName   string    `json:"display_name"`
+	Emoji         string    `json:"emoji"`
+	ProfileBio    string    `json:"profile_bio"`
 	ManifestURL   string    `json:"manifest_url"`
 	Capabilities  string    `json:"capabilities_url"`
 	OfflineMarked bool      `json:"offline_marked"`
@@ -108,6 +111,15 @@ type AppState struct {
 type BindProfile struct {
 	BindToken       string
 	Handle          string
+	DisplayName     string
+	Emoji           string
+	ProfileMarkdown string
+}
+
+type AgentProfile struct {
+	Handle          string
+	DisplayName     string
+	Emoji           string
 	ProfileMarkdown string
 }
 

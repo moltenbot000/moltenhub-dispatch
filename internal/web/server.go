@@ -20,6 +20,7 @@ var assets embed.FS
 type service interface {
 	Snapshot() app.AppState
 	BindAndRegister(ctx context.Context, profile app.BindProfile) error
+	UpdateAgentProfile(ctx context.Context, profile app.AgentProfile) error
 	AddConnectedAgent(agent app.ConnectedAgent) error
 	DispatchFromUI(ctx context.Context, req app.DispatchRequest) (app.PendingTask, error)
 	UpdateSettings(mutator func(*app.Settings) error) error
@@ -67,6 +68,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/bind", s.handleBind)
+	s.mux.HandleFunc("/profile", s.handleProfile)
 	s.mux.HandleFunc("/agents", s.handleAgents)
 	s.mux.HandleFunc("/dispatch", s.handleDispatch)
 	s.mux.HandleFunc("/settings", s.handleSettings)
@@ -74,6 +76,10 @@ func (s *Server) routes() {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	s.renderIndex(w, r, "", false, agentProfileForm{})
+}
+
+func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash string, isError bool, form agentProfileForm) {
 	state := s.service.Snapshot()
 	selectedRuntime, err := app.ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
 	if err != nil {
@@ -81,10 +87,16 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	view := pageData{
 		State:           state,
-		Flash:           r.URL.Query().Get("message"),
-		IsError:         r.URL.Query().Get("level") == "error",
+		Flash:           flash,
+		IsError:         isError,
 		RuntimeOptions:  app.SupportedHubRuntimes(),
 		SelectedRuntime: selectedRuntime,
+		ProfileForm:     defaultProfileForm(state, form),
+		EmojiOptions:    emojiOptions(),
+	}
+	if view.Flash == "" {
+		view.Flash = r.URL.Query().Get("message")
+		view.IsError = r.URL.Query().Get("level") == "error"
 	}
 	if err := s.templates.ExecuteTemplate(w, "index.html", view); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -100,15 +112,40 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		s.redirectWithMessage(w, r, "error", err.Error())
 		return
 	}
+	form := profileFormFromRequest(r)
 	if err := s.service.BindAndRegister(r.Context(), app.BindProfile{
 		BindToken:       strings.TrimSpace(r.FormValue("bind_token")),
-		Handle:          strings.TrimSpace(r.FormValue("handle")),
-		ProfileMarkdown: r.FormValue("profile_markdown"),
+		Handle:          form.Handle,
+		DisplayName:     form.DisplayName,
+		Emoji:           form.Emoji,
+		ProfileMarkdown: form.ProfileMarkdown,
 	}); err != nil {
-		s.redirectWithMessage(w, r, "error", err.Error())
+		s.renderIndex(w, r, err.Error(), true, form)
 		return
 	}
 	s.redirectWithMessage(w, r, "info", "Agent bound and profile registered.")
+}
+
+func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.redirectWithMessage(w, r, "error", err.Error())
+		return
+	}
+	form := profileFormFromRequest(r)
+	if err := s.service.UpdateAgentProfile(r.Context(), app.AgentProfile{
+		Handle:          form.Handle,
+		DisplayName:     form.DisplayName,
+		Emoji:           form.Emoji,
+		ProfileMarkdown: form.ProfileMarkdown,
+	}); err != nil {
+		s.renderIndex(w, r, err.Error(), true, form)
+		return
+	}
+	s.redirectWithMessage(w, r, "info", "Agent profile updated.")
 }
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
@@ -272,4 +309,57 @@ type pageData struct {
 	IsError         bool
 	RuntimeOptions  []app.HubRuntime
 	SelectedRuntime app.HubRuntime
+	ProfileForm     agentProfileForm
+	EmojiOptions    []string
+}
+
+type agentProfileForm struct {
+	BindToken       string
+	Handle          string
+	DisplayName     string
+	Emoji           string
+	ProfileMarkdown string
+}
+
+func profileFormFromRequest(r *http.Request) agentProfileForm {
+	return agentProfileForm{
+		BindToken:       strings.TrimSpace(r.FormValue("bind_token")),
+		Handle:          strings.TrimSpace(r.FormValue("handle")),
+		DisplayName:     strings.TrimSpace(r.FormValue("display_name")),
+		Emoji:           strings.TrimSpace(r.FormValue("emoji")),
+		ProfileMarkdown: strings.TrimSpace(r.FormValue("profile_markdown")),
+	}
+}
+
+func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileForm {
+	if state.Session.AgentToken != "" {
+		if form.Handle == "" {
+			form.Handle = state.Session.Handle
+		}
+		if form.DisplayName == "" {
+			form.DisplayName = state.Session.DisplayName
+		}
+		if form.Emoji == "" {
+			form.Emoji = state.Session.Emoji
+		}
+		if form.Emoji == "" {
+			form.Emoji = "🤖"
+		}
+		if form.ProfileMarkdown == "" {
+			form.ProfileMarkdown = state.Session.ProfileBio
+		}
+		return form
+	}
+
+	if form.Emoji == "" {
+		form.Emoji = "🤖"
+	}
+	if form.ProfileMarkdown == "" {
+		form.ProfileMarkdown = "Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks."
+	}
+	return form
+}
+
+func emojiOptions() []string {
+	return []string{"🤖", "💯", "🛠️", "⚙️", "🚀", "🧠"}
 }

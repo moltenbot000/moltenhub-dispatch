@@ -87,13 +87,19 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if err != nil {
 		return err
 	}
+	agentProfile := normalizeAgentProfile(AgentProfile{
+		Handle:          profile.Handle,
+		DisplayName:     profile.DisplayName,
+		Emoji:           profile.Emoji,
+		ProfileMarkdown: profile.ProfileMarkdown,
+	})
 	if setter, ok := s.hub.(baseURLSetter); ok {
 		setter.SetBaseURL(runtime.HubURL)
 	}
 	result, err := s.hub.BindAgent(ctx, hub.BindRequest{
 		HubURL:    runtime.HubURL,
 		BindToken: profile.BindToken,
-		Handle:    profile.Handle,
+		Handle:    agentProfile.Handle,
 	})
 	if err != nil {
 		return err
@@ -101,26 +107,8 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if setter, ok := s.hub.(baseURLSetter); ok && strings.TrimSpace(result.APIBase) != "" {
 		setter.SetBaseURL(result.APIBase)
 	}
-
-	metadata := map[string]any{
-		"agent_type":       "dispatch",
-		"profile_markdown": strings.TrimSpace(profile.ProfileMarkdown),
-		"harness":          dispatcherHarness,
-		"skills":           advertisedSkills,
-		"presence": map[string]any{
-			"status":      "online",
-			"ready":       true,
-			"transport":   "polling+web",
-			"session_key": s.settings.SessionKey,
-			"updated_at":  time.Now().UTC().Format(time.RFC3339),
-		},
-	}
-
-	if _, err := s.hub.UpdateMetadata(ctx, result.AgentToken, hub.UpdateMetadataRequest{
-		Handle:   strings.TrimSpace(profile.Handle),
-		Metadata: metadata,
-	}); err != nil {
-		return err
+	if strings.TrimSpace(result.Handle) != "" {
+		agentProfile.Handle = strings.TrimSpace(result.Handle)
 	}
 
 	if err := s.store.Update(func(state *AppState) error {
@@ -133,7 +121,10 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			AgentToken:    result.AgentToken,
 			AgentUUID:     result.AgentUUID,
 			AgentURI:      result.AgentURI,
-			Handle:        result.Handle,
+			Handle:        agentProfile.Handle,
+			DisplayName:   agentProfile.DisplayName,
+			Emoji:         agentProfile.Emoji,
+			ProfileBio:    agentProfile.ProfileMarkdown,
 			ManifestURL:   result.Endpoints.Manifest,
 			Capabilities:  result.Endpoints.Capabilities,
 			OfflineMarked: false,
@@ -144,7 +135,36 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}
 	s.settings = s.store.Snapshot().Settings
 
+	if err := s.updateAgentProfile(ctx, result.AgentToken, agentProfile); err != nil {
+		return fmt.Errorf("agent bound, but profile registration failed: %w", err)
+	}
+
 	return s.logEvent("info", "Agent bound", fmt.Sprintf("Bound handle %q against %s", result.Handle, result.APIBase), "", "")
+}
+
+func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) error {
+	state := s.store.Snapshot()
+	if strings.TrimSpace(state.Session.AgentToken) == "" {
+		return errors.New("agent is not bound yet")
+	}
+
+	normalized := normalizeAgentProfile(profile)
+	if normalized.Handle == "" {
+		normalized.Handle = strings.TrimSpace(state.Session.Handle)
+	}
+	if current := strings.TrimSpace(state.Session.Handle); current != "" && normalized.Handle != current {
+		return fmt.Errorf("bound handle is immutable in this console: %s", current)
+	}
+
+	if err := s.updateAgentProfile(ctx, state.Session.AgentToken, normalized); err != nil {
+		return err
+	}
+	return s.store.Update(func(current *AppState) error {
+		current.Session.DisplayName = normalized.DisplayName
+		current.Session.Emoji = normalized.Emoji
+		current.Session.ProfileBio = normalized.ProfileMarkdown
+		return nil
+	})
 }
 
 func (s *Service) AddConnectedAgent(agent ConnectedAgent) error {
@@ -374,6 +394,7 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 		if _, err := s.queueFollowUp(ctx, state, pending, failureFromMessage(message.OpenClawMessage)); err != nil {
 			return err
 		}
+		s.tryMarkTaskFailureOffline(ctx, pending, failureFromMessage(message.OpenClawMessage))
 	}
 
 	if err := s.store.Update(func(current *AppState) error {
@@ -409,6 +430,11 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 		}); queueErr != nil {
 			return queueErr
 		}
+		s.tryMarkTaskFailureOffline(ctx, pending, failureReport{
+			Message: "Task failed because the downstream agent did not reply before the timeout.",
+			Error:   err.Error(),
+			Detail:  map[string]any{"timeout": true},
+		})
 		if updateErr := s.store.Update(func(current *AppState) error {
 			current.PendingTasks = RemovePendingTask(current.PendingTasks, pending.ChildRequestID)
 			return nil
@@ -426,7 +452,11 @@ func (s *Service) failDispatchedTask(ctx context.Context, state AppState, pendin
 		}
 	}
 	_, err := s.queueFollowUp(ctx, state, pending, report)
-	return err
+	if err != nil {
+		return err
+	}
+	s.tryMarkTaskFailureOffline(ctx, pending, report)
+	return nil
 }
 
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
@@ -521,6 +551,14 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		return err
 	}
 
+	failurePayload := map[string]any{
+		"status":       "failed",
+		"message":      report.Message,
+		"error":        report.Error,
+		"error_detail": report.Detail,
+		"log_paths":    logPaths,
+	}
+
 	message := hub.OpenClawMessage{
 		Protocol:      "openclaw.http.v1",
 		Type:          "skill_result",
@@ -529,20 +567,11 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		RequestID:     pending.ParentRequestID,
 		ReplyTo:       pending.CallerRequestID,
 		PayloadFormat: "json",
-		Payload: map[string]any{
-			"status":       "failed",
-			"message":      report.Message,
-			"error":        report.Error,
-			"error_detail": report.Detail,
-			"log_paths":    logPaths,
-		},
-		Error: report.Error,
-		ErrorDetail: map[string]any{
-			"error_detail": report.Detail,
-			"log_paths":    logPaths,
-		},
-		OK:     boolPtr(false),
-		Status: "failed",
+		Payload:       failurePayload,
+		Error:         report.Error,
+		ErrorDetail:   failurePayload,
+		OK:            boolPtr(false),
+		Status:        "failed",
 	}
 	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
 		ToAgentUUID: pending.CallerAgentUUID,
@@ -615,6 +644,16 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 
 func boolPtr(value bool) *bool {
 	return &value
+}
+
+func (s *Service) updateAgentProfile(ctx context.Context, token string, profile AgentProfile) error {
+	if _, err := s.hub.UpdateMetadata(ctx, token, hub.UpdateMetadataRequest{
+		Handle:   profile.Handle,
+		Metadata: buildAgentMetadata(profile, s.settings.SessionKey),
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) resolveDispatchTarget(state AppState, req DispatchRequest) (ConnectedAgent, error) {
@@ -822,6 +861,26 @@ func failureDetailIsEmpty(detail any) bool {
 	return ok && strings.TrimSpace(value) == ""
 }
 
+func (s *Service) tryMarkTaskFailureOffline(ctx context.Context, pending PendingTask, report failureReport) {
+	if err := s.MarkOffline(ctx, failureOfflineReason(pending, report)); err != nil {
+		_ = s.logEvent("error", "Offline mark failed", err.Error(), pending.ID, pending.LogPath)
+	}
+}
+
+func failureOfflineReason(pending PendingTask, report failureReport) string {
+	parts := []string{"task failure"}
+	if pending.ID != "" {
+		parts = append(parts, "id="+pending.ID)
+	}
+	if pending.OriginalSkillName != "" {
+		parts = append(parts, "skill="+pending.OriginalSkillName)
+	}
+	if report.Error != "" {
+		parts = append(parts, "error="+report.Error)
+	}
+	return strings.Join(parts, " ")
+}
+
 func fallbackRepo(repo string) string {
 	repo = strings.TrimSpace(repo)
 	if repo == "" {
@@ -893,4 +952,40 @@ func (a ConnectedAgent) NameOrRef() string {
 		return a.AgentUUID
 	}
 	return a.AgentURI
+}
+
+func normalizeAgentProfile(profile AgentProfile) AgentProfile {
+	profile.Handle = strings.TrimSpace(profile.Handle)
+	profile.DisplayName = strings.TrimSpace(profile.DisplayName)
+	profile.Emoji = strings.TrimSpace(profile.Emoji)
+	profile.ProfileMarkdown = strings.TrimSpace(profile.ProfileMarkdown)
+	return profile
+}
+
+func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any {
+	metadata := map[string]any{
+		"agent_type":       "dispatch",
+		"display_name":     profile.DisplayName,
+		"emoji":            profile.Emoji,
+		"profile_markdown": profile.ProfileMarkdown,
+		"harness":          dispatcherHarness,
+		"skills":           advertisedSkills,
+		"presence": map[string]any{
+			"status":      "online",
+			"ready":       true,
+			"transport":   "polling+web",
+			"session_key": sessionKey,
+			"updated_at":  time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+	if profile.DisplayName == "" {
+		delete(metadata, "display_name")
+	}
+	if profile.Emoji == "" {
+		delete(metadata, "emoji")
+	}
+	if profile.ProfileMarkdown == "" {
+		delete(metadata, "profile_markdown")
+	}
+	return metadata
 }

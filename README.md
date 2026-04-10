@@ -26,15 +26,16 @@ Key integration points:
 - `POST /v1/openclaw/messages/nack`
   Releases messages when local processing fails.
 - `POST /v1/openclaw/messages/offline`
-  Marks the runtime offline during shutdown, matching the hub’s presence contract.
+  Marks the runtime offline during shutdown and after task failures, matching the hub’s presence contract in the NA/EU OpenAPI spec.
 
 ## Failure Behavior
 
 When a dispatched task fails, the app does all of the following:
 
 1. Writes task lifecycle details to a local log file under `data/logs/`.
-2. Sends a `skill_result` response back to the calling agent that clearly marks failure and includes the error details plus both the upstream failing log path(s) and the dispatcher log path.
-3. Queues a remediation follow-up task with this run config payload shape:
+2. Sends a `skill_result` response back to the calling agent that clearly marks failure and includes the failure message, error, error details, plus both the upstream failing log path(s) and the dispatcher log path.
+3. Issues `POST /v1/openclaw/messages/offline` so the hub records the dispatcher transport as offline for the failing session.
+4. Queues a remediation follow-up task with this run config payload shape:
 
 ```json
 {
