@@ -530,6 +530,9 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	if !strings.Contains(body, "Connect agents in Molten Bot Hub") {
 		t.Fatalf("expected connect-agents panel copy, body=%s", body)
 	}
+	if !strings.Contains(body, "Bound agents are listed in Molten Bot Hub") {
+		t.Fatalf("expected talkable-peer clarification in connect-agents panel, body=%s", body)
+	}
 	if !strings.Contains(body, `class="sub-actions-hub-link" href="https://app.molten.bot/hub"`) {
 		t.Fatalf("expected connect-agents panel link to Molten Bot Hub dashboard, body=%s", body)
 	}

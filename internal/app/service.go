@@ -1277,6 +1277,15 @@ func stringFromMap(values map[string]any, key string) string {
 	return strings.TrimSpace(value)
 }
 
+func firstStringFromMap(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value := stringFromMap(values, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func (s *Service) tryMarkTaskFailureOffline(ctx context.Context, pending PendingTask, report failureReport) {
 	if err := s.MarkOffline(ctx, failureOfflineReason(pending, report)); err != nil {
 		_ = s.logEvent("error", "Offline mark failed", err.Error(), pending.ID, pending.LogPath)
@@ -1432,8 +1441,8 @@ func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
 }
 
 func connectedAgentsFromCapabilities(capabilities map[string]any, state AppState) []ConnectedAgent {
-	rawCatalog, ok := capabilities["peer_skill_catalog"]
-	if !ok || rawCatalog == nil {
+	rawCatalog := connectedAgentCatalog(capabilities)
+	if rawCatalog == nil {
 		return nil
 	}
 
@@ -1467,6 +1476,15 @@ func connectedAgentsFromCapabilities(capabilities map[string]any, state AppState
 		agents = append(agents, agent)
 	}
 	return agents
+}
+
+func connectedAgentCatalog(capabilities map[string]any) any {
+	for _, key := range []string{"peer_skill_catalog", "connected_agents", "bound_agents", "agents", "peers", "results", "items"} {
+		if raw := capabilities[key]; raw != nil {
+			return raw
+		}
+	}
+	return nil
 }
 
 func flattenPeerSkillCatalog(raw any) []map[string]any {
@@ -1565,7 +1583,7 @@ func firstCapabilityString(primary map[string]any, metadata map[string]any, agen
 		if source == nil {
 			continue
 		}
-		if value := stringFromMap(source, keys...); value != "" {
+		if value := firstStringFromMap(source, keys...); value != "" {
 			return value
 		}
 	}

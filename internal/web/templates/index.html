@@ -1128,7 +1128,7 @@
         }
 
         const reason = requiresAgentConnection
-          ? "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Manual Dispatch."
+          ? "No talkable peer agents are available yet. Bound agents are listed in Molten Bot Hub, and dispatch targets appear here after Hub trust/connectivity makes them reachable."
           : (bound
             ? "Sub-actions stay hidden while the Hub connection is offline or unavailable."
             : "Sub-actions stay hidden until this runtime is bound to Molten Hub and connectivity is working.");
