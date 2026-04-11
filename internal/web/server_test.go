@@ -551,6 +551,12 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	if !strings.Contains(body, "Connect agents in Molten Bot Hub") {
 		t.Fatalf("expected connect-agents panel copy, body=%s", body)
 	}
+	if !strings.Contains(body, "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Dispatch.") {
+		t.Fatalf("expected connect-agents reason to mention Dispatch, body=%s", body)
+	}
+	if strings.Contains(body, "enable Manual Dispatch") {
+		t.Fatalf("did not expect legacy Manual Dispatch wording in connect-agents reason, body=%s", body)
+	}
 	if !strings.Contains(body, `class="sub-actions-hub-link" href="https://app.molten.bot/hub"`) {
 		t.Fatalf("expected connect-agents panel link to Molten Bot Hub dashboard, body=%s", body)
 	}
