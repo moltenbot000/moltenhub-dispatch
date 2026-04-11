@@ -38,20 +38,14 @@
     </section>
     {{end}}
 
+    {{if not .State.Session.AgentToken}}
     <section class="grid two-up">
-      {{if .State.Session.AgentToken}}
-      <article class="panel">
-        <h2>1. Agent Settings</h2>
-        <p class="empty">Use the settings icon in the bottom dock to edit the dispatcher profile.</p>
-        <button type="button" id="open-agent-settings">Open Agent Settings</button>
-      </article>
-      {{else}}
       <article class="panel">
         <h2>1. Onboarding</h2>
         <p class="empty">Complete the onboarding dialog to select your runtime region and bind this dispatcher agent.</p>
       </article>
-      {{end}}
     </section>
+    {{end}}
 
     <section id="sub-actions-notice" class="panel" {{if .SubActions.Visible}}hidden{{end}}>
       <h2>Sub-Actions Hidden</h2>
@@ -61,23 +55,7 @@
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
       <section class="grid two-up">
         <article class="panel">
-          <h2>3. Connected Agents</h2>
-          <form method="post" action="/agents" class="stack">
-            <label>ID<input name="id" placeholder="worker-a"></label>
-            <label>Name<input name="name" placeholder="Worker A"></label>
-            <label>Agent UUID<input name="agent_uuid" placeholder="uuid"></label>
-            <label>Agent URI<input name="agent_uri" placeholder="molten://agent/worker-a"></label>
-            <label>Default Skill<input name="default_skill" placeholder="run_task"></label>
-            <label>Repo<input name="repo" placeholder="/tmp/repo"></label>
-            <label>Skills<textarea name="skills" rows="3" placeholder="run_task:Execute coding tasks, review_failure_logs:Fix broken tasks"></textarea></label>
-            <label>Notes<textarea name="notes" rows="3" placeholder="Trust path already approved in hub."></textarea></label>
-            <label class="checkbox"><input type="checkbox" name="failure_reviewer"> This agent should receive remediation follow-ups.</label>
-            <button type="submit">Save Connected Agent</button>
-          </form>
-        </article>
-
-        <article class="panel">
-          <h2>4. Manual Dispatch</h2>
+          <h2>Manual Dispatch</h2>
           <form method="post" action="/dispatch" class="stack">
             <label>Target Agent Ref<input name="target_agent_ref" placeholder="worker-a or molten://agent/worker-a"></label>
             <label>Skill Name<input name="skill_name" placeholder="run_task" required></label>
@@ -385,7 +363,6 @@
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const onboardingModalBackdrop = document.getElementById("onboarding-modal-backdrop");
       const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");
-      const openAgentSettingsButton = document.getElementById("open-agent-settings");
       const agentSettingsModalBackdrop = document.getElementById("agent-settings-modal-backdrop");
       const agentSettingsModalClose = document.getElementById("agent-settings-modal-close");
       const agentSettingsHandle = document.getElementById("agent-settings-handle");
@@ -757,12 +734,6 @@
 
       if (agentSettingsDockButton instanceof HTMLButtonElement) {
         agentSettingsDockButton.addEventListener("click", () => {
-          setAgentSettingsModalOpen(true);
-        });
-      }
-
-      if (openAgentSettingsButton instanceof HTMLButtonElement) {
-        openAgentSettingsButton.addEventListener("click", () => {
           setAgentSettingsModalOpen(true);
         });
       }

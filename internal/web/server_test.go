@@ -376,7 +376,13 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, `id="onboarding-modal-backdrop"`) {
 		t.Fatalf("did not expect onboarding modal once bound, body=%s", body)
 	}
-	if !strings.Contains(body, ">4. Manual Dispatch<") {
+	if strings.Contains(body, ">1. Agent Settings<") {
+		t.Fatalf("did not expect removed agent settings section, body=%s", body)
+	}
+	if strings.Contains(body, `id="open-agent-settings"`) {
+		t.Fatalf("did not expect removed agent settings section button, body=%s", body)
+	}
+	if !strings.Contains(body, ">Manual Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
 	}
 	if !strings.Contains(body, `id="sub-actions-notice" class="panel" hidden`) {
@@ -493,10 +499,10 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	if !strings.Contains(body, `id="sub-actions" hidden`) {
 		t.Fatalf("expected sub-actions container to be hidden, body=%s", body)
 	}
-	if !strings.Contains(body, ">3. Connected Agents<") {
-		t.Fatalf("expected connected agents markup to remain available for client-side reveal, body=%s", body)
+	if strings.Contains(body, ">3. Connected Agents<") {
+		t.Fatalf("did not expect removed connected agents section, body=%s", body)
 	}
-	if !strings.Contains(body, ">4. Manual Dispatch<") {
+	if !strings.Contains(body, ">Manual Dispatch<") {
 		t.Fatalf("expected manual dispatch markup to remain available for client-side reveal, body=%s", body)
 	}
 	if !strings.Contains(body, "until this runtime is bound to Molten Hub and connectivity is working") {

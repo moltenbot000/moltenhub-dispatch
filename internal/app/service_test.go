@@ -1125,6 +1125,12 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected follow-up repos: %#v", got)
 	}
+	if got := state.FollowUpTasks[0].RunConfig.BaseBranch; got != "main" {
+		t.Fatalf("unexpected follow-up baseBranch: %q", got)
+	}
+	if got := state.FollowUpTasks[0].RunConfig.TargetSubdir; got != "." {
+		t.Fatalf("unexpected follow-up targetSubdir: %q", got)
+	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
 		t.Fatalf("unexpected follow-up log paths: %#v", got)
 	}
