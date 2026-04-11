@@ -79,10 +79,20 @@ func (s *Server) routes() {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodHead)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	s.renderIndex(w, r, "", false, agentProfileForm{}, nil)
 }
 
-func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodHead)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	state := s.service.Snapshot()
 	view := connectionStatusView(state.Connection)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -133,8 +143,7 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 	}
 	form := profileFormFromRequest(r)
 	if err := s.applyRuntimeSelection(r.FormValue("hub_region")); err != nil {
-		onboarding := onboardingViewFromError(s.service.Snapshot(), app.WrapOnboardingError(app.OnboardingStepBind, err))
-		s.renderIndex(w, r, err.Error(), true, form, &onboarding)
+		s.redirectWithMessage(w, r, "error", err.Error())
 		return
 	}
 	if err := s.service.BindAndRegister(r.Context(), app.BindProfile{
@@ -144,8 +153,7 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		Emoji:           form.Emoji,
 		ProfileMarkdown: form.ProfileMarkdown,
 	}); err != nil {
-		onboarding := onboardingViewFromError(s.service.Snapshot(), err)
-		s.renderIndex(w, r, err.Error(), true, form, &onboarding)
+		s.redirectWithMessage(w, r, "error", err.Error())
 		return
 	}
 	s.redirectWithMessage(w, r, "info", "Agent bound and profile registered.")
@@ -167,7 +175,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		Emoji:           form.Emoji,
 		ProfileMarkdown: form.ProfileMarkdown,
 	}); err != nil {
-		s.renderIndex(w, r, err.Error(), true, form, nil)
+		s.redirectWithMessage(w, r, "error", err.Error())
 		return
 	}
 	s.redirectWithMessage(w, r, "info", "Agent profile updated.")

@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
 )
@@ -493,5 +495,165 @@ func TestUpdateMetadataFallsBackWhenCanonicalMetadataEndpointIsMissing(t *testin
 	}
 	if aliasCalls != 1 {
 		t.Fatalf("expected one alias fallback call, got %d", aliasCalls)
+	}
+}
+
+func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu     sync.Mutex
+		called = map[string]bool{}
+	)
+
+	markCalled := func(name string) {
+		mu.Lock()
+		called[name] = true
+		mu.Unlock()
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/runtime/openclaw/publish":
+			markCalled("publish")
+			if r.Method != http.MethodPost {
+				t.Fatalf("publish method = %s, want %s", r.Method, http.MethodPost)
+			}
+			var payload hub.PublishRequest
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode publish payload: %v", err)
+			}
+			if got := payload.Message.Type; got != "skill_request" {
+				t.Fatalf("publish type = %q, want skill_request", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": true,
+				"result": map[string]any{
+					"message_id":  "message-1",
+					"delivery":    "queued",
+					"idempotency": "idem-1",
+				},
+			})
+		case "/runtime/openclaw/pull":
+			markCalled("pull")
+			if r.Method != http.MethodGet {
+				t.Fatalf("pull method = %s, want %s", r.Method, http.MethodGet)
+			}
+			if got := r.URL.Query().Get("timeout_ms"); got != "25000" {
+				t.Fatalf("pull timeout_ms = %q, want 25000", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": true,
+				"result": map[string]any{
+					"delivery_id":     "delivery-1",
+					"message_id":      "message-1",
+					"from_agent_uuid": "source-agent",
+					"openclaw_message": map[string]any{
+						"type":       "skill_request",
+						"request_id": "request-1",
+					},
+				},
+			})
+		case "/v1/openclaw/messages/ack":
+			markCalled("ack")
+			if r.Method != http.MethodPost {
+				t.Fatalf("ack method = %s, want %s", r.Method, http.MethodPost)
+			}
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode ack payload: %v", err)
+			}
+			if got := body["delivery_id"]; got != "delivery-ack" {
+				t.Fatalf("ack delivery_id = %q, want delivery-ack", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1/openclaw/messages/nack":
+			markCalled("nack")
+			if r.Method != http.MethodPost {
+				t.Fatalf("nack method = %s, want %s", r.Method, http.MethodPost)
+			}
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode nack payload: %v", err)
+			}
+			if got := body["delivery_id"]; got != "delivery-nack" {
+				t.Fatalf("nack delivery_id = %q, want delivery-nack", got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case "/runtime/openclaw/offline":
+			markCalled("offline")
+			if r.Method != http.MethodPost {
+				t.Fatalf("offline method = %s, want %s", r.Method, http.MethodPost)
+			}
+			var body hub.OfflineRequest
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode offline payload: %v", err)
+			}
+			if body.SessionKey != "session-1" {
+				t.Fatalf("offline session_key = %q, want session-1", body.SessionKey)
+			}
+			if body.Reason != "task failure id=task-1" {
+				t.Fatalf("offline reason = %q, want task failure id=task-1", body.Reason)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
+		OpenClawPushURL:    server.URL + "/runtime/openclaw/publish",
+		OpenClawPullURL:    server.URL + "/runtime/openclaw/pull",
+		OpenClawOfflineURL: server.URL + "/runtime/openclaw/offline",
+	})
+
+	_, err := client.PublishOpenClaw(context.Background(), "agent-token", hub.PublishRequest{
+		ToAgentUUID: "worker-1",
+		ClientMsgID: "client-msg-1",
+		Message: hub.OpenClawMessage{
+			Type:      "skill_request",
+			RequestID: "request-1",
+			SkillName: "dispatch_skill_request",
+			Payload:   map[string]any{"repo": "/tmp/repo"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("publish openclaw: %v", err)
+	}
+
+	pull, ok, err := client.PullOpenClaw(context.Background(), "agent-token", 25*time.Second)
+	if err != nil {
+		t.Fatalf("pull openclaw: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected pull message")
+	}
+	if pull.DeliveryID != "delivery-1" {
+		t.Fatalf("pull delivery_id = %q, want delivery-1", pull.DeliveryID)
+	}
+
+	if err := client.AckOpenClaw(context.Background(), "agent-token", "delivery-ack"); err != nil {
+		t.Fatalf("ack openclaw: %v", err)
+	}
+	if err := client.NackOpenClaw(context.Background(), "agent-token", "delivery-nack"); err != nil {
+		t.Fatalf("nack openclaw: %v", err)
+	}
+	if err := client.MarkOffline(context.Background(), "agent-token", hub.OfflineRequest{
+		SessionKey: "session-1",
+		Reason:     "task failure id=task-1",
+	}); err != nil {
+		t.Fatalf("mark offline: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for _, key := range []string{"publish", "pull", "ack", "nack", "offline"} {
+		if !called[key] {
+			t.Fatalf("expected %s call", key)
+		}
 	}
 }

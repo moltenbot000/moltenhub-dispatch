@@ -77,7 +77,7 @@ func (s *stubService) UpdateSettings(mutator func(*app.Settings) error) error {
 	return mutator(&s.state.Settings)
 }
 
-func TestHandleBindRendersSubmittedTokenOnFailure(t *testing.T) {
+func TestHandleBindRedirectsOnFailure(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{bindErr: errors.New("bind failed")})
@@ -91,21 +91,15 @@ func TestHandleBindRendersSubmittedTokenOnFailure(t *testing.T) {
 
 	server.Handler().ServeHTTP(rec, req)
 
-	body := rec.Body.String()
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 response, got %d", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
 	}
-	if !strings.Contains(body, `name="bind_token" value="bind-123"`) {
-		t.Fatalf("expected bind token to remain in form, body=%s", body)
+	location := rec.Header().Get("Location")
+	if !strings.Contains(location, "level=error") {
+		t.Fatalf("expected error redirect level, location=%q", location)
 	}
-	if !strings.Contains(body, "bind failed") {
-		t.Fatalf("expected bind error in page, body=%s", body)
-	}
-	if !strings.Contains(body, `id="bind-submit">Bind</button>`) {
-		t.Fatalf("expected bind CTA label to be Bind, body=%s", body)
-	}
-	if strings.Contains(body, "Bind And Register") {
-		t.Fatalf("did not expect legacy bind CTA label, body=%s", body)
+	if !strings.Contains(location, "bind+failed") {
+		t.Fatalf("expected bind failure message in redirect location, location=%q", location)
 	}
 }
 
@@ -763,9 +757,25 @@ func TestHandleBindShowsEditProfileAfterSessionBecomesBound(t *testing.T) {
 
 	server.Handler().ServeHTTP(rec, req)
 
-	body := rec.Body.String()
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 response, got %d", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+
+	location := rec.Header().Get("Location")
+	if !strings.Contains(location, "level=error") {
+		t.Fatalf("expected error redirect level, location=%q", location)
+	}
+	if !strings.Contains(location, "agent+bound%2C+but+profile+registration+failed") {
+		t.Fatalf("expected surfaced bind error in redirect, location=%q", location)
+	}
+
+	followReq := httptest.NewRequest(http.MethodGet, location, nil)
+	followRec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(followRec, followReq)
+	body := followRec.Body.String()
+
+	if followRec.Code != http.StatusOK {
+		t.Fatalf("expected successful GET after redirect, got %d", followRec.Code)
 	}
 	if strings.Contains(body, `name="bind_token"`) {
 		t.Fatalf("did not expect bind token field after session became bound, body=%s", body)
@@ -775,6 +785,42 @@ func TestHandleBindShowsEditProfileAfterSessionBecomesBound(t *testing.T) {
 	}
 	if !strings.Contains(body, "agent bound, but profile registration failed") {
 		t.Fatalf("expected surfaced bind error, body=%s", body)
+	}
+}
+
+func TestHandleProfileRedirectsOnFailure(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken:      "agent-token",
+				Handle:          "dispatch-agent",
+				HandleFinalized: true,
+			},
+		},
+		updateProfileErr: errors.New("profile update failed"),
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/profile", strings.NewReader("handle=dispatch-agent&display_name=Jef%27s+Codex"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	location := rec.Header().Get("Location")
+	if !strings.Contains(location, "level=error") {
+		t.Fatalf("expected error redirect level, location=%q", location)
+	}
+	if !strings.Contains(location, "profile+update+failed") {
+		t.Fatalf("expected update failure message in redirect location, location=%q", location)
 	}
 }
 
@@ -866,6 +912,48 @@ func TestHandleStatusReturnsErrorConnectionView(t *testing.T) {
 	}
 	if view.Description != "status request failed with 503" {
 		t.Fatalf("unexpected description: %#v", view)
+	}
+}
+
+func TestHandleIndexRejectsPostMethod(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{state: app.AppState{Settings: app.DefaultSettings()}})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 response, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Allow"); got != http.MethodGet+", "+http.MethodHead {
+		t.Fatalf("unexpected Allow header: %q", got)
+	}
+}
+
+func TestHandleStatusRejectsPostMethod(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{state: app.AppState{Settings: app.DefaultSettings()}})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/status", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 response, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Allow"); got != http.MethodGet+", "+http.MethodHead {
+		t.Fatalf("unexpected Allow header: %q", got)
 	}
 }
 
