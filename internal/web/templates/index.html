@@ -41,49 +41,9 @@
     <section class="grid two-up">
       {{if .State.Session.AgentToken}}
       <article class="panel">
-        <h2>1. Edit Agent Profile</h2>
-        <form method="post" action="/profile" class="stack profile-shell">
-          <div class="profile-grid profile-grid-top">
-            <label>Handle<input name="handle" value="{{.ProfileForm.Handle}}" {{if .State.Session.HandleFinalized}}readonly{{end}}></label>
-            <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Jef's Codex"></label>
-            <fieldset class="emoji-fieldset">
-              <legend>Emoji</legend>
-              <div class="hub-emoji-picker" data-hub-emoji-picker>
-                <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
-                <button
-                  type="button"
-                  class="hub-emoji-picker-toggle"
-                  data-hub-emoji-toggle
-                  aria-haspopup="dialog"
-                  aria-expanded="false"
-                  aria-label="{{if .ProfileForm.Emoji}}Selected emoji: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}"
-                >
-                  <span class="hub-emoji-picker-toggle-content">
-                    <span class="hub-emoji-picker-toggle-chip">
-                      <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                    </span>
-                    <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
-                  </span>
-                  <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">⌄</span>
-                </button>
-                <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
-                  <div class="hub-emoji-picker-panel-header">
-                    <p class="hub-emoji-picker-label">Pick one emoji</p>
-                    <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
-                  </div>
-                  <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
-                </div>
-              </div>
-            </fieldset>
-          </div>
-          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
-          {{if .State.Session.HandleFinalized}}
-          <p class="hint">The bind token is removed only after the agent is successfully bound. The finalized handle stays visible but immutable here.</p>
-          {{else}}
-          <p class="hint">This bind used a temporary handle. Pick the permanent handle you want, then save the profile once to finalize it.</p>
-          {{end}}
-          <button type="submit">Save Agent Profile</button>
-        </form>
+        <h2>1. Agent Settings</h2>
+        <p class="empty">Use the settings icon in the bottom dock to edit the dispatcher profile.</p>
+        <button type="button" id="open-agent-settings">Open Agent Settings</button>
       </article>
       {{else}}
       <article class="panel">
@@ -224,6 +184,110 @@
       </section>
     </div>
   </main>
+  <div class="page-bottom-dock" aria-hidden="false">
+    <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Dispatch menu">
+      <a
+        id="moltenbot-hub-link"
+        class="prompt-mode-link prompt-mode-link-logo"
+        href="https://app.molten.bot/signin?target=hub"
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label="Open Molten Bot Hub in a new window"
+        title="Open Molten Bot Hub in a new window">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <img src="https://app.molten.bot/logo.svg" alt="" aria-hidden="true">
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">Molten Hub</span>
+        <span class="sr-only">Molten Bot Hub</span>
+      </a>
+      <button
+        id="agent-settings-dock-button"
+        class="prompt-mode-link prompt-mode-link-logo hub-profile-button"
+        type="button"
+        aria-label="Open agent settings"
+        title="Open agent settings"
+        {{if not .State.Session.AgentToken}}hidden{{end}}>
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M10.2 2.4h3.6l.4 2a8 8 0 0 1 1.7.7l1.8-1 2.5 2.5-1 1.8a8 8 0 0 1 .7 1.7l2 .4v3.6l-2 .4a8 8 0 0 1-.7 1.7l1 1.8-2.5 2.5-1.8-1a8 8 0 0 1-1.7.7l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.7-.7l-1.8 1-2.5-2.5 1-1.8a8 8 0 0 1-.7-1.7l-2-.4v-3.6l2-.4a8 8 0 0 1 .7-1.7l-1-1.8L6.3 4l1.8 1a8 8 0 0 1 1.7-.7l.4-2Zm1.8 6a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"></path>
+          </svg>
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">Agent Settings</span>
+        <span class="sr-only">Open agent settings</span>
+      </button>
+    </div>
+  </div>
+  {{if .State.Session.AgentToken}}
+  <div
+    class="settings-modal-backdrop"
+    id="agent-settings-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="agent-settings-modal-title"
+    aria-describedby="agent-settings-modal-summary"
+    hidden
+  >
+    <section class="settings-modal">
+      <header class="settings-modal-header">
+        <div class="settings-modal-copy">
+          <p class="eyebrow">Agent Settings</p>
+          <h2 id="agent-settings-modal-title">Edit Agent Profile</h2>
+          <p id="agent-settings-modal-summary">Update how this dispatcher appears in Molten Hub.</p>
+        </div>
+        <button type="button" class="settings-modal-close" id="agent-settings-modal-close">Close</button>
+      </header>
+      <form method="post" action="/profile" class="stack profile-shell">
+        <div class="profile-grid profile-grid-top">
+          <label>Handle<input id="agent-settings-handle" name="handle" value="{{.ProfileForm.Handle}}" {{if .State.Session.HandleFinalized}}readonly{{end}}></label>
+          <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Jef's Codex"></label>
+          <fieldset class="emoji-fieldset">
+            <legend>Emoji</legend>
+            <div class="hub-emoji-picker" data-hub-emoji-picker>
+              <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
+              <button
+                type="button"
+                class="hub-emoji-picker-toggle"
+                data-hub-emoji-toggle
+                aria-haspopup="dialog"
+                aria-expanded="false"
+                aria-label="{{if .ProfileForm.Emoji}}Selected emoji: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}"
+              >
+                <span class="hub-emoji-picker-toggle-content">
+                  <span class="hub-emoji-picker-toggle-chip">
+                    <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
+                  </span>
+                  <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
+                </span>
+                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">⌄</span>
+              </button>
+              <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
+                <div class="hub-emoji-picker-panel-header">
+                  <p class="hub-emoji-picker-label">Pick one emoji</p>
+                  <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
+                </div>
+                <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+        <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
+        {{if .State.Session.HandleFinalized}}
+        <p class="hint">The bind token is removed only after the agent is successfully bound. The finalized handle stays visible but immutable here.</p>
+        {{else}}
+        <p class="hint">This bind used a temporary handle. Pick the permanent handle you want, then save the profile once to finalize it.</p>
+        {{end}}
+        <button type="submit">Save Agent Profile</button>
+      </form>
+    </section>
+  </div>
+  {{end}}
   {{if not .State.Session.AgentToken}}
   <div
     class="onboarding-modal-backdrop"
@@ -314,6 +378,11 @@
       const subActions = document.getElementById("sub-actions");
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const onboardingModalBackdrop = document.getElementById("onboarding-modal-backdrop");
+      const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");
+      const openAgentSettingsButton = document.getElementById("open-agent-settings");
+      const agentSettingsModalBackdrop = document.getElementById("agent-settings-modal-backdrop");
+      const agentSettingsModalClose = document.getElementById("agent-settings-modal-close");
+      const agentSettingsHandle = document.getElementById("agent-settings-handle");
       const bindForm = document.getElementById("bind-form");
       const bindSubmit = document.getElementById("bind-submit");
       const onboardingSteps = document.getElementById("onboarding-steps");
@@ -409,6 +478,33 @@
       };
 
       let closeActiveEmojiPicker = null;
+
+      const setAgentSettingsModalOpen = (open, returnFocus = false) => {
+        if (!(agentSettingsModalBackdrop instanceof HTMLElement)) {
+          return;
+        }
+        const visible = Boolean(open);
+        if (!visible && closeActiveEmojiPicker) {
+          closeActiveEmojiPicker();
+        }
+        agentSettingsModalBackdrop.hidden = !visible;
+        agentSettingsModalBackdrop.setAttribute("aria-hidden", visible ? "false" : "true");
+        document.body.classList.toggle("settings-modal-open", visible);
+        if (!visible) {
+          if (returnFocus && agentSettingsDockButton instanceof HTMLElement) {
+            agentSettingsDockButton.focus({ preventScroll: true });
+          }
+          return;
+        }
+        const focusTarget = agentSettingsHandle instanceof HTMLElement
+          ? agentSettingsHandle
+          : agentSettingsModalClose;
+        if (focusTarget instanceof HTMLElement) {
+          window.requestAnimationFrame(() => {
+            focusTarget.focus({ preventScroll: true });
+          });
+        }
+      };
 
       const initHubEmojiPicker = (root) => {
         const input = root.querySelector("[data-hub-emoji-input]");
@@ -632,6 +728,45 @@
         if (picker instanceof HTMLElement) {
           initHubEmojiPicker(picker);
         }
+      });
+
+      if (agentSettingsDockButton instanceof HTMLButtonElement) {
+        agentSettingsDockButton.addEventListener("click", () => {
+          setAgentSettingsModalOpen(true);
+        });
+      }
+
+      if (openAgentSettingsButton instanceof HTMLButtonElement) {
+        openAgentSettingsButton.addEventListener("click", () => {
+          setAgentSettingsModalOpen(true);
+        });
+      }
+
+      if (agentSettingsModalClose instanceof HTMLButtonElement) {
+        agentSettingsModalClose.addEventListener("click", () => {
+          setAgentSettingsModalOpen(false, true);
+        });
+      }
+
+      if (agentSettingsModalBackdrop instanceof HTMLElement) {
+        agentSettingsModalBackdrop.addEventListener("click", (event) => {
+          if (event.target === agentSettingsModalBackdrop) {
+            setAgentSettingsModalOpen(false, true);
+          }
+        });
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") {
+          return;
+        }
+        if (!(agentSettingsModalBackdrop instanceof HTMLElement) || agentSettingsModalBackdrop.hidden) {
+          return;
+        }
+        if (document.querySelector(".hub-emoji-picker-panel:not([hidden])")) {
+          return;
+        }
+        setAgentSettingsModalOpen(false, true);
       });
 
       const bound = shell?.dataset.bound === "true";

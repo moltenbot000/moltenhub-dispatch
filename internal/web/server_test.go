@@ -384,6 +384,55 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken:      "agent-token",
+				Handle:          "dispatch-agent",
+				HandleFinalized: true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(body, `class="page-bottom-dock"`) {
+		t.Fatalf("expected bottom dock container, body=%s", body)
+	}
+	if !strings.Contains(body, `id="moltenbot-hub-link"`) {
+		t.Fatalf("expected molten hub dock link, body=%s", body)
+	}
+	if !strings.Contains(body, `id="agent-settings-dock-button"`) {
+		t.Fatalf("expected settings dock button, body=%s", body)
+	}
+	if !strings.Contains(body, `id="agent-settings-modal-backdrop"`) {
+		t.Fatalf("expected agent settings dialog markup, body=%s", body)
+	}
+	if !strings.Contains(body, `id="agent-settings-modal-close"`) {
+		t.Fatalf("expected settings dialog close control, body=%s", body)
+	}
+	if !strings.Contains(body, `const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");`) {
+		t.Fatalf("expected settings dock JS hook, body=%s", body)
+	}
+	if !strings.Contains(body, `const setAgentSettingsModalOpen = (open, returnFocus = false) => {`) {
+		t.Fatalf("expected settings dialog open/close handler, body=%s", body)
+	}
+}
+
 func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	t.Parallel()
 
