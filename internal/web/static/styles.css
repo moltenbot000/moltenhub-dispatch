@@ -2651,7 +2651,7 @@ select.prompt-control {
 
 .hub-emoji-picker-panel {
   position: fixed;
-  z-index: 90;
+  z-index: 130;
   width: min(360px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   overflow: auto;

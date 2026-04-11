@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -584,6 +585,23 @@ func TestHandleIndexRendersInteractiveEmojiPicker(t *testing.T) {
 	}
 	if !strings.Contains(body, `https://esm.sh/@emoji-mart/data@1.2.1`) {
 		t.Fatalf("expected @emoji-mart/data module usage, body=%s", body)
+	}
+}
+
+func TestEmojiPickerPanelStacksAboveModalBackdrop(t *testing.T) {
+	t.Parallel()
+
+	styles, err := os.ReadFile("static/styles.css")
+	if err != nil {
+		t.Fatalf("read styles.css: %v", err)
+	}
+
+	content := string(styles)
+	if !strings.Contains(content, ".hub-emoji-picker-panel {\n  position: fixed;\n  z-index: 130;") {
+		t.Fatalf("expected emoji picker panel to sit above modal backdrops")
+	}
+	if !strings.Contains(content, ".settings-modal-backdrop,\n.onboarding-modal-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 121;") {
+		t.Fatalf("expected modal backdrop z-index baseline")
 	}
 }
 
