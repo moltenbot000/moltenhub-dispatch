@@ -386,6 +386,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, ">Manual Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
 	}
+	if !strings.Contains(body, `class="grid manual-dispatch-grid"`) {
+		t.Fatalf("expected manual dispatch section to render full-width grid class, body=%s", body)
+	}
 	if !strings.Contains(body, `id="sub-actions-notice" class="panel" hidden`) {
 		t.Fatalf("expected sub-action notice to be hidden when bound and connected, body=%s", body)
 	}
@@ -466,6 +469,12 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.onboarding-modal-backdrop[hidden]`) {
 		t.Fatalf("expected onboarding modal hidden override rule, body=%s", body)
+	}
+	if !strings.Contains(body, `.manual-dispatch-grid {`) {
+		t.Fatalf("expected manual dispatch full-width grid rule, body=%s", body)
+	}
+	if !strings.Contains(body, `grid-template-columns: minmax(0, 1fr);`) {
+		t.Fatalf("expected manual dispatch section to force a single full-width column, body=%s", body)
 	}
 	if !strings.Contains(body, `display: none !important;`) {
 		t.Fatalf("expected explicit hidden display override, body=%s", body)
