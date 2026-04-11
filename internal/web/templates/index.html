@@ -13,22 +13,22 @@
   <main class="shell" data-bound="{{if .State.Session.AgentToken}}true{{else}}false{{end}}">
     <header class="page-header">
       <p class="eyebrow">Molten Hub Console</p>
-      <div
-        class="connection-indicator connection-{{.Connection.Status}} connection-transport-{{.Connection.Transport}}"
-        id="connection-indicator"
-        data-status="{{.Connection.Status}}"
-        data-transport="{{.Connection.Transport}}"
-        title="{{.Connection.Description}}"
-        aria-live="polite"
-      >
-        <span class="connection-icon" aria-hidden="true">
-          <span class="connection-ring"></span>
-          <span class="connection-core"></span>
-        </span>
-        <span class="connection-text">
-          <strong id="connection-label">{{.Connection.Label}}</strong>
-          <small id="connection-description">{{.Connection.Description}}</small>
-        </span>
+      <div class="status-row connection-status-row" aria-live="polite">
+        <div
+          id="hub-conn-item"
+          class="status-item status-item-compact"
+          data-status="{{.Connection.Status}}"
+          data-transport="{{.Connection.Transport}}"
+          title="Molten Hub: {{.Connection.Label}} - {{.Connection.Description}}"
+          aria-label="Molten Hub: {{.Connection.Label}} - {{.Connection.Description}}"
+          tabindex="0"
+        >
+          <span
+            id="hub-conn-dot"
+            class="dot{{if and (eq .Connection.Status "connected") (eq .Connection.Transport "ws")}} online{{else if and (eq .Connection.Status "connected") (or (eq .Connection.Transport "http") (eq .Connection.Transport "http_long_poll"))}} http{{else}} disconnected{{end}}"
+          ></span>
+          <span id="hub-conn-text" class="status-tooltip">Molten Hub: {{.Connection.Label}} - {{.Connection.Description}}</span>
+        </div>
       </div>
     </header>
 
@@ -308,9 +308,9 @@
   <script>
     (() => {
       const shell = document.querySelector(".shell");
-      const indicator = document.getElementById("connection-indicator");
-      const label = document.getElementById("connection-label");
-      const description = document.getElementById("connection-description");
+      const hubConnItem = document.getElementById("hub-conn-item");
+      const hubConnDot = document.getElementById("hub-conn-dot");
+      const hubConnText = document.getElementById("hub-conn-text");
       const subActions = document.getElementById("sub-actions");
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const onboardingModalBackdrop = document.getElementById("onboarding-modal-backdrop");
@@ -821,18 +821,49 @@
         }
       };
 
+      const applyHubDotMode = (status, transport) => {
+        if (!hubConnDot) {
+          return;
+        }
+        hubConnDot.classList.remove("online", "http", "disconnected");
+        if (status === "connected" && transport === "ws") {
+          hubConnDot.classList.add("online");
+          return;
+        }
+        if (status === "connected" && (transport === "http" || transport === "http_long_poll")) {
+          hubConnDot.classList.add("http");
+          return;
+        }
+        hubConnDot.classList.add("disconnected");
+      };
+
+      const setHubConnectionActionable = (actionable, tone) => {
+        if (!hubConnItem) {
+          return;
+        }
+        hubConnItem.classList.toggle("status-item-action", actionable);
+        hubConnItem.classList.toggle("status-item-action-online", actionable && tone === "online");
+        hubConnItem.classList.toggle("status-item-action-offline", actionable && tone === "offline");
+        hubConnItem.dataset.actionable = actionable ? "true" : "false";
+      };
+
       const applyState = (state) => {
-        if (!indicator || !label || !description) {
+        if (!hubConnItem || !hubConnText) {
           return;
         }
         const status = state.status || "disconnected";
         const transport = state.transport || "offline";
-        indicator.dataset.status = status;
-        indicator.dataset.transport = transport;
-        indicator.className = `connection-indicator connection-${status} connection-transport-${transport}`;
-        indicator.title = state.description || "";
-        label.textContent = state.label || "Offline";
-        description.textContent = state.description || "Not currently connected to the hub.";
+        const labelText = state.label || (status === "connected" ? "Connected" : "Offline");
+        const descriptionText = state.description || "Not currently connected to the hub.";
+        const message = `Molten Hub: ${labelText} - ${descriptionText}`;
+        hubConnItem.dataset.status = status;
+        hubConnItem.dataset.transport = transport;
+        hubConnItem.title = message;
+        hubConnItem.setAttribute("aria-label", message);
+        hubConnText.textContent = message;
+        applyHubDotMode(status, transport);
+        const actionable = status === "connected" || status === "disconnected";
+        setHubConnectionActionable(actionable, status === "connected" ? "online" : "offline");
         syncSubActions({ status, transport });
       };
 
@@ -853,7 +884,7 @@
         }
       };
 
-      if (shell && indicator && label && description && subActions && subActionsNotice) {
+      if (shell && hubConnItem && hubConnText && subActions && subActionsNotice) {
         refreshState();
         window.setInterval(refreshState, 3000);
       }
