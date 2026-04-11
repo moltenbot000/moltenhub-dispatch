@@ -349,7 +349,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `name="display_name" value="Jef&#39;s Codex"`) {
 		t.Fatalf("expected display name field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="connection-indicator"`) {
+	if !strings.Contains(body, `id="hub-conn-item"`) {
 		t.Fatalf("expected connection indicator in page, body=%s", body)
 	}
 	if strings.Contains(body, "Awaiting Bind") {
@@ -704,6 +704,54 @@ func TestHandleStatusReturnsConnectionView(t *testing.T) {
 	}
 	if view.Label != "HTTP Connected" {
 		t.Fatalf("unexpected label: %#v", view)
+	}
+}
+
+func TestHandleStatusReturnsErrorConnectionView(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportOffline,
+				Error:     "status request failed with 503",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	var view struct {
+		Status      string `json:"status"`
+		Transport   string `json:"transport"`
+		Label       string `json:"label"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode status response: %v", err)
+	}
+	if view.Status != app.ConnectionStatusDisconnected {
+		t.Fatalf("unexpected status: %#v", view)
+	}
+	if view.Transport != app.ConnectionTransportOffline {
+		t.Fatalf("unexpected transport: %#v", view)
+	}
+	if view.Label != "Error" {
+		t.Fatalf("unexpected label: %#v", view)
+	}
+	if view.Description != "status request failed with 503" {
+		t.Fatalf("unexpected description: %#v", view)
 	}
 }
 
