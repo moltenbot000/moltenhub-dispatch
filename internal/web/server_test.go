@@ -525,6 +525,12 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	if !strings.Contains(body, `class="sub-actions-hub-link" href="https://app.molten.bot/hub"`) {
 		t.Fatalf("expected connect-agents panel link to Molten Bot Hub dashboard, body=%s", body)
 	}
+	if !strings.Contains(body, `id="sub-actions-notice-refresh"`) {
+		t.Fatalf("expected notice panel manual refresh control, body=%s", body)
+	}
+	if !strings.Contains(body, `id="sub-actions-notice-refresh-progress"`) {
+		t.Fatalf("expected notice panel refresh loading bar, body=%s", body)
+	}
 }
 
 func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing.T) {
@@ -1246,6 +1252,12 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `id="connected-agents-refresh"`) {
 		t.Fatalf("expected connected agents refresh control, body=%s", body)
 	}
+	if !strings.Contains(body, `id="connected-agents-refresh-progress"`) {
+		t.Fatalf("expected connected agents refresh loading bar, body=%s", body)
+	}
+	if !strings.Contains(body, `id="connected-agents-refresh-next"`) {
+		t.Fatalf("expected connected agents auto-refresh countdown label, body=%s", body)
+	}
 	if !strings.Contains(body, `id="connected-agents-list"`) {
 		t.Fatalf("expected connected agents list container, body=%s", body)
 	}
@@ -1257,6 +1269,15 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if strings.Contains(body, "PERSONAL · YOU") {
 		t.Fatalf("did not expect invalid personal-context badge in connected agent card, body=%s", body)
+	}
+	if !strings.Contains(body, `const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;`) {
+		t.Fatalf("expected 30s connected agents refresh interval constant, body=%s", body)
+	}
+	if !strings.Contains(body, `const scheduleConnectedAgentsAutoRefresh = (delayMs = CONNECTED_AGENTS_REFRESH_INTERVAL_MS) => {`) {
+		t.Fatalf("expected connected agents auto-refresh scheduler, body=%s", body)
+	}
+	if !strings.Contains(body, `const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));`) {
+		t.Fatalf("expected shared manual refresh button hooks, body=%s", body)
 	}
 }
 

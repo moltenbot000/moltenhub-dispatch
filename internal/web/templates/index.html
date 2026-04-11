@@ -10,7 +10,11 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <main class="shell" data-bound="{{if .State.Session.AgentToken}}true{{else}}false{{end}}">
+  <main
+    class="shell"
+    data-bound="{{if .State.Session.AgentToken}}true{{else}}false{{end}}"
+    data-connected-agent-count="{{len .State.ConnectedAgents}}"
+  >
     <header class="page-header">
       <p class="eyebrow">Molten Hub Console</p>
       <div class="status-row connection-status-row" aria-live="polite">
@@ -53,6 +57,33 @@
       <p class="sub-actions-hub-link-row" data-sub-actions-connect-panel {{if not .SubActions.RequiresAgentConnection}}hidden{{end}}>
         <a class="sub-actions-hub-link" href="{{if .SubActions.AgentConnectURL}}{{.SubActions.AgentConnectURL}}{{else}}https://app.molten.bot/hub{{end}}" target="_blank" rel="noreferrer noopener">Connect agents in Molten Bot Hub</a>
       </p>
+      <div class="connected-agents-refresh-shell connected-agents-refresh-shell-inline">
+        <button
+          type="button"
+          id="sub-actions-notice-refresh"
+          class="connected-agents-refresh"
+          data-connected-agents-refresh-button
+          aria-label="Refresh connected agents now"
+          title="Refresh connected agents now"
+        >
+          <span aria-hidden="true">↻</span>
+          <span>Refresh</span>
+        </button>
+        <div
+          id="sub-actions-notice-refresh-progress"
+          class="connected-agents-refresh-progress"
+          data-connected-agents-refresh-progress
+          role="progressbar"
+          aria-label="Connected agents auto-refresh progress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+        >
+          <span class="connected-agents-refresh-progress-bar" data-connected-agents-refresh-bar></span>
+        </div>
+        <p class="connected-agents-refresh-next" data-connected-agents-refresh-next aria-live="polite">Auto-refresh in 30s.</p>
+        <p class="connected-agents-refresh-status" data-connected-agents-refresh-status aria-live="polite"></p>
+      </div>
     </section>
 
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
@@ -87,6 +118,7 @@
               type="button"
               id="connected-agents-refresh"
               class="connected-agents-refresh"
+              data-connected-agents-refresh-button
               aria-label="Refresh connected agents"
               title="Refresh connected agents"
             >
@@ -94,7 +126,20 @@
               <span>Refresh</span>
             </button>
           </div>
-          <p id="connected-agents-refresh-status" class="connected-agents-refresh-status" aria-live="polite"></p>
+          <div
+            id="connected-agents-refresh-progress"
+            class="connected-agents-refresh-progress"
+            data-connected-agents-refresh-progress
+            role="progressbar"
+            aria-label="Connected agents auto-refresh progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span class="connected-agents-refresh-progress-bar" data-connected-agents-refresh-bar></span>
+          </div>
+          <p id="connected-agents-refresh-next" class="connected-agents-refresh-next" data-connected-agents-refresh-next aria-live="polite">Auto-refresh in 30s.</p>
+          <p id="connected-agents-refresh-status" class="connected-agents-refresh-status" data-connected-agents-refresh-status aria-live="polite"></p>
           <p id="connected-agents-empty" class="empty" {{if .State.ConnectedAgents}}hidden{{end}}>No connected agents configured yet.</p>
           <div id="connected-agents-list" class="list connected-agents-list" {{if not .State.ConnectedAgents}}hidden{{end}}>
             {{range .State.ConnectedAgents}}
@@ -387,8 +432,11 @@
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const connectedAgentsList = document.getElementById("connected-agents-list");
       const connectedAgentsEmpty = document.getElementById("connected-agents-empty");
-      const connectedAgentsRefresh = document.getElementById("connected-agents-refresh");
-      const connectedAgentsRefreshStatus = document.getElementById("connected-agents-refresh-status");
+      const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));
+      const connectedAgentsRefreshStatusNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-status]"));
+      const connectedAgentsRefreshProgressNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-progress]"));
+      const connectedAgentsRefreshProgressBarNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-bar]"));
+      const connectedAgentsRefreshNextNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-next]"));
       const onboardingModalBackdrop = document.getElementById("onboarding-modal-backdrop");
       const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");
       const agentSettingsModalBackdrop = document.getElementById("agent-settings-modal-backdrop");
@@ -407,6 +455,8 @@
       const THEME_KEY = "hubui.theme";
       const THEME_MODES = ["light", "dark", "night"];
       const DEFAULT_THEME_MODE = "dark";
+      const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;
+      const CONNECTED_AGENTS_REFRESH_TICK_MS = 250;
 
       if (flash) {
         const configuredSeconds = Number.parseFloat(flash.dataset.autoDismissSeconds || "");
@@ -1046,15 +1096,22 @@
 
       const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
       const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
-      const HAS_CONNECTED_AGENTS = {{if .State.ConnectedAgents}}true{{else}}false{{end}};
+      const parsedConnectedAgentsCount = Number.parseInt(String(shell && shell.dataset.connectedAgentCount || "0"), 10);
+      let connectedAgentsCount = Number.isFinite(parsedConnectedAgentsCount) && parsedConnectedAgentsCount > 0
+        ? parsedConnectedAgentsCount
+        : 0;
+      let latestHubConnectionState = {
+        status: String(hubConnItem && hubConnItem.dataset.status || "").trim() || "disconnected",
+        transport: String(hubConnItem && hubConnItem.dataset.transport || "").trim() || "offline",
+      };
 
-      const syncSubActions = (state) => {
+      const syncSubActions = (state = latestHubConnectionState) => {
         if (!subActions || !subActionsNotice) {
           return;
         }
         const connected = bound && (state.status === "connected" || state.transport === "ws" || state.transport === "http_long_poll" || state.transport === "connected");
-        const dispatchEnabled = connected && HAS_CONNECTED_AGENTS;
-        const requiresAgentConnection = connected && !HAS_CONNECTED_AGENTS;
+        const dispatchEnabled = connected && connectedAgentsCount > 0;
+        const requiresAgentConnection = connected && connectedAgentsCount === 0;
 
         subActions.hidden = !dispatchEnabled;
         subActionsNotice.hidden = dispatchEnabled;
@@ -1084,6 +1141,12 @@
         if (connectPanel instanceof HTMLElement) {
           connectPanel.hidden = !requiresAgentConnection;
         }
+
+        subActionsNotice.querySelectorAll(".connected-agents-refresh-shell-inline").forEach((node) => {
+          if (node instanceof HTMLElement) {
+            node.hidden = !requiresAgentConnection;
+          }
+        });
       };
 
       const setIndicator = (itemNode, dot, textNode, label, online, text) => {
@@ -1145,10 +1208,11 @@
         setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, messageText);
         applyHubDotMode(mode);
         setHubConnectionActionable(actionable, targetURL, actionTone);
-        syncSubActions({
+        latestHubConnectionState = {
           status: connected ? "connected" : "disconnected",
           transport: mode || "offline",
-        });
+        };
+        syncSubActions(latestHubConnectionState);
       };
 
       const trimmedString = (value) => String(value || "").trim();
@@ -1202,6 +1266,11 @@
           return;
         }
         const nextAgents = Array.isArray(agents) ? agents : [];
+        connectedAgentsCount = nextAgents.length;
+        if (shell instanceof HTMLElement) {
+          shell.dataset.connectedAgentCount = String(connectedAgentsCount);
+        }
+        syncSubActions(latestHubConnectionState);
         connectedAgentsList.innerHTML = "";
         if (nextAgents.length === 0) {
           connectedAgentsList.hidden = true;
@@ -1241,21 +1310,97 @@
         connectedAgentsList.hidden = false;
       };
 
-      const setConnectedAgentsRefreshState = (busy, status, isError = false) => {
-        if (connectedAgentsRefresh instanceof HTMLButtonElement) {
-          connectedAgentsRefresh.disabled = busy;
-          connectedAgentsRefresh.setAttribute("aria-busy", busy ? "true" : "false");
-        }
-        if (connectedAgentsRefreshStatus instanceof HTMLElement) {
-          connectedAgentsRefreshStatus.classList.toggle("is-error", isError);
-          connectedAgentsRefreshStatus.textContent = trimmedString(status);
-        }
+      const setConnectedAgentsRefreshProgress = (ratio) => {
+        const clamped = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
+        const percent = Math.round(clamped * 100);
+        connectedAgentsRefreshProgressNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            node.setAttribute("aria-valuenow", String(percent));
+          }
+        });
+        connectedAgentsRefreshProgressBarNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            node.style.transform = `scaleX(${clamped})`;
+          }
+        });
       };
 
-      const refreshConnectedAgents = async () => {
+      const setConnectedAgentsRefreshCountdown = (remainingMs, busy) => {
+        const safeRemaining = Math.max(0, Number.isFinite(remainingMs) ? remainingMs : 0);
+        const seconds = Math.max(0, Math.ceil(safeRemaining / 1000));
+        const text = busy
+          ? "Refreshing connected agents..."
+          : `Auto-refresh in ${seconds}s.`;
+        connectedAgentsRefreshNextNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            node.textContent = text;
+          }
+        });
+      };
+
+      const setConnectedAgentsRefreshState = (busy, status, isError = false) => {
+        connectedAgentsRefreshButtons.forEach((node) => {
+          if (node instanceof HTMLButtonElement) {
+            node.disabled = busy;
+            node.setAttribute("aria-busy", busy ? "true" : "false");
+          }
+        });
+        connectedAgentsRefreshStatusNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            node.classList.toggle("is-error", isError);
+            node.textContent = trimmedString(status);
+          }
+        });
+      };
+
+      let connectedAgentsNextRefreshAt = Date.now() + CONNECTED_AGENTS_REFRESH_INTERVAL_MS;
+      let connectedAgentsRefreshInFlight = false;
+      let connectedAgentsAutoRefreshTimer = 0;
+      let connectedAgentsRefreshTickTimer = 0;
+
+      const scheduleConnectedAgentsAutoRefresh = (delayMs = CONNECTED_AGENTS_REFRESH_INTERVAL_MS) => {
+        if (connectedAgentsAutoRefreshTimer) {
+          window.clearTimeout(connectedAgentsAutoRefreshTimer);
+          connectedAgentsAutoRefreshTimer = 0;
+        }
+        const nextDelayMs = Math.max(0, Number.isFinite(delayMs) ? Math.floor(delayMs) : CONNECTED_AGENTS_REFRESH_INTERVAL_MS);
+        connectedAgentsNextRefreshAt = Date.now() + nextDelayMs;
+        setConnectedAgentsRefreshProgress(0);
+        setConnectedAgentsRefreshCountdown(nextDelayMs, false);
+        connectedAgentsAutoRefreshTimer = window.setTimeout(() => {
+          void refreshConnectedAgents("auto");
+        }, nextDelayMs);
+      };
+
+      const startConnectedAgentsRefreshTicker = () => {
+        if (connectedAgentsRefreshTickTimer) {
+          return;
+        }
+        connectedAgentsRefreshTickTimer = window.setInterval(() => {
+          if (connectedAgentsRefreshInFlight) {
+            return;
+          }
+          const remainingMs = Math.max(0, connectedAgentsNextRefreshAt - Date.now());
+          const elapsedMs = CONNECTED_AGENTS_REFRESH_INTERVAL_MS - remainingMs;
+          setConnectedAgentsRefreshProgress(elapsedMs / CONNECTED_AGENTS_REFRESH_INTERVAL_MS);
+          setConnectedAgentsRefreshCountdown(remainingMs, false);
+        }, CONNECTED_AGENTS_REFRESH_TICK_MS);
+      };
+
+      const refreshConnectedAgents = async (_reason = "manual") => {
         if (!(connectedAgentsList instanceof HTMLElement)) {
           return;
         }
+        if (connectedAgentsRefreshInFlight) {
+          return;
+        }
+        connectedAgentsRefreshInFlight = true;
+        if (connectedAgentsAutoRefreshTimer) {
+          window.clearTimeout(connectedAgentsAutoRefreshTimer);
+          connectedAgentsAutoRefreshTimer = 0;
+        }
+        setConnectedAgentsRefreshProgress(1);
+        setConnectedAgentsRefreshCountdown(0, true);
         setConnectedAgentsRefreshState(true, "Refreshing connected agents...");
         try {
           const response = await fetch("/api/connected-agents", {
@@ -1275,6 +1420,9 @@
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh connected agents.";
           setConnectedAgentsRefreshState(false, message, true);
+        } finally {
+          connectedAgentsRefreshInFlight = false;
+          scheduleConnectedAgentsAutoRefresh();
         }
       };
 
@@ -1362,15 +1510,28 @@
         });
       }
 
-      if (connectedAgentsRefresh instanceof HTMLButtonElement) {
-        connectedAgentsRefresh.addEventListener("click", () => {
-          void refreshConnectedAgents();
-        });
-      }
-
       if (shell && hubConnItem && hubConnText && subActions && subActionsNotice) {
+        syncSubActions(latestHubConnectionState);
         refreshState();
         window.setInterval(refreshState, 3000);
+      }
+
+      connectedAgentsRefreshButtons.forEach((node) => {
+        if (node instanceof HTMLButtonElement) {
+          node.addEventListener("click", () => {
+            void refreshConnectedAgents("manual");
+          });
+        }
+      });
+
+      setConnectedAgentsRefreshProgress(0);
+      if (!bound) {
+        setConnectedAgentsRefreshCountdown(CONNECTED_AGENTS_REFRESH_INTERVAL_MS, false);
+        setConnectedAgentsRefreshState(false, "Bind to Molten Hub to refresh connected agents.");
+      } else {
+        startConnectedAgentsRefreshTicker();
+        scheduleConnectedAgentsAutoRefresh();
+        void refreshConnectedAgents("initial");
       }
     })();
   </script>

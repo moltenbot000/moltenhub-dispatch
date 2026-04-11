@@ -3953,14 +3953,53 @@ body.settings-modal-open {
   text-transform: uppercase;
 }
 
+.connected-agents-refresh-shell {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.connected-agents-refresh-shell-inline {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, rgba(17, 34, 68, 0.18));
+}
+
 .connected-agents-refresh[disabled] {
   opacity: 0.72;
   transform: none;
   cursor: progress;
 }
 
+.connected-agents-refresh-progress {
+  position: relative;
+  height: 8px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, rgba(10, 132, 255, 0.22));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(232, 240, 255, 0.88));
+}
+
+.connected-agents-refresh-progress-bar {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--brand-gradient);
+  transition: transform 180ms linear;
+}
+
+.connected-agents-refresh-next {
+  margin: 0;
+  color: var(--surface-label);
+  font-size: 0.77rem;
+  letter-spacing: 0.04em;
+}
+
 .connected-agents-refresh-status {
-  margin: 8px 0 0;
+  margin: 0;
   min-height: 1.2em;
   color: var(--meta);
   font-size: 0.8rem;
