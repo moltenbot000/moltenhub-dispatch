@@ -257,7 +257,6 @@
                 data-hub-emoji-toggle
                 aria-haspopup="dialog"
                 aria-expanded="false"
-                aria-label="{{if .ProfileForm.Emoji}}Selected emoji: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}"
               >
                 <span class="hub-emoji-picker-toggle-content">
                   <span class="hub-emoji-picker-toggle-chip">
@@ -265,7 +264,11 @@
                   </span>
                   <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
                 </span>
-                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">⌄</span>
+                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"></path>
+                  </svg>
+                </span>
               </button>
               <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
                 <div class="hub-emoji-picker-panel-header">
@@ -331,7 +334,6 @@
                 data-hub-emoji-toggle
                 aria-haspopup="dialog"
                 aria-expanded="false"
-                aria-label="{{if .ProfileForm.Emoji}}Selected emoji: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}"
               >
                 <span class="hub-emoji-picker-toggle-content">
                   <span class="hub-emoji-picker-toggle-chip">
@@ -339,7 +341,11 @@
                   </span>
                   <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
                 </span>
-                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">⌄</span>
+                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"></path>
+                  </svg>
+                </span>
               </button>
               <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
                 <div class="hub-emoji-picker-panel-header">
@@ -410,6 +416,7 @@
       const PANEL_OFFSET = 8;
       const PANEL_MAX_WIDTH = 360;
       const PANEL_ESTIMATED_HEIGHT = 430;
+      const PANEL_ANIMATION_DURATION_MS = 180;
       const DEFAULT_EMOJI = "🙂";
       const REACT_VERSION = "18.2.0";
       const EMOJI_MART_REACT_MODULE = `https://esm.sh/@emoji-mart/react@1.1.1?deps=react@${REACT_VERSION}`;
@@ -530,6 +537,7 @@
         let pickerRoot = null;
         let pickerMounted = false;
         let pickerLoading = false;
+        let panelCloseTimer = 0;
         if (panel.parentElement !== document.body) {
           document.body.appendChild(panel);
         }
@@ -551,8 +559,6 @@
           preview.textContent = previewEmoji;
           selectedText.textContent = emojiValue ? `Selected: ${emojiValue}` : "Choose an emoji";
           selectedText.classList.toggle("is-selected", emojiValue !== "");
-          toggle.setAttribute("aria-label", emojiValue ? `Selected emoji: ${emojiValue}` : "Choose an emoji");
-          clearButton.disabled = emojiValue === "";
         };
 
         const positionPanel = () => {
@@ -569,6 +575,7 @@
           const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_GUTTER;
           const spaceAbove = rect.top - VIEWPORT_GUTTER;
           const placeBelow = spaceBelow >= PANEL_ESTIMATED_HEIGHT || spaceBelow >= spaceAbove;
+          panel.dataset.placement = placeBelow ? "bottom" : "top";
 
           panel.style.left = `${left}px`;
           panel.style.width = `min(${PANEL_MAX_WIDTH}px, calc(100vw - ${VIEWPORT_GUTTER * 2}px))`;
@@ -590,6 +597,14 @@
           window.removeEventListener("scroll", positionPanel, true);
         };
 
+        const clearPanelCloseTimer = () => {
+          if (!panelCloseTimer) {
+            return;
+          }
+          window.clearTimeout(panelCloseTimer);
+          panelCloseTimer = 0;
+        };
+
         const unmountPicker = () => {
           if (pickerRoot && pickerMounted) {
             pickerRoot.render(null);
@@ -605,11 +620,18 @@
             return;
           }
           open = false;
-          panel.hidden = true;
           toggle.classList.remove("is-open");
           toggle.setAttribute("aria-expanded", "false");
           detachPanelListeners();
-          unmountPicker();
+          panel.classList.remove("is-open");
+          panel.classList.add("is-closing");
+          clearPanelCloseTimer();
+          panelCloseTimer = window.setTimeout(() => {
+            panel.hidden = true;
+            panel.classList.remove("is-closing");
+            unmountPicker();
+            panelCloseTimer = 0;
+          }, PANEL_ANIMATION_DURATION_MS);
           if (closeActiveEmojiPicker === closePanel) {
             closeActiveEmojiPicker = null;
           }
@@ -671,10 +693,15 @@
           }
           closeActiveEmojiPicker = closePanel;
           open = true;
+          clearPanelCloseTimer();
           panel.hidden = false;
+          panel.classList.remove("is-closing");
           toggle.classList.add("is-open");
           toggle.setAttribute("aria-expanded", "true");
           positionPanel();
+          window.requestAnimationFrame(() => {
+            panel.classList.add("is-open");
+          });
           window.addEventListener("mousedown", handleDocumentPointerDown);
           window.addEventListener("touchstart", handleDocumentPointerDown);
           window.addEventListener("keydown", handleWindowKeydown);
@@ -688,7 +715,6 @@
           syncSelectedState();
           if (closeWhenDone) {
             closePanel();
-            toggle.focus({ preventScroll: true });
           }
         };
 
@@ -702,7 +728,6 @@
         function handleWindowKeydown(event) {
           if (event.key === "Escape") {
             closePanel();
-            toggle.focus({ preventScroll: true });
           }
         }
 
