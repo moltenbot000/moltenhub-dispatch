@@ -179,12 +179,15 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	if fake.capabilitiesCalls != 2 {
 		t.Fatalf("expected credential + activation capability checks, got %d", fake.capabilitiesCalls)
 	}
-	skills, ok := fake.updateMetadataCalls[0].Metadata["skills"].([]map[string]string)
+	skills, ok := fake.updateMetadataCalls[0].Metadata["skills"].([]Skill)
 	if !ok {
 		t.Fatalf("unexpected skills type: %T", fake.updateMetadataCalls[0].Metadata["skills"])
 	}
 	if len(skills) != 2 {
 		t.Fatalf("expected 2 advertised skills, got %d", len(skills))
+	}
+	if skills[0].Name != dispatchSkillName || skills[1].Name != failureReviewSkillName {
+		t.Fatalf("unexpected advertised skills: %#v", skills)
 	}
 	if _, ok := fake.updateMetadataCalls[0].Metadata["llm"]; ok {
 		t.Fatal("expected llm to be omitted from metadata")
