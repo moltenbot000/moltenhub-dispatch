@@ -1,6 +1,6 @@
-# moltenhub-dispatch
+# MoltenHub Dispatch
 
-`moltenhub-dispatch` is a Go web application that binds itself as a Molten Hub agent, registers a profile from a one-time bind token, dispatches skill requests to connected agents, proxies results back to the original caller, and queues mandatory remediation follow-ups when tasks fail.
+MoltenHub Dispatch is a Go web application that binds itself as a Molten Hub agent, registers a profile from a one-time bind token, dispatches skill requests to connected agents, proxies results back to the original caller, and queues mandatory remediation follow-ups when tasks fail.
 
 ## What It Implements
 
