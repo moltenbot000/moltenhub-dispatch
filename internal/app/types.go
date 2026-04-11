@@ -66,6 +66,7 @@ type Skill struct {
 type ConnectedAgent struct {
 	ID                string    `json:"id"`
 	Name              string    `json:"name"`
+	Emoji             string    `json:"emoji,omitempty"`
 	AgentUUID         string    `json:"agent_uuid"`
 	AgentURI          string    `json:"agent_uri"`
 	DefaultSkill      string    `json:"default_skill"`

@@ -148,7 +148,7 @@
             {{range .State.ConnectedAgents}}
             <article class="connected-agent-card">
               <div class="connected-agent-card-main">
-                <span class="connected-agent-avatar" aria-hidden="true">🤖</span>
+                <span class="connected-agent-avatar" aria-hidden="true">{{if .Emoji}}{{.Emoji}}{{else}}🤖{{end}}</span>
                 <div class="connected-agent-card-copy">
                   <h3>{{if .Name}}{{.Name}}{{else if .ID}}{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else}}Unknown agent{{end}}</h3>
                   <p class="connected-agent-handle">{{if .ID}}@{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else}}unknown{{end}}</p>
@@ -1131,7 +1131,7 @@
         }
 
         const reason = requiresAgentConnection
-          ? "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Dispatch."
+          ? "No talkable peer agents are available yet. Bound agents are listed in Molten Bot Hub, and dispatch targets appear here after Hub trust/connectivity makes them reachable."
           : (bound
             ? "Sub-actions stay hidden while the Hub connection is offline or unavailable."
             : "Sub-actions stay hidden until this runtime is bound to Molten Hub and connectivity is working.");

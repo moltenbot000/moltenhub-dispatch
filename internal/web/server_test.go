@@ -21,6 +21,7 @@ type stubService struct {
 	updateProfileErr  error
 	updateSettingsErr error
 	setFlashErr       error
+	refreshAgentsErr  error
 	bindStateOnError  bool
 	lastBindProfile   app.BindProfile
 }
@@ -65,6 +66,13 @@ func (s *stubService) UpdateAgentProfile(_ context.Context, profile app.AgentPro
 
 func (s *stubService) AddConnectedAgent(app.ConnectedAgent) error {
 	return nil
+}
+
+func (s *stubService) RefreshConnectedAgents(_ context.Context) ([]app.ConnectedAgent, error) {
+	if s.refreshAgentsErr != nil {
+		return nil, s.refreshAgentsErr
+	}
+	return s.state.ConnectedAgents, nil
 }
 
 func (s *stubService) DispatchFromUI(context.Context, app.DispatchRequest) (app.PendingTask, error) {
@@ -551,11 +559,8 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	if !strings.Contains(body, "Connect agents in Molten Bot Hub") {
 		t.Fatalf("expected connect-agents panel copy, body=%s", body)
 	}
-	if !strings.Contains(body, "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Dispatch.") {
-		t.Fatalf("expected connect-agents reason to mention Dispatch, body=%s", body)
-	}
-	if strings.Contains(body, "enable Manual Dispatch") {
-		t.Fatalf("did not expect legacy Manual Dispatch wording in connect-agents reason, body=%s", body)
+	if !strings.Contains(body, "Bound agents are listed in Molten Bot Hub") {
+		t.Fatalf("expected talkable-peer clarification in connect-agents panel, body=%s", body)
 	}
 	if !strings.Contains(body, `class="sub-actions-hub-link" href="https://app.molten.bot/hub"`) {
 		t.Fatalf("expected connect-agents panel link to Molten Bot Hub dashboard, body=%s", body)
@@ -1245,6 +1250,50 @@ func TestHandleConnectedAgentsReturnsSnapshot(t *testing.T) {
 	}
 	if body.ConnectedAgents[0].Name != "Dispatcher" {
 		t.Fatalf("unexpected connected agent payload: %#v", body.ConnectedAgents[0])
+	}
+}
+
+func TestHandleConnectedAgentsReturnsStructuredRefreshError(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			ConnectedAgents: []app.ConnectedAgent{{ID: "stale-agent"}},
+		},
+		refreshAgentsErr: errors.New("refresh connected agents from /v1/agents/me/capabilities: hub API 401 unauthorized: missing or invalid bearer token"),
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/connected-agents", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 response, got %d", rec.Code)
+	}
+
+	var body struct {
+		OK              bool                 `json:"ok"`
+		Error           string               `json:"error"`
+		Detail          string               `json:"detail"`
+		ConnectedAgents []app.ConnectedAgent `json:"connected_agents"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.OK {
+		t.Fatalf("expected ok=false response, got %#v", body)
+	}
+	if body.Error != "connected agents refresh failed" {
+		t.Fatalf("unexpected error body: %#v", body)
+	}
+	if !strings.Contains(body.Detail, "missing or invalid bearer token") {
+		t.Fatalf("expected detailed refresh error, got %#v", body)
+	}
+	if len(body.ConnectedAgents) != 1 || body.ConnectedAgents[0].ID != "stale-agent" {
+		t.Fatalf("expected stale connected agents to be returned for context, got %#v", body.ConnectedAgents)
 	}
 }
 

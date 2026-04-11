@@ -23,6 +23,7 @@ type service interface {
 	BindAndRegister(ctx context.Context, profile app.BindProfile) error
 	UpdateAgentProfile(ctx context.Context, profile app.AgentProfile) error
 	AddConnectedAgent(agent app.ConnectedAgent) error
+	RefreshConnectedAgents(ctx context.Context) ([]app.ConnectedAgent, error)
 	DispatchFromUI(ctx context.Context, req app.DispatchRequest) (app.PendingTask, error)
 	UpdateSettings(mutator func(*app.Settings) error) error
 	SetFlash(level, message string) error
@@ -269,10 +270,20 @@ func (s *Server) handleConnectedAgents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	state := s.service.Snapshot()
+	agents, err := s.service.RefreshConnectedAgents(r.Context())
+	if err != nil {
+		state := s.service.Snapshot()
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"ok":               false,
+			"error":            "connected agents refresh failed",
+			"detail":           err.Error(),
+			"connected_agents": state.ConnectedAgents,
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":               true,
-		"connected_agents": state.ConnectedAgents,
+		"connected_agents": agents,
 	})
 }
 
@@ -635,7 +646,7 @@ func subActionState(state app.AppState) subActionView {
 	if len(state.ConnectedAgents) == 0 {
 		return subActionView{
 			Visible:                 false,
-			Reason:                  "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Dispatch.",
+			Reason:                  "No talkable peer agents are available yet. Bound agents are listed in Molten Bot Hub, and dispatch targets appear here after Hub trust/connectivity makes them reachable.",
 			RequiresAgentConnection: true,
 			AgentConnectURL:         "https://app.molten.bot/hub",
 		}
