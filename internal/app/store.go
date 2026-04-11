@@ -15,8 +15,7 @@ import (
 const maxRecentEvents = 40
 
 const (
-	defaultDataDir       = "moltenhub"
-	legacyDefaultDataDir = "data"
+	defaultDataDir = ".moltenhub"
 )
 
 type Store struct {
@@ -43,7 +42,6 @@ func DefaultSettings() Settings {
 
 func ResolveStorePath(dataDir string) (string, error) {
 	dataDir = strings.TrimSpace(dataDir)
-	usingDefaultDir := dataDir == "" || dataDir == defaultDataDir
 	if dataDir == "" {
 		dataDir = defaultDataDir
 	}
@@ -60,14 +58,6 @@ func ResolveStorePath(dataDir string) (string, error) {
 		return "", fmt.Errorf("stat config store: %w", err)
 	}
 
-	if usingDefaultDir {
-		if migratedPath, migrated, err := migrateLegacyDefaultStore(configPath); err != nil {
-			return "", err
-		} else if migrated {
-			return migratedPath, nil
-		}
-	}
-
 	if _, err := os.Stat(legacyPath); err == nil {
 		if err := os.Rename(legacyPath, configPath); err != nil {
 			return "", fmt.Errorf("migrate legacy state store: %w", err)
@@ -77,24 +67,6 @@ func ResolveStorePath(dataDir string) (string, error) {
 	}
 
 	return configPath, nil
-}
-
-func migrateLegacyDefaultStore(configPath string) (string, bool, error) {
-	legacyCandidates := []string{
-		filepath.Join(legacyDefaultDataDir, "config.json"),
-		filepath.Join(legacyDefaultDataDir, "state.json"),
-	}
-	for _, legacyPath := range legacyCandidates {
-		if _, err := os.Stat(legacyPath); err == nil {
-			if err := os.Rename(legacyPath, configPath); err != nil {
-				return "", false, fmt.Errorf("migrate legacy default store %s: %w", legacyPath, err)
-			}
-			return configPath, true, nil
-		} else if !os.IsNotExist(err) {
-			return "", false, fmt.Errorf("stat legacy default store %s: %w", legacyPath, err)
-		}
-	}
-	return "", false, nil
 }
 
 func NewStore(path string, defaults Settings) (*Store, error) {

@@ -35,7 +35,7 @@ Key integration points:
 
 When a dispatched task fails, the app does all of the following:
 
-1. Writes task lifecycle details to a local log file under `moltenhub/logs/` by default.
+1. Writes task lifecycle details to a local log file under `.moltenhub/logs/` by default.
 2. Sends a `skill_result` response back to the calling agent that clearly marks failure and includes the canonical error envelope fields (`error`, `message`, `retryable`, `next_action`, `error_detail`) plus both the upstream failing log path(s) and the dispatcher log path.
 3. Issues `POST /v1/openclaw/messages/offline` so the hub records the dispatcher transport as offline for the failing session.
 4. Queues a remediation follow-up task with this run config payload shape:
@@ -97,7 +97,7 @@ go build ./...
 
 ## Notes
 
-- The app stores runtime state in `moltenhub/config.json` by default. On startup it migrates legacy stores from `moltenhub/state.json`, `data/config.json`, and `data/state.json` when present. Set `APP_DATA_DIR` to override the storage location.
+- The app stores runtime state in `.moltenhub/config.json` by default and migrates a legacy `state.json` to `config.json` within the active data directory when present. Set `APP_DATA_DIR` to override the storage location.
 - Session credentials and routing are persisted with canonical keys (`api_base`, `agent_token`) plus compatibility aliases (`base_url`, `bind_token`).
 - Downstream trust relationships still need to exist in Molten Hub; this app does not create trust edges itself.
 - The dispatcher uses the OpenClaw HTTP adapter because the hub spec explicitly defines skill-request and skill-result envelopes there.
