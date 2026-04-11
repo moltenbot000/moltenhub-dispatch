@@ -23,6 +23,8 @@ const (
 	openClawSkillResult    = "skill_result"
 	followUpRepo           = "git@github.com:Molten-Bot/moltenhub-code.git"
 	followUpPrompt         = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
+	hubPingRetryInterval   = 12 * time.Second
+	hubPingRequestTimeout  = 6 * time.Second
 )
 
 var advertisedSkills = []Skill{
@@ -51,10 +53,16 @@ type realtimeHubClient interface {
 	ConnectOpenClaw(ctx context.Context, token, sessionKey string) (hub.RealtimeSession, error)
 }
 
+type hubPingClient interface {
+	CheckPing(ctx context.Context) (string, error)
+}
+
 type Service struct {
-	store    *Store
-	hub      HubClient
-	settings Settings
+	store               *Store
+	hub                 HubClient
+	settings            Settings
+	hubPingRetryDelay   time.Duration
+	hubPingCheckTimeout time.Duration
 }
 
 type failureReport struct {
@@ -76,9 +84,11 @@ type runtimeEndpointSetter interface {
 func NewService(store *Store, hubClient HubClient) *Service {
 	snapshot := store.Snapshot()
 	service := &Service{
-		store:    store,
-		hub:      hubClient,
-		settings: snapshot.Settings,
+		store:               store,
+		hub:                 hubClient,
+		settings:            snapshot.Settings,
+		hubPingRetryDelay:   hubPingRetryInterval,
+		hubPingCheckTimeout: hubPingRequestTimeout,
 	}
 	service.configureHubClient(snapshot)
 	return service
@@ -175,10 +185,13 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			OfflineURL:      result.Endpoints.Offline,
 			OfflineMarked:   false,
 		}
+		connectionBaseURL, connectionDomain := hubConnectionTarget(result.APIBase, runtime.HubURL)
 		state.Connection = ConnectionState{
 			Status:        ConnectionStatusConnected,
-			Transport:     ConnectionTransportHTTP,
+			Transport:     ConnectionTransportConnected,
 			LastChangedAt: time.Now().UTC(),
+			BaseURL:       connectionBaseURL,
+			Domain:        connectionDomain,
 		}
 		return nil
 	}); err != nil {
@@ -334,10 +347,10 @@ func (s *Service) PollOnce(ctx context.Context) error {
 
 	message, ok, err := s.hub.PullOpenClaw(ctx, state.Session.AgentToken, 25*time.Second)
 	if err != nil {
-		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		s.noteHubInteraction(err, ConnectionTransportHTTPLong)
 		return err
 	}
-	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+	s.noteHubInteraction(nil, ConnectionTransportHTTPLong)
 	if !ok {
 		return s.expirePendingTasks(ctx)
 	}
@@ -373,6 +386,15 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 		}
 		s.syncHubClient(state)
 
+		if err := s.waitForHubReachable(ctx); err != nil {
+			return
+		}
+
+		state = s.store.Snapshot()
+		if strings.TrimSpace(state.Session.AgentToken) == "" {
+			continue
+		}
+
 		if realtime, ok := s.hub.(realtimeHubClient); ok {
 			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
 			if err == nil {
@@ -396,6 +418,77 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 	}
 }
 
+func (s *Service) waitForHubReachable(ctx context.Context) error {
+	pinger, ok := s.hub.(hubPingClient)
+	if !ok {
+		return nil
+	}
+
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		timeout := s.hubPingCheckTimeout
+		if timeout <= 0 {
+			timeout = hubPingRequestTimeout
+		}
+		pingCtx, cancel := context.WithTimeout(ctx, timeout)
+		detail, err := pinger.CheckPing(pingCtx)
+		cancel()
+		if err == nil {
+			snapshot := s.store.Snapshot()
+			if strings.TrimSpace(snapshot.Connection.Status) != ConnectionStatusConnected {
+				s.noteHubPingReachable(detail)
+			}
+			return nil
+		}
+
+		retryDelay := s.hubPingRetryDelay
+		if retryDelay <= 0 {
+			retryDelay = hubPingRetryInterval
+		}
+		s.noteHubPingRetrying(err, retryDelay)
+		if !sleepWithContext(ctx, retryDelay) {
+			return ctx.Err()
+		}
+	}
+}
+
+func (s *Service) noteHubPingRetrying(err error, retryDelay time.Duration) {
+	now := time.Now().UTC()
+	_ = s.store.Update(func(state *AppState) error {
+		baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
+		state.Connection = ConnectionState{
+			Status:        ConnectionStatusDisconnected,
+			Transport:     ConnectionTransportRetrying,
+			LastChangedAt: now,
+			Error:         strings.TrimSpace(err.Error()),
+			Detail:        hubPingFailureDetail(err, retryDelay),
+			BaseURL:       baseURL,
+			Domain:        domain,
+		}
+		return nil
+	})
+}
+
+func (s *Service) noteHubPingReachable(detail string) {
+	now := time.Now().UTC()
+	_ = s.store.Update(func(state *AppState) error {
+		baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
+		state.Connection = ConnectionState{
+			Status:        ConnectionStatusDisconnected,
+			Transport:     ConnectionTransportReachable,
+			LastChangedAt: now,
+			Detail:        strings.TrimSpace(detail),
+			BaseURL:       baseURL,
+			Domain:        domain,
+		}
+		state.Session.OfflineMarked = false
+		return nil
+	})
+}
+
 func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 	state := s.store.Snapshot()
 	if state.Session.AgentToken == "" || state.Session.OfflineMarked {
@@ -410,12 +503,16 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 		return err
 	}
 	return s.store.Update(func(current *AppState) error {
+		baseURL, domain := hubConnectionTarget(current.Session.APIBase, current.Settings.HubURL)
 		current.Session.OfflineMarked = true
 		current.Connection = ConnectionState{
 			Status:        ConnectionStatusDisconnected,
 			Transport:     ConnectionTransportOffline,
 			LastChangedAt: time.Now().UTC(),
 			Error:         strings.TrimSpace(reason),
+			Detail:        strings.TrimSpace(reason),
+			BaseURL:       baseURL,
+			Domain:        domain,
 		}
 		return nil
 	})
@@ -1324,11 +1421,15 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 	now := time.Now().UTC()
 	if !hubReachable(err) {
 		_ = s.store.Update(func(state *AppState) error {
+			baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
 			state.Connection = ConnectionState{
 				Status:        ConnectionStatusDisconnected,
 				Transport:     ConnectionTransportOffline,
 				LastChangedAt: now,
 				Error:         strings.TrimSpace(err.Error()),
+				Detail:        strings.TrimSpace(err.Error()),
+				BaseURL:       baseURL,
+				Domain:        domain,
 			}
 			return nil
 		})
@@ -1336,10 +1437,13 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 	}
 
 	_ = s.store.Update(func(state *AppState) error {
+		baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
 		state.Connection = ConnectionState{
 			Status:        ConnectionStatusConnected,
 			Transport:     transport,
 			LastChangedAt: now,
+			BaseURL:       baseURL,
+			Domain:        domain,
 		}
 		state.Session.OfflineMarked = false
 		return nil
@@ -1388,4 +1492,47 @@ func hubReachable(err error) bool {
 	}
 	var apiErr *hub.APIError
 	return errors.As(err, &apiErr)
+}
+
+func sleepWithContext(ctx context.Context, wait time.Duration) bool {
+	if wait <= 0 {
+		wait = time.Second
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func hubConnectionTarget(apiBase, fallback string) (string, string) {
+	baseURL := strings.TrimSpace(apiBase)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(fallback)
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	if baseURL == "" {
+		return "", ""
+	}
+
+	parsed, err := url.Parse(baseURL)
+	if err != nil || strings.TrimSpace(parsed.Host) == "" {
+		return baseURL, ""
+	}
+	return baseURL, strings.TrimSpace(parsed.Host)
+}
+
+func hubPingFailureDetail(pingErr error, retryDelay time.Duration) string {
+	if retryDelay <= 0 {
+		retryDelay = hubPingRetryInterval
+	}
+	message := fmt.Sprintf("Hub endpoint ping failed; retrying every %s until live.", retryDelay)
+	if pingErr == nil {
+		return message
+	}
+	return fmt.Sprintf("%s Error: %s", message, strings.TrimSpace(pingErr.Error()))
 }

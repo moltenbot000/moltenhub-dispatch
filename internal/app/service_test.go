@@ -30,7 +30,14 @@ type fakeHubClient struct {
 	expectedOfflineURL    string
 	pullMessage           hub.PullResponse
 	pullOK                bool
+	pullCalls             int
 	pullErr               error
+	pingDetail            string
+	pingErr               error
+	pingErrSequence       []error
+	pingCalls             int
+	connectErr            error
+	connectSession        hub.RealtimeSession
 	publishErr            error
 }
 
@@ -77,6 +84,7 @@ func (f *fakeHubClient) PublishOpenClaw(_ context.Context, _ string, req hub.Pub
 }
 
 func (f *fakeHubClient) PullOpenClaw(_ context.Context, _ string, _ time.Duration) (hub.PullResponse, bool, error) {
+	f.pullCalls++
 	if f.expectedPullURL != "" && f.currentBaseURL != f.expectedPullURL {
 		return hub.PullResponse{}, false, &hub.APIError{
 			StatusCode: 401,
@@ -116,7 +124,31 @@ func (f *fakeHubClient) ConnectOpenClaw(_ context.Context, _ string, _ string) (
 	if len(f.baseURLCalls) == 0 {
 		f.baseURLCalls = append(f.baseURLCalls, f.currentBaseURL)
 	}
+	if f.connectSession != nil && f.connectErr == nil {
+		return f.connectSession, nil
+	}
+	if f.connectErr != nil {
+		return nil, f.connectErr
+	}
 	return &fakeRealtimeSession{}, errors.New("websocket unavailable")
+}
+
+func (f *fakeHubClient) CheckPing(_ context.Context) (string, error) {
+	f.pingCalls++
+	if len(f.pingErrSequence) > 0 {
+		err := f.pingErrSequence[0]
+		f.pingErrSequence = f.pingErrSequence[1:]
+		if err != nil {
+			return "", err
+		}
+	}
+	if f.pingErr != nil {
+		return "", f.pingErr
+	}
+	if strings.TrimSpace(f.pingDetail) != "" {
+		return strings.TrimSpace(f.pingDetail), nil
+	}
+	return "https://na.hub.molten.bot/ping status=204", nil
 }
 
 func (f *fakeRealtimeSession) Receive(_ context.Context) (hub.PullResponse, error) {
@@ -1493,7 +1525,7 @@ func TestPollOnceMarksHTTPConnectivityAfterSuccessfulPull(t *testing.T) {
 	if state.Connection.Status != ConnectionStatusConnected {
 		t.Fatalf("expected connected status, got %#v", state.Connection)
 	}
-	if state.Connection.Transport != ConnectionTransportHTTP {
+	if state.Connection.Transport != ConnectionTransportHTTPLong {
 		t.Fatalf("expected http transport, got %#v", state.Connection)
 	}
 }
@@ -1525,6 +1557,102 @@ func TestPollOnceMarksDisconnectedWhenHubIsUnreachable(t *testing.T) {
 	}
 	if state.Connection.Error == "" {
 		t.Fatalf("expected connection error detail, got %#v", state.Connection)
+	}
+}
+
+func TestWaitForHubReachableRetriesPingUntilLive(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	fake.pingErrSequence = []error{
+		errors.New("GET https://na.hub.molten.bot/ping returned status=503"),
+		nil,
+	}
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.waitForHubReachable(context.Background()); err != nil {
+		t.Fatalf("wait for hub reachable: %v", err)
+	}
+
+	if fake.pingCalls != 2 {
+		t.Fatalf("expected 2 ping checks, got %d", fake.pingCalls)
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Transport != ConnectionTransportReachable {
+		t.Fatalf("expected reachable transport after successful ping, got %#v", state.Connection)
+	}
+	if state.Connection.Status != ConnectionStatusDisconnected {
+		t.Fatalf("expected disconnected status while connecting, got %#v", state.Connection)
+	}
+	if state.Connection.Detail != "https://na.hub.molten.bot/ping status=204" {
+		t.Fatalf("unexpected ping detail: %#v", state.Connection)
+	}
+	if state.Connection.Domain != "na.hub.molten.bot" {
+		t.Fatalf("unexpected hub domain: %#v", state.Connection)
+	}
+}
+
+func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	fake.connectErr = errors.New("websocket unavailable")
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+	fake.pullOK = false
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunHubLoop(ctx)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if fake.pullCalls > 0 {
+			break
+		}
+		select {
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatalf("expected pull fallback to run at least once; connect calls=%d ping calls=%d", len(fake.baseURLCalls), fake.pingCalls)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-done
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusConnected {
+		t.Fatalf("expected connected status after HTTP fallback poll, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportHTTPLong {
+		t.Fatalf("expected http long-poll transport after websocket fallback, got %#v", state.Connection)
 	}
 }
 

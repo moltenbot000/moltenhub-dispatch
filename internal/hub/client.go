@@ -291,6 +291,40 @@ func (c *Client) MarkOffline(ctx context.Context, token string, req OfflineReque
 	return c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawOfflineURL, "/v1/openclaw/messages/offline"), token, req, nil)
 }
 
+func (c *Client) CheckPing(ctx context.Context) (string, error) {
+	pingURL, err := hubPingURL(c.baseURL)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pingURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("build ping request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GET %s failed: %w", pingURL, err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+	detail := fmt.Sprintf("%s status=%d", pingURL, resp.StatusCode)
+	if trimmed := strings.TrimSpace(string(body)); trimmed != "" {
+		trimmed = strings.Join(strings.Fields(trimmed), " ")
+		if len(trimmed) > 120 {
+			trimmed = trimmed[:117] + "..."
+		}
+		detail += fmt.Sprintf(" body=%q", trimmed)
+	}
+	if resp.StatusCode/100 != 2 {
+		return "", fmt.Errorf("GET %s returned status=%d", pingURL, resp.StatusCode)
+	}
+	return detail, nil
+}
+
 func (c *Client) runtimeEndpoint(override, fallback string) string {
 	override = strings.TrimSpace(override)
 	if override != "" {
@@ -564,6 +598,23 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func hubPingURL(baseURL string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", fmt.Errorf("parse base URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("base URL must use http or https")
+	}
+	if strings.TrimSpace(u.Host) == "" {
+		return "", fmt.Errorf("base URL host is required")
+	}
+	u.Path = "/ping"
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String(), nil
 }
 
 func joinURLPath(basePath, endpoint string) string {
