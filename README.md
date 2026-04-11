@@ -98,6 +98,7 @@ go build ./...
 ## Notes
 
 - The app stores runtime state in `.moltenhub/config.json` by default and migrates a legacy `state.json` to `config.json` within the active data directory when present. Set `APP_DATA_DIR` to override the storage location.
+- Runtime region options are sourced from `https://molten.bot/hubs.json` and fall back to the built-in NA/EU catalog if the remote catalog is unavailable.
 - Runtime and endpoint URLs are restricted to Molten Hub domains (`https://na.hub.molten.bot`, `https://eu.hub.molten.bot`, and subdomains under those roots). Non-Hub endpoints such as localhost URLs are rejected during onboarding/state normalization.
 - Session credentials and routing are persisted with canonical keys (`api_base`, `agent_token`) plus compatibility aliases (`base_url`, `bind_token`).
 - Downstream trust relationships still need to exist in Molten Hub; this app does not create trust edges itself.

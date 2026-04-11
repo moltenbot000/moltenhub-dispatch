@@ -1,15 +1,21 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
 	HubRegionNA   = "na"
 	HubRegionEU   = "eu"
 	hubBaseDomain = "hub.molten.bot"
+	hubCatalogURL = "https://molten.bot/hubs.json"
 )
 
 type HubRuntime struct {
@@ -19,7 +25,7 @@ type HubRuntime struct {
 	HubURL      string
 }
 
-var supportedHubRuntimes = []HubRuntime{
+var fallbackHubRuntimes = []HubRuntime{
 	{
 		ID:          HubRegionNA,
 		Label:       "NA",
@@ -34,14 +40,24 @@ var supportedHubRuntimes = []HubRuntime{
 	},
 }
 
+var (
+	hubRuntimeCatalogClient = &http.Client{Timeout: 2 * time.Second}
+
+	hubRuntimeCatalogMu     sync.RWMutex
+	hubRuntimeCatalogLoaded bool
+	hubRuntimeCatalog       = cloneHubRuntimes(fallbackHubRuntimes)
+)
+
 func SupportedHubRuntimes() []HubRuntime {
-	runtimes := make([]HubRuntime, len(supportedHubRuntimes))
-	copy(runtimes, supportedHubRuntimes)
-	return runtimes
+	return cloneHubRuntimes(currentHubRuntimes())
 }
 
 func DefaultHubRuntime() HubRuntime {
-	return supportedHubRuntimes[0]
+	runtimes := currentHubRuntimes()
+	if len(runtimes) == 0 {
+		return HubRuntime{}
+	}
+	return runtimes[0]
 }
 
 func ResolveHubRuntime(region, hubURL string) (HubRuntime, error) {
@@ -59,7 +75,7 @@ func ResolveHubRuntime(region, hubURL string) (HubRuntime, error) {
 
 func hubRuntimeByID(region string) (HubRuntime, bool) {
 	region = strings.TrimSpace(strings.ToLower(region))
-	for _, runtime := range supportedHubRuntimes {
+	for _, runtime := range currentHubRuntimes() {
 		if runtime.ID == region {
 			return runtime, true
 		}
@@ -69,7 +85,7 @@ func hubRuntimeByID(region string) (HubRuntime, bool) {
 
 func hubRuntimeByURL(hubURL string) (HubRuntime, bool) {
 	hubURL = normalizeHubRuntimeURL(hubURL)
-	for _, runtime := range supportedHubRuntimes {
+	for _, runtime := range currentHubRuntimes() {
 		if normalizeHubRuntimeURL(runtime.HubURL) == hubURL {
 			return runtime, true
 		}
@@ -133,7 +149,7 @@ func runtimeFromHost(host string) (HubRuntime, bool) {
 		return HubRuntime{}, false
 	}
 
-	for _, runtime := range supportedHubRuntimes {
+	for _, runtime := range currentHubRuntimes() {
 		rootHost := hubHostForRegion(runtime.ID)
 		if host == rootHost || strings.HasSuffix(host, "."+rootHost) {
 			return runtime, true
@@ -156,4 +172,121 @@ func hubURLForRegion(region string) string {
 		return ""
 	}
 	return "https://" + host
+}
+
+func currentHubRuntimes() []HubRuntime {
+	hubRuntimeCatalogMu.RLock()
+	if hubRuntimeCatalogLoaded {
+		runtimes := cloneHubRuntimes(hubRuntimeCatalog)
+		hubRuntimeCatalogMu.RUnlock()
+		return runtimes
+	}
+	hubRuntimeCatalogMu.RUnlock()
+
+	hubRuntimeCatalogMu.Lock()
+	defer hubRuntimeCatalogMu.Unlock()
+
+	if !hubRuntimeCatalogLoaded {
+		runtimes, err := fetchHubRuntimeCatalog(hubCatalogURL, hubRuntimeCatalogClient)
+		if err == nil && len(runtimes) > 0 {
+			hubRuntimeCatalog = runtimes
+		} else {
+			hubRuntimeCatalog = cloneHubRuntimes(fallbackHubRuntimes)
+		}
+		hubRuntimeCatalogLoaded = true
+	}
+
+	return cloneHubRuntimes(hubRuntimeCatalog)
+}
+
+func fetchHubRuntimeCatalog(rawURL string, client *http.Client) ([]HubRuntime, error) {
+	if client == nil {
+		client = hubRuntimeCatalogClient
+	}
+	req, err := http.NewRequest(http.MethodGet, strings.TrimSpace(rawURL), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("hub catalog returned %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+
+	var payload []struct {
+		Display string `json:"display"`
+		Key     string `json:"key"`
+		Domain  string `json:"domain"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	runtimes := make([]HubRuntime, 0, len(payload))
+	seen := make(map[string]struct{}, len(payload))
+	for _, item := range payload {
+		hubURL := catalogHubURL(item.Domain)
+		runtime := HubRuntime{
+			ID:          strings.TrimSpace(strings.ToLower(item.Key)),
+			Label:       strings.ToUpper(strings.TrimSpace(item.Key)),
+			Description: strings.TrimSpace(item.Display),
+			HubURL:      hubURL,
+		}
+		if runtime.ID == "" || runtime.Label == "" || runtime.Description == "" || runtime.HubURL == "" {
+			continue
+		}
+		if _, ok := seen[runtime.ID]; ok {
+			continue
+		}
+		seen[runtime.ID] = struct{}{}
+		runtimes = append(runtimes, runtime)
+	}
+	if len(runtimes) == 0 {
+		return nil, fmt.Errorf("hub catalog %q did not contain any supported runtimes", rawURL)
+	}
+	return runtimes, nil
+}
+
+func cloneHubRuntimes(runtimes []HubRuntime) []HubRuntime {
+	cloned := make([]HubRuntime, len(runtimes))
+	copy(cloned, runtimes)
+	return cloned
+}
+
+func catalogHubURL(domain string) string {
+	domain = strings.TrimSpace(strings.ToLower(domain))
+	if domain == "" {
+		return ""
+	}
+
+	rawURL := "https://" + domain
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	if !strings.EqualFold(parsed.Scheme, "https") {
+		return ""
+	}
+	if parsed.User != nil || strings.TrimSpace(parsed.Port()) != "" {
+		return ""
+	}
+
+	host := strings.TrimSpace(strings.ToLower(parsed.Hostname()))
+	if host != domain || !strings.HasSuffix(host, "."+hubBaseDomain) {
+		return ""
+	}
+	parsed.Scheme = "https"
+	parsed.Host = host
+	parsed.User = nil
+	return strings.TrimRight(parsed.String(), "/")
 }
