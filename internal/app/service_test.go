@@ -494,6 +494,37 @@ func TestBindAndRegisterReportsCredentialVerificationFailureStage(t *testing.T) 
 	}
 }
 
+func TestBindAndRegisterFailsBindStageWhenBindResponseMissingToken(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentUUID: "agent-uuid",
+		AgentURI:  "molten://dispatch/agent",
+		Handle:    "dispatch-agent",
+		APIBase:   "https://na.hub.molten.bot",
+	}
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		BindToken:       "bind-token",
+		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err == nil {
+		t.Fatal("expected bind-stage failure for missing token")
+	}
+	if stage := OnboardingStageFromError(err); stage != OnboardingStepBind {
+		t.Fatalf("expected bind stage, got %q", stage)
+	}
+	if !strings.Contains(err.Error(), "bind response missing agent token") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fake.capabilitiesCalls != 0 {
+		t.Fatalf("expected no capability checks without token, got %d", fake.capabilitiesCalls)
+	}
+}
+
 func TestUpdateAgentProfileUpdatesMetadataAndStoredProfile(t *testing.T) {
 	t.Parallel()
 

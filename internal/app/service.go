@@ -121,6 +121,12 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if err != nil {
 		return WrapOnboardingError(OnboardingStepBind, err)
 	}
+	result.AgentToken = strings.TrimSpace(result.AgentToken)
+	if result.AgentToken == "" {
+		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing agent token"))
+	}
+	result.APIBase = strings.TrimSpace(result.APIBase)
+	result.Handle = strings.TrimSpace(result.Handle)
 	if setter, ok := s.hub.(baseURLSetter); ok && strings.TrimSpace(result.APIBase) != "" {
 		setter.SetBaseURL(result.APIBase)
 	}
