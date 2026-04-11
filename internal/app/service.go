@@ -340,6 +340,30 @@ func (s *Service) AddConnectedAgent(agent ConnectedAgent) error {
 	})
 }
 
+func (s *Service) RefreshConnectedAgents(ctx context.Context) ([]ConnectedAgent, error) {
+	state := s.store.Snapshot()
+	if strings.TrimSpace(state.Session.AgentToken) == "" {
+		return state.ConnectedAgents, nil
+	}
+	s.syncHubClient(state)
+
+	capabilities, err := s.hub.GetCapabilities(ctx, state.Session.AgentToken)
+	if err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		return nil, fmt.Errorf("refresh connected agents from /v1/agents/me/capabilities: %w", err)
+	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+
+	agents := connectedAgentsFromCapabilities(capabilities, state)
+	if err := s.store.Update(func(current *AppState) error {
+		current.ConnectedAgents = agents
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return agents, nil
+}
+
 func (s *Service) UpdateSettings(mutator func(*Settings) error) error {
 	if err := s.store.Update(func(state *AppState) error {
 		if err := mutator(&state.Settings); err != nil {
@@ -1405,6 +1429,213 @@ func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
 		OpenClawPushURL: result.Endpoints.OpenClawPush,
 		OfflineURL:      result.Endpoints.Offline,
 	})
+}
+
+func connectedAgentsFromCapabilities(capabilities map[string]any, state AppState) []ConnectedAgent {
+	rawCatalog, ok := capabilities["peer_skill_catalog"]
+	if !ok || rawCatalog == nil {
+		return nil
+	}
+
+	existingByRef := make(map[string]ConnectedAgent, len(state.ConnectedAgents)*3)
+	for _, agent := range state.ConnectedAgents {
+		for _, ref := range []string{agent.ID, agent.AgentUUID, agent.AgentURI} {
+			ref = strings.TrimSpace(ref)
+			if ref == "" {
+				continue
+			}
+			existingByRef[strings.ToLower(ref)] = agent
+		}
+	}
+
+	entries := flattenPeerSkillCatalog(rawCatalog)
+	agents := make([]ConnectedAgent, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		agent, ok := connectedAgentFromCapabilityEntry(entry, state, existingByRef)
+		if !ok {
+			continue
+		}
+		key := strings.ToLower(coalesceTrimmed(agent.AgentUUID, agent.AgentURI, agent.ID))
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		agents = append(agents, agent)
+	}
+	return agents
+}
+
+func flattenPeerSkillCatalog(raw any) []map[string]any {
+	switch typed := raw.(type) {
+	case []any:
+		out := make([]map[string]any, 0, len(typed))
+		for _, item := range typed {
+			if entry, ok := item.(map[string]any); ok {
+				out = append(out, entry)
+			}
+		}
+		return out
+	case map[string]any:
+		for _, key := range []string{"agents", "peers", "items", "results"} {
+			if nested, ok := typed[key]; ok {
+				if out := flattenPeerSkillCatalog(nested); len(out) > 0 {
+					return out
+				}
+			}
+		}
+		out := make([]map[string]any, 0, len(typed))
+		for key, value := range typed {
+			entry, ok := value.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, hasID := entry["id"]; !hasID && strings.TrimSpace(key) != "" {
+				cloned := cloneMap(entry)
+				cloned["id"] = key
+				entry = cloned
+			}
+			out = append(out, entry)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func connectedAgentFromCapabilityEntry(entry map[string]any, state AppState, existingByRef map[string]ConnectedAgent) (ConnectedAgent, bool) {
+	metadata := nestedMetadata(entry)
+	agentSection := nestedMap(entry, "agent")
+
+	agentUUID := firstCapabilityString(entry, metadata, agentSection, "agent_uuid", "uuid")
+	agentURI := firstCapabilityString(entry, metadata, agentSection, "agent_uri", "uri")
+	handle := firstCapabilityString(entry, metadata, agentSection, "handle", "agent_id", "id")
+	if sameAgentRef(state.Session, agentUUID, agentURI, handle) {
+		return ConnectedAgent{}, false
+	}
+
+	previous := existingConnectedAgent(existingByRef, handle, agentUUID, agentURI)
+	name := firstCapabilityString(entry, metadata, agentSection, "display_name", "name", "handle", "agent_id", "id")
+	emoji := firstCapabilityString(entry, metadata, agentSection, "emoji")
+	skills := capabilitySkills(entry, metadata, agentSection)
+
+	agent := previous
+	agent.ID = coalesceTrimmed(handle, previous.ID, agentUUID, agentURI)
+	agent.Name = coalesceTrimmed(name, previous.Name, agent.ID)
+	agent.Emoji = coalesceTrimmed(emoji, previous.Emoji)
+	agent.AgentUUID = coalesceTrimmed(agentUUID, previous.AgentUUID)
+	agent.AgentURI = coalesceTrimmed(agentURI, previous.AgentURI)
+	if len(skills) > 0 {
+		agent.AdvertisedSkills = skills
+	}
+	if agent.CreatedAt.IsZero() {
+		agent.CreatedAt = time.Now().UTC()
+	}
+	if agent.ID == "" && agent.AgentUUID == "" && agent.AgentURI == "" {
+		return ConnectedAgent{}, false
+	}
+	return agent, true
+}
+
+func nestedMetadata(entry map[string]any) map[string]any {
+	metadata := nestedMap(entry, "metadata")
+	if len(metadata) > 0 {
+		return metadata
+	}
+	if agent := nestedMap(entry, "agent"); len(agent) > 0 {
+		return nestedMap(agent, "metadata")
+	}
+	return nil
+}
+
+func nestedMap(entry map[string]any, key string) map[string]any {
+	value, ok := entry[key]
+	if !ok {
+		return nil
+	}
+	mapped, _ := value.(map[string]any)
+	return mapped
+}
+
+func firstCapabilityString(primary map[string]any, metadata map[string]any, agent map[string]any, keys ...string) string {
+	for _, source := range []map[string]any{primary, metadata, agent} {
+		if source == nil {
+			continue
+		}
+		if value := stringFromMap(source, keys...); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func capabilitySkills(primary map[string]any, metadata map[string]any, agent map[string]any) []Skill {
+	for _, source := range []map[string]any{primary, metadata, agent} {
+		if source == nil {
+			continue
+		}
+		for _, key := range []string{"advertised_skills", "skills"} {
+			if skills := skillsFromAny(source[key]); len(skills) > 0 {
+				return skills
+			}
+		}
+	}
+	return nil
+}
+
+func skillsFromAny(value any) []Skill {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	skills := make([]Skill, 0, len(items))
+	for _, item := range items {
+		switch typed := item.(type) {
+		case map[string]any:
+			name := strings.TrimSpace(stringFromMap(typed, "name"))
+			description := strings.TrimSpace(stringFromMap(typed, "description"))
+			if name == "" {
+				continue
+			}
+			skills = append(skills, Skill{Name: name, Description: description})
+		case string:
+			name := strings.TrimSpace(typed)
+			if name == "" {
+				continue
+			}
+			skills = append(skills, Skill{Name: name})
+		}
+	}
+	return skills
+}
+
+func existingConnectedAgent(existingByRef map[string]ConnectedAgent, refs ...string) ConnectedAgent {
+	for _, ref := range refs {
+		ref = strings.ToLower(strings.TrimSpace(ref))
+		if ref == "" {
+			continue
+		}
+		if existing, ok := existingByRef[ref]; ok {
+			return existing
+		}
+	}
+	return ConnectedAgent{}
+}
+
+func sameAgentRef(session Session, refs ...string) bool {
+	for _, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		if strings.EqualFold(ref, session.AgentUUID) || strings.EqualFold(ref, session.AgentURI) || strings.EqualFold(ref, session.Handle) {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeAPIBaseFromBind(result hub.BindResponse) string {

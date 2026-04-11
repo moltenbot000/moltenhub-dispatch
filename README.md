@@ -20,6 +20,8 @@ Key integration points:
   - `dispatch_skill_request`
   - `review_failure_logs`
   If a deployment returns `404 not_found` for `/v1/agents/me/metadata`, the dispatcher retries against the spec-compatible alias `PATCH /v1/agents/me`.
+- `GET /v1/agents/me/capabilities`
+  Refreshes the UI's connected-agent list from the runtime `peer_skill_catalog`, which the OpenAPI spec defines as talkable peers for the authenticated agent. The human-auth `/v1/me/agents` route is intentionally not used here because it lists bound agents for a human session rather than routable peers for an agent bearer token.
 - `POST /v1/openclaw/messages/publish`
   Sends downstream skill requests and result/failure responses.
 - `GET /v1/openclaw/messages/pull`
