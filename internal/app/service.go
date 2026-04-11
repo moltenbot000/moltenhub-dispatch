@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,12 +89,16 @@ func (s *Service) Snapshot() AppState {
 }
 
 func (s *Service) configureHubClient(state AppState) {
-	baseURL := strings.TrimSpace(state.Session.APIBase)
+	baseURL := runtimeAPIBaseFromSession(state.Session)
 	if baseURL == "" {
 		baseURL = strings.TrimSpace(state.Settings.HubURL)
 	}
 	s.setHubBaseURL(baseURL)
 	s.setRuntimeEndpoints(runtimeEndpointsFromSession(state.Session))
+}
+
+func (s *Service) syncHubClient(state AppState) {
+	s.configureHubClient(state)
 }
 
 func (s *Service) setHubBaseURL(baseURL string) {
@@ -139,7 +144,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if result.AgentToken == "" {
 		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing agent token"))
 	}
-	result.APIBase = strings.TrimSpace(result.APIBase)
+	result.APIBase = coalesceTrimmed(strings.TrimSpace(result.APIBase), runtimeAPIBaseFromBind(result))
 	result.Handle = strings.TrimSpace(result.Handle)
 	s.setHubBaseURL(result.APIBase)
 	s.setRuntimeEndpoints(runtimeEndpointsFromBind(result))
@@ -179,7 +184,9 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}); err != nil {
 		return WrapOnboardingError(OnboardingStepBind, err)
 	}
-	s.settings = s.store.Snapshot().Settings
+	updatedState := s.store.Snapshot()
+	s.settings = updatedState.Settings
+	s.syncHubClient(updatedState)
 	if _, err := s.hub.GetCapabilities(ctx, result.AgentToken); err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return WrapOnboardingError(OnboardingStepWorkBind, fmt.Errorf("agent bound, but credential verification failed: %w", err))
@@ -211,6 +218,7 @@ func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) 
 	if strings.TrimSpace(state.Session.AgentToken) == "" {
 		return errors.New("agent is not bound yet")
 	}
+	s.syncHubClient(state)
 
 	normalized := normalizeAgentProfile(profile)
 	if normalized.Handle == "" {
@@ -284,6 +292,7 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 	if state.Session.AgentToken == "" {
 		return PendingTask{}, errors.New("agent is not bound yet")
 	}
+	s.syncHubClient(state)
 
 	target, err := s.resolveDispatchTarget(state, req)
 	if err != nil {
@@ -321,6 +330,7 @@ func (s *Service) PollOnce(ctx context.Context) error {
 	if state.Session.AgentToken == "" {
 		return nil
 	}
+	s.syncHubClient(state)
 
 	message, ok, err := s.hub.PullOpenClaw(ctx, state.Session.AgentToken, 25*time.Second)
 	if err != nil {
@@ -361,6 +371,7 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 			}
 			continue
 		}
+		s.syncHubClient(state)
 
 		if realtime, ok := s.hub.(realtimeHubClient); ok {
 			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
@@ -390,6 +401,7 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 	if state.Session.AgentToken == "" || state.Session.OfflineMarked {
 		return nil
 	}
+	s.syncHubClient(state)
 	if err := s.hub.MarkOffline(ctx, state.Session.AgentToken, hub.OfflineRequest{
 		SessionKey: state.Settings.SessionKey,
 		Reason:     reason,
@@ -554,6 +566,7 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 }
 
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
+	s.syncHubClient(state)
 	logPaths := followUpLogPaths(pending)
 	originalRequest := cloneMap(pending.DispatchPayload)
 	task := FollowUpTask{
@@ -623,6 +636,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 }
 
 func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
+	s.syncHubClient(state)
 	if pending.LogPath == "" {
 		pending.LogPath = filepath.Join(s.settings.DataDir, "logs", pending.ID+".log")
 	}
@@ -662,6 +676,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 }
 
 func (s *Service) publishResultToCaller(ctx context.Context, state AppState, pending PendingTask, result hub.OpenClawMessage) error {
+	s.syncHubClient(state)
 	forwarded := result
 	forwarded.ReplyTo = pending.CallerRequestID
 	forwarded.RequestID = pending.ParentRequestID
@@ -1199,6 +1214,80 @@ func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
 		OpenClawPushURL: result.Endpoints.OpenClawPush,
 		OfflineURL:      result.Endpoints.Offline,
 	})
+}
+
+func runtimeAPIBaseFromBind(result hub.BindResponse) string {
+	return runtimeAPIBaseFromSession(Session{
+		APIBase:         result.APIBase,
+		ManifestURL:     result.Endpoints.Manifest,
+		Capabilities:    result.Endpoints.Capabilities,
+		MetadataURL:     result.Endpoints.Metadata,
+		OpenClawPullURL: result.Endpoints.OpenClawPull,
+		OpenClawPushURL: result.Endpoints.OpenClawPush,
+		OfflineURL:      result.Endpoints.Offline,
+	})
+}
+
+func runtimeAPIBaseFromSession(session Session) string {
+	if apiBase := strings.TrimSpace(session.APIBase); apiBase != "" {
+		return apiBase
+	}
+	for _, endpoint := range []string{
+		session.MetadataURL,
+		session.Capabilities,
+		session.OpenClawPullURL,
+		session.OpenClawPushURL,
+		session.OfflineURL,
+		session.ManifestURL,
+	} {
+		if apiBase := runtimeAPIBaseFromEndpoint(endpoint); apiBase != "" {
+			return apiBase
+		}
+	}
+	return ""
+}
+
+func coalesceTrimmed(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func runtimeAPIBaseFromEndpoint(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+
+	trimmedPath := strings.TrimRight(parsed.Path, "/")
+	for _, suffix := range []string{
+		"/v1/agents/me/metadata",
+		"/v1/agents/me/capabilities",
+		"/v1/agents/me/manifest",
+		"/v1/agents/me",
+		"/v1/openclaw/messages/pull",
+		"/v1/openclaw/messages/publish",
+		"/v1/openclaw/messages/offline",
+		"/runtime/profile",
+		"/runtime/capabilities",
+		"/runtime/manifest",
+	} {
+		if strings.HasSuffix(trimmedPath, suffix) {
+			parsed.Path = strings.TrimSuffix(trimmedPath, suffix)
+			parsed.RawPath = ""
+			return strings.TrimRight(parsed.String(), "/")
+		}
+	}
+
+	parsed.Path = ""
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return strings.TrimRight(parsed.String(), "/")
 }
 
 func runtimeEndpointsFromSession(session Session) hub.RuntimeEndpoints {
