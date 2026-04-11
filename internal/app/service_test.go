@@ -638,6 +638,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if fake.offlineCalls[0].Reason == "" {
 		t.Fatal("expected offline reason to describe the task failure")
 	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
+	}
 
 	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
 	if !ok {
@@ -750,6 +753,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
 
 	failureMessage := fake.publishCalls[0].Message
@@ -1012,6 +1018,9 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if fake.offlineCalls[0].Reason == "" {
 		t.Fatal("expected offline reason to describe the task failure")
 	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
+	}
 
 	state := service.store.Snapshot()
 	if len(state.PendingTasks) != 0 {
@@ -1132,6 +1141,9 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
 	if len(fake.baseURLCalls) != 1 || fake.baseURLCalls[0] != "https://runtime.na.hub.molten.bot" {
 		t.Fatalf("expected service to initialize client with persisted api_base, got %#v", fake.baseURLCalls)

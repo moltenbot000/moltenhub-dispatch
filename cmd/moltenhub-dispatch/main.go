@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -22,7 +21,12 @@ func main() {
 		log.Fatalf("create data directory: %v", err)
 	}
 
-	store, err := app.NewStore(filepath.Join(settings.DataDir, "state.json"), settings)
+	storePath, err := app.ResolveStorePath(settings.DataDir)
+	if err != nil {
+		log.Fatalf("resolve state store path: %v", err)
+	}
+
+	store, err := app.NewStore(storePath, settings)
 	if err != nil {
 		log.Fatalf("initialize store: %v", err)
 	}

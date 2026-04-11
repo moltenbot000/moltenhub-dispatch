@@ -36,6 +36,35 @@ func DefaultSettings() Settings {
 	}
 }
 
+func ResolveStorePath(dataDir string) (string, error) {
+	dataDir = strings.TrimSpace(dataDir)
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return "", fmt.Errorf("create data directory: %w", err)
+	}
+
+	configPath := filepath.Join(dataDir, "config.json")
+	legacyPath := filepath.Join(dataDir, "state.json")
+
+	if _, err := os.Stat(configPath); err == nil {
+		return configPath, nil
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat config store: %w", err)
+	}
+
+	if _, err := os.Stat(legacyPath); err == nil {
+		if err := os.Rename(legacyPath, configPath); err != nil {
+			return "", fmt.Errorf("migrate legacy state store: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat legacy state store: %w", err)
+	}
+
+	return configPath, nil
+}
+
 func NewStore(path string, defaults Settings) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create store directory: %w", err)
