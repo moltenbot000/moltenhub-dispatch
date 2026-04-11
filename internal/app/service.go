@@ -18,6 +18,8 @@ const (
 	dispatchSkillName      = "dispatch_skill_request"
 	failureReviewSkillName = "review_failure_logs"
 	dispatcherHarness      = "moltenhub-dispatch"
+	followUpRepo           = "git@github.com:Molten-Bot/moltenhub-code.git"
+	followUpPrompt         = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 )
 
 var advertisedSkills = []map[string]string{
@@ -585,10 +587,10 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 		FailedRepo:      fallbackRepo(pending.Repo),
 		LogPaths:        logPaths,
 		RunConfig: FollowUpRunConfig{
-			Repos:        []string{fallbackRepo(pending.Repo)},
+			Repos:        []string{followUpRepo},
 			BaseBranch:   "main",
 			TargetSubdir: ".",
-			Prompt:       "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results.",
+			Prompt:       followUpPrompt,
 		},
 		OriginalError:    formatFailureSummary(report),
 		OriginalRequest:  originalRequest,

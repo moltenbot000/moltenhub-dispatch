@@ -625,7 +625,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
@@ -756,7 +756,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if len(state.PendingTasks) != 0 {
 		t.Fatalf("expected task to be cleared, got %d pending", len(state.PendingTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" || got[1] != filepath.Join(service.settings.DataDir, "logs", "task-1.log") {
@@ -847,13 +847,13 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected follow-up task after failed dispatch, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected follow-up repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
 		t.Fatalf("unexpected follow-up log paths: %#v", got)
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Prompt; got != "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results." {
+	if got := state.FollowUpTasks[0].RunConfig.Prompt; got != followUpPrompt {
 		t.Fatalf("unexpected follow-up prompt: %q", got)
 	}
 }

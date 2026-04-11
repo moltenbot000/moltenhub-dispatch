@@ -99,6 +99,12 @@ func TestHandleBindRendersSubmittedTokenOnFailure(t *testing.T) {
 	if !strings.Contains(body, "bind failed") {
 		t.Fatalf("expected bind error in page, body=%s", body)
 	}
+	if !strings.Contains(body, `<button type="submit">Bind</button>`) {
+		t.Fatalf("expected bind CTA label to be Bind, body=%s", body)
+	}
+	if strings.Contains(body, "Bind And Register") {
+		t.Fatalf("did not expect legacy bind CTA label, body=%s", body)
+	}
 }
 
 func TestHandleBindPassesSubmittedEmailToService(t *testing.T) {
