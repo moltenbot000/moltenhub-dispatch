@@ -491,65 +491,53 @@ func applyBindEndpoints(out *BindResponse, endpoints map[string]any) {
 }
 
 func extractStringFromAny(value any, keys ...string) string {
-	switch typed := value.(type) {
-	case map[string]any:
-		for _, key := range keys {
-			if raw, ok := typed[key]; ok {
-				if str, ok := raw.(string); ok && strings.TrimSpace(str) != "" {
-					return strings.TrimSpace(str)
-				}
-			}
-		}
-		for _, nestedKey := range []string{"data", "result", "agent", "payload"} {
-			if nested, ok := typed[nestedKey]; ok {
-				if value := extractStringFromAny(nested, keys...); value != "" {
-					return value
-				}
-			}
-		}
-		for _, nested := range typed {
-			if value := extractStringFromAny(nested, keys...); value != "" {
-				return value
-			}
-		}
-	case []any:
-		for _, entry := range typed {
-			if value := extractStringFromAny(entry, keys...); value != "" {
-				return value
-			}
-		}
-	}
-	return ""
+	var out string
+	visitAny(value, func(entry map[string]any) bool {
+		out = stringFromMap(entry, keys...)
+		return out != ""
+	})
+	return out
 }
 
 func extractMapByKey(value any, key string) map[string]any {
+	var out map[string]any
+	visitAny(value, func(entry map[string]any) bool {
+		found, ok := entry[key].(map[string]any)
+		if !ok || len(found) == 0 {
+			return false
+		}
+		out = found
+		return true
+	})
+	return out
+}
+
+func visitAny(value any, visit func(map[string]any) bool) bool {
 	switch typed := value.(type) {
 	case map[string]any:
-		if raw, ok := typed[key]; ok {
-			if parsed, ok := raw.(map[string]any); ok {
-				return parsed
-			}
+		if visit(typed) {
+			return true
 		}
 		for _, nestedKey := range []string{"data", "result", "agent", "payload"} {
 			if nested, ok := typed[nestedKey]; ok {
-				if parsed := extractMapByKey(nested, key); len(parsed) > 0 {
-					return parsed
+				if visitAny(nested, visit) {
+					return true
 				}
 			}
 		}
 		for _, nested := range typed {
-			if parsed := extractMapByKey(nested, key); len(parsed) > 0 {
-				return parsed
+			if visitAny(nested, visit) {
+				return true
 			}
 		}
 	case []any:
 		for _, entry := range typed {
-			if parsed := extractMapByKey(entry, key); len(parsed) > 0 {
-				return parsed
+			if visitAny(entry, visit) {
+				return true
 			}
 		}
 	}
-	return nil
+	return false
 }
 
 func stringFromMap(values map[string]any, keys ...string) string {

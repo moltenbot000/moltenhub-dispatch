@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
@@ -18,18 +17,21 @@ const (
 	dispatchSkillName      = "dispatch_skill_request"
 	failureReviewSkillName = "review_failure_logs"
 	dispatcherHarness      = "moltenhub-dispatch"
+	openClawHTTPProtocol   = "openclaw.http.v1"
+	openClawSkillRequest   = "skill_request"
+	openClawSkillResult    = "skill_result"
 	followUpRepo           = "git@github.com:Molten-Bot/moltenhub-code.git"
 	followUpPrompt         = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 )
 
-var advertisedSkills = []map[string]string{
+var advertisedSkills = []Skill{
 	{
-		"name":        dispatchSkillName,
-		"description": "Dispatch a skill request to a connected agent and proxy the result back to the original caller.",
+		Name:        dispatchSkillName,
+		Description: "Dispatch a skill request to a connected agent and proxy the result back to the original caller.",
 	},
 	{
-		"name":        failureReviewSkillName,
-		"description": "Review failing log paths, find root causes, fix the repository, and report verified results.",
+		Name:        failureReviewSkillName,
+		Description: "Review failing log paths, find root causes, fix the repository, and report verified results.",
 	},
 }
 
@@ -52,7 +54,6 @@ type Service struct {
 	store    *Store
 	hub      HubClient
 	settings Settings
-	mu       sync.Mutex
 }
 
 type failureReport struct {
@@ -73,27 +74,42 @@ type runtimeEndpointSetter interface {
 
 func NewService(store *Store, hubClient HubClient) *Service {
 	snapshot := store.Snapshot()
-	if setter, ok := hubClient.(baseURLSetter); ok {
-		baseURL := strings.TrimSpace(snapshot.Session.APIBase)
-		if baseURL == "" {
-			baseURL = strings.TrimSpace(snapshot.Settings.HubURL)
-		}
-		if baseURL != "" {
-			setter.SetBaseURL(baseURL)
-		}
-	}
-	if setter, ok := hubClient.(runtimeEndpointSetter); ok {
-		setter.SetRuntimeEndpoints(runtimeEndpointsFromSession(snapshot.Session))
-	}
-	return &Service{
+	service := &Service{
 		store:    store,
 		hub:      hubClient,
 		settings: snapshot.Settings,
 	}
+	service.configureHubClient(snapshot)
+	return service
 }
 
 func (s *Service) Snapshot() AppState {
 	return s.store.Snapshot()
+}
+
+func (s *Service) configureHubClient(state AppState) {
+	baseURL := strings.TrimSpace(state.Session.APIBase)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(state.Settings.HubURL)
+	}
+	s.setHubBaseURL(baseURL)
+	s.setRuntimeEndpoints(runtimeEndpointsFromSession(state.Session))
+}
+
+func (s *Service) setHubBaseURL(baseURL string) {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return
+	}
+	if setter, ok := s.hub.(baseURLSetter); ok {
+		setter.SetBaseURL(baseURL)
+	}
+}
+
+func (s *Service) setRuntimeEndpoints(endpoints hub.RuntimeEndpoints) {
+	if setter, ok := s.hub.(runtimeEndpointSetter); ok {
+		setter.SetRuntimeEndpoints(endpoints)
+	}
 }
 
 func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) error {
@@ -108,11 +124,9 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 		Emoji:           profile.Emoji,
 		ProfileMarkdown: profile.ProfileMarkdown,
 	})
-	agentProfile.Handle = normalizeBindHandle(agentProfile.Handle)
+	agentProfile.Handle = strings.TrimSpace(agentProfile.Handle)
 	handleRequestedDuringBind := agentProfile.Handle != ""
-	if setter, ok := s.hub.(baseURLSetter); ok {
-		setter.SetBaseURL(runtime.HubURL)
-	}
+	s.setHubBaseURL(runtime.HubURL)
 	result, err := s.hub.BindAgent(ctx, hub.BindRequest{
 		HubURL:    runtime.HubURL,
 		BindToken: profile.BindToken,
@@ -127,12 +141,8 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}
 	result.APIBase = strings.TrimSpace(result.APIBase)
 	result.Handle = strings.TrimSpace(result.Handle)
-	if setter, ok := s.hub.(baseURLSetter); ok && strings.TrimSpace(result.APIBase) != "" {
-		setter.SetBaseURL(result.APIBase)
-	}
-	if setter, ok := s.hub.(runtimeEndpointSetter); ok {
-		setter.SetRuntimeEndpoints(runtimeEndpointsFromBind(result))
-	}
+	s.setHubBaseURL(result.APIBase)
+	s.setRuntimeEndpoints(runtimeEndpointsFromBind(result))
 	if strings.TrimSpace(result.Handle) != "" {
 		agentProfile.Handle = strings.TrimSpace(result.Handle)
 	}
@@ -265,19 +275,7 @@ func (s *Service) UpdateSettings(mutator func(*Settings) error) error {
 	}); err != nil {
 		return err
 	}
-	if setter, ok := s.hub.(baseURLSetter); ok {
-		snapshot := s.store.Snapshot()
-		baseURL := strings.TrimSpace(snapshot.Session.APIBase)
-		if baseURL == "" {
-			baseURL = strings.TrimSpace(snapshot.Settings.HubURL)
-		}
-		if baseURL != "" {
-			setter.SetBaseURL(baseURL)
-		}
-	}
-	if setter, ok := s.hub.(runtimeEndpointSetter); ok {
-		setter.SetRuntimeEndpoints(runtimeEndpointsFromSession(s.store.Snapshot().Session))
-	}
+	s.configureHubClient(s.store.Snapshot())
 	return nil
 }
 
@@ -417,9 +415,9 @@ func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResp
 		messageType = strings.TrimSpace(message.OpenClawMessage.Kind)
 	}
 	switch messageType {
-	case "skill_result":
+	case openClawSkillResult:
 		return s.handleSkillResult(ctx, message)
-	case "skill_request":
+	case openClawSkillRequest:
 		return s.handleSkillRequest(ctx, message)
 	default:
 		return s.logEvent("info", "Ignored message", "Received unsupported message type "+messageType, "", "")
@@ -438,7 +436,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 			CallerRequestID: message.OpenClawMessage.RequestID,
 			LogPath:         filepath.Join(s.settings.DataDir, "logs", NewID("task")+".log"),
 		}
-		return s.failDispatchedTask(ctx, state, pending, failureFromError("Failed to decode the dispatch request payload.", fmt.Errorf("decode dispatch payload: %w", err)))
+		return s.handleTaskFailure(ctx, state, pending, failureFromError("Failed to decode the dispatch request payload.", fmt.Errorf("decode dispatch payload: %w", err)))
 	}
 
 	req := DispatchRequest{
@@ -463,7 +461,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 			LogPath:           filepath.Join(s.settings.DataDir, "logs", NewID("task")+".log"),
 			DispatchPayload:   normalizePayload(req.Payload, req.Repo, req.LogPaths),
 		}
-		return s.failDispatchedTask(ctx, state, pending, failureFromError("Task dispatch failed before it reached a connected agent.", err))
+		return s.handleTaskFailure(ctx, state, pending, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
 
 	task, publishReq := s.buildPendingTask(state, target, req, message.FromAgentUUID, message.FromAgentURI)
@@ -479,7 +477,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 
 	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
-		return s.failDispatchedTask(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
+		return s.handleTaskFailure(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 	}
 	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 
@@ -555,10 +553,6 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) failDispatchedTask(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
-	return s.handleTaskFailure(ctx, state, pending, report)
-}
-
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
 	logPaths := followUpLogPaths(pending)
 	originalRequest := cloneMap(pending.DispatchPayload)
@@ -590,14 +584,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 			"failed_task_id": pending.ID,
 			"log_paths":      task.LogPaths,
 			"run_config":     task.RunConfig,
-			"failure": map[string]any{
-				"status":       "failed",
-				"message":      report.Message,
-				"error":        report.Error,
-				"retryable":    report.Retryable,
-				"next_action":  report.NextAction,
-				"error_detail": report.Detail,
-			},
+			"failure":        failureFields(report, report.Message, report.Detail),
 			"original_request": map[string]any{
 				"skill_name":     pending.OriginalSkillName,
 				"repo":           fallbackRepo(pending.Repo),
@@ -609,15 +596,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 			ToAgentUUID: reviewer.AgentUUID,
 			ToAgentURI:  reviewer.AgentURI,
 			ClientMsgID: task.ID,
-			Message: hub.OpenClawMessage{
-				Protocol:      "openclaw.http.v1",
-				Type:          "skill_request",
-				Timestamp:     time.Now().UTC().Format(time.RFC3339),
-				SkillName:     failureReviewSkillName,
-				Payload:       payload,
-				PayloadFormat: "json",
-				RequestID:     task.ID,
-			},
+			Message:     newSkillRequestMessage(time.Now().UTC(), failureReviewSkillName, payload, "json", task.ID, ""),
 		}); err != nil {
 			s.noteHubInteraction(err, ConnectionTransportHTTP)
 			task.Status = "queued_local_only"
@@ -656,27 +635,11 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		return err
 	}
 
-	detail := report.Detail
-	if failureDetailIsEmpty(detail) {
-		detail = report.Error
-	}
-
-	failurePayload := map[string]any{
-		"ok":            false,
-		"failure":       true,
-		"status":        "failed",
-		"message":       explicitFailureMessage(report.Message),
-		"error":         report.Error,
-		"retryable":     report.Retryable,
-		"next_action":   report.NextAction,
-		"error_detail":  detail,
-		"error_details": detail,
-		"log_paths":     logPaths,
-	}
+	failurePayload := callerFailurePayload(report, logPaths)
 
 	message := hub.OpenClawMessage{
-		Protocol:      "openclaw.http.v1",
-		Type:          "skill_result",
+		Protocol:      openClawHTTPProtocol,
+		Type:          openClawSkillResult,
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 		SkillName:     pending.OriginalSkillName,
 		RequestID:     pending.ParentRequestID,
@@ -740,16 +703,14 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 		DispatchPayload:   payload,
 	}
 
-	message := hub.OpenClawMessage{
-		Protocol:      "openclaw.http.v1",
-		Type:          "skill_request",
-		Timestamp:     now.Format(time.RFC3339),
-		SkillName:     req.SkillName,
-		Payload:       payload,
-		PayloadFormat: normalizePayloadFormat(req.PayloadFormat, req.Payload),
-		RequestID:     childRequestID,
-		ReplyTo:       req.RequestID,
-	}
+	message := newSkillRequestMessage(
+		now,
+		req.SkillName,
+		payload,
+		normalizePayloadFormat(req.PayloadFormat, req.Payload),
+		childRequestID,
+		req.RequestID,
+	)
 
 	return task, hub.PublishRequest{
 		ToAgentUUID: target.AgentUUID,
@@ -1010,6 +971,30 @@ func formatFailureSummary(report failureReport) string {
 	return fmt.Sprintf("%s | detail=%v", report.Error, report.Detail)
 }
 
+func failureFields(report failureReport, message string, detail any) map[string]any {
+	return map[string]any{
+		"status":       "failed",
+		"message":      message,
+		"error":        report.Error,
+		"retryable":    report.Retryable,
+		"next_action":  report.NextAction,
+		"error_detail": detail,
+	}
+}
+
+func callerFailurePayload(report failureReport, logPaths []string) map[string]any {
+	detail := report.Detail
+	if failureDetailIsEmpty(detail) {
+		detail = report.Error
+	}
+	payload := failureFields(report, explicitFailureMessage(report.Message), detail)
+	payload["ok"] = false
+	payload["failure"] = true
+	payload["error_details"] = detail
+	payload["log_paths"] = logPaths
+	return payload
+}
+
 func explicitFailureMessage(message string) string {
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -1108,18 +1093,28 @@ func compactPaths(paths []string) []string {
 }
 
 func followUpLogPaths(pending PendingTask) []string {
-	paths := make([]string, 0, 1)
-	if logPaths, ok := pending.DispatchPayload["log_paths"].([]string); ok {
-		paths = append(paths, logPaths...)
-	} else if logPaths, ok := pending.DispatchPayload["log_paths"].([]any); ok {
-		for _, entry := range logPaths {
-			if path, ok := entry.(string); ok {
-				paths = append(paths, path)
-			}
-		}
-	}
+	paths := stringSliceFromAny(pending.DispatchPayload["log_paths"])
 	paths = append(paths, pending.LogPath)
 	return compactPaths(paths)
+}
+
+func stringSliceFromAny(value any) []string {
+	switch typed := value.(type) {
+	case []string:
+		out := make([]string, len(typed))
+		copy(out, typed)
+		return out
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, entry := range typed {
+			if str, ok := entry.(string); ok {
+				out = append(out, str)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func cloneMap(value map[string]any) map[string]any {
@@ -1167,10 +1162,6 @@ func normalizeAgentProfile(profile AgentProfile) AgentProfile {
 	return profile
 }
 
-func normalizeBindHandle(handle string) string {
-	return strings.TrimSpace(handle)
-}
-
 func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any {
 	metadata := map[string]any{
 		"agent_type":       "dispatch",
@@ -1200,14 +1191,14 @@ func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any 
 }
 
 func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
-	return hub.RuntimeEndpoints{
-		ManifestURL:        strings.TrimSpace(result.Endpoints.Manifest),
-		CapabilitiesURL:    strings.TrimSpace(result.Endpoints.Capabilities),
-		MetadataURL:        strings.TrimSpace(result.Endpoints.Metadata),
-		OpenClawPullURL:    strings.TrimSpace(result.Endpoints.OpenClawPull),
-		OpenClawPushURL:    strings.TrimSpace(result.Endpoints.OpenClawPush),
-		OpenClawOfflineURL: strings.TrimSpace(result.Endpoints.Offline),
-	}
+	return runtimeEndpointsFromSession(Session{
+		ManifestURL:     result.Endpoints.Manifest,
+		Capabilities:    result.Endpoints.Capabilities,
+		MetadataURL:     result.Endpoints.Metadata,
+		OpenClawPullURL: result.Endpoints.OpenClawPull,
+		OpenClawPushURL: result.Endpoints.OpenClawPush,
+		OfflineURL:      result.Endpoints.Offline,
+	})
 }
 
 func runtimeEndpointsFromSession(session Session) hub.RuntimeEndpoints {
@@ -1219,6 +1210,22 @@ func runtimeEndpointsFromSession(session Session) hub.RuntimeEndpoints {
 		OpenClawPushURL:    strings.TrimSpace(session.OpenClawPushURL),
 		OpenClawOfflineURL: strings.TrimSpace(session.OfflineURL),
 	}
+}
+
+func newSkillRequestMessage(timestamp time.Time, skillName string, payload any, payloadFormat, requestID, replyTo string) hub.OpenClawMessage {
+	message := hub.OpenClawMessage{
+		Protocol:      openClawHTTPProtocol,
+		Type:          openClawSkillRequest,
+		Timestamp:     timestamp.UTC().Format(time.RFC3339),
+		SkillName:     skillName,
+		Payload:       payload,
+		PayloadFormat: payloadFormat,
+		RequestID:     requestID,
+	}
+	if strings.TrimSpace(replyTo) != "" {
+		message.ReplyTo = replyTo
+	}
+	return message
 }
 
 func (s *Service) noteHubInteraction(err error, transport string) {
