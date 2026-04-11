@@ -320,6 +320,79 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportOffline,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="bind-form"`) {
+		t.Fatalf("expected bind form id for onboarding API flow, body=%s", body)
+	}
+	if !strings.Contains(body, `id="onboarding-steps"`) {
+		t.Fatalf("expected onboarding steps container, body=%s", body)
+	}
+	if !strings.Contains(body, `id="onboarding-message"`) {
+		t.Fatalf("expected onboarding message container, body=%s", body)
+	}
+	if !strings.Contains(body, `onboarding-step onboarding-step-current" data-step-id="bind"`) {
+		t.Fatalf("expected bind step to render as current in unbound state, body=%s", body)
+	}
+}
+
+func TestHandleIndexRendersCompletedOnboardingFlowForBoundSession(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken:      "agent-token",
+				Handle:          "dispatch-agent",
+				HandleFinalized: true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `onboarding-step onboarding-step-completed" data-step-id="bind"`) {
+		t.Fatalf("expected bind step to render as completed once bound, body=%s", body)
+	}
+	if !strings.Contains(body, `onboarding-step onboarding-step-completed" data-step-id="profile_set"`) {
+		t.Fatalf("expected profile_set step to render as completed once bound, body=%s", body)
+	}
+	if !strings.Contains(body, `onboarding-step onboarding-step-completed" data-step-id="work_activate"`) {
+		t.Fatalf("expected work_activate step to render as completed once bound, body=%s", body)
+	}
+	if !strings.Contains(body, `id="onboarding-message">Agent bound and profile registered.`) {
+		t.Fatalf("expected completed onboarding message once bound, body=%s", body)
+	}
+}
+
 func TestHandleIndexAllowsFinalizingTemporaryHandle(t *testing.T) {
 	t.Parallel()
 

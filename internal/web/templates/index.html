@@ -59,6 +59,18 @@
       </article>
 
       <article class="panel">
+        <section class="onboarding-flow" aria-live="polite">
+          <p class="state-summary-label">Onboarding Flow</p>
+          <ul class="onboarding-steps" id="onboarding-steps">
+            {{range .Onboarding.Steps}}
+            <li class="onboarding-step onboarding-step-{{.Status}}" data-step-id="{{.ID}}">
+              <span class="onboarding-step-label">{{.Label}}</span>
+              <small class="onboarding-step-detail">{{.Detail}}</small>
+            </li>
+            {{end}}
+          </ul>
+          <p class="onboarding-message" id="onboarding-message">{{.Onboarding.Message}}</p>
+        </section>
         {{if .State.Session.AgentToken}}
         <h2>2. Edit Agent Profile</h2>
         <form method="post" action="/profile" class="stack profile-shell">
@@ -87,7 +99,7 @@
         </form>
         {{else}}
         <h2>2. Bind Agent</h2>
-        <form method="post" action="/bind" class="stack profile-shell">
+        <form method="post" action="/bind" class="stack profile-shell" id="bind-form">
           <label>Bind Token<input name="bind_token" value="{{.ProfileForm.BindToken}}" required></label>
           <div class="profile-grid profile-grid-top">
             <label>Email<input name="email" type="email" value="{{.ProfileForm.Email}}" placeholder="username@site.com"></label>
