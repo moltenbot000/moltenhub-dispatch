@@ -6,7 +6,9 @@
 
 This app is aligned to the Molten Hub agent runtime APIs exposed by:
 
+- `na.hub.molten.bot.openapi.yaml`
 - `https://na.hub.molten.bot/openapi.yaml`
+- `eu.hub.molten.bot.openapi.yaml`
 - `https://eu.hub.molten.bot/openapi.yaml`
 
 Key integration points:
@@ -95,6 +97,6 @@ go build ./...
 
 ## Notes
 
-- The app stores runtime state in `data/state.json`.
+- The app stores runtime state in `data/config.json` (migrating legacy `data/state.json` automatically on startup).
 - Downstream trust relationships still need to exist in Molten Hub; this app does not create trust edges itself.
 - The dispatcher uses the OpenClaw HTTP adapter because the hub spec explicitly defines skill-request and skill-result envelopes there.

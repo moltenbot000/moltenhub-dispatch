@@ -108,7 +108,6 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		ProfileForm:     defaultProfileForm(state, form),
 		EmojiOptions:    emojiOptions(),
 		Connection:      connectionStatusView(state.Connection),
-		Binding:         bindingStateView(state, selectedRuntime),
 		SubActions:      subActionState(state),
 		Onboarding:      currentOnboarding,
 	}
@@ -398,7 +397,6 @@ type pageData struct {
 	ProfileForm     agentProfileForm
 	EmojiOptions    []string
 	Connection      connectionView
-	Binding         bindingView
 	SubActions      subActionView
 	Onboarding      onboardingView
 }
@@ -416,12 +414,6 @@ type subActionView struct {
 	Reason  string
 }
 
-type bindingView struct {
-	Bound       bool
-	Label       string
-	Description string
-}
-
 type onboardingView struct {
 	Steps   []onboardingStepView `json:"steps"`
 	Stage   string               `json:"stage,omitempty"`
@@ -435,7 +427,6 @@ type onboardingStepView struct {
 	Status string `json:"status"`
 	Detail string `json:"detail,omitempty"`
 }
-
 type agentProfileForm struct {
 	BindToken       string
 	Email           string
@@ -535,29 +526,6 @@ func subActionState(state app.AppState) subActionView {
 		}
 	}
 	return subActionView{Visible: true}
-}
-
-func bindingStateView(state app.AppState, runtime app.HubRuntime) bindingView {
-	if strings.TrimSpace(state.Session.AgentToken) == "" {
-		return bindingView{
-			Bound:       false,
-			Label:       "Awaiting Bind",
-			Description: fmt.Sprintf("Enter a one-time bind token to register this runtime with the %s hub.", runtime.Label),
-		}
-	}
-
-	description := fmt.Sprintf("This runtime is already bound to the %s hub.", runtime.Label)
-	if state.Connection.Status == app.ConnectionStatusConnected {
-		description += " The one-time bind token is no longer needed here."
-	} else {
-		description += " The one-time bind token is no longer needed here, but the live connection is currently offline."
-	}
-
-	return bindingView{
-		Bound:       true,
-		Label:       "Bound Session",
-		Description: description,
-	}
 }
 
 func defaultOnboardingView(state app.AppState) onboardingView {

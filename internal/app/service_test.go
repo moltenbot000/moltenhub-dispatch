@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -618,7 +619,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 				"repo":              "/tmp/repo",
 				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
 				"payload": map[string]any{
-					"input": "Issue an offline to moltenbot hub",
+					"input": "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 				"payload_format": "json",
 			},
@@ -637,6 +638,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	}
 	if fake.offlineCalls[0].Reason == "" {
 		t.Fatal("expected offline reason to describe the task failure")
+	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
 
 	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
@@ -669,13 +673,13 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
 		t.Fatalf("unexpected follow-up log paths: %#v", got)
 	}
-	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub" {
+	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
 		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
 	}
 }
@@ -711,7 +715,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log", "/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub",
+					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 			},
 		}
@@ -750,6 +754,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
 
 	failureMessage := fake.publishCalls[0].Message
@@ -800,13 +807,13 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if len(state.PendingTasks) != 0 {
 		t.Fatalf("expected task to be cleared, got %d pending", len(state.PendingTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" || got[1] != filepath.Join(service.settings.DataDir, "logs", "task-1.log") {
 		t.Fatalf("unexpected follow-up log paths: %#v", got)
 	}
-	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub" {
+	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
 		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
 	}
 
@@ -864,15 +871,19 @@ func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *
 				"repo":              "/tmp/repo",
 				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
 				"payload": map[string]any{
-					"input": "Issue an offline to moltenbot hub",
+					"input": "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 				"payload_format": "json",
 			},
 		},
 	}
 
-	if err := service.handleInboundMessage(context.Background(), message); err != nil {
-		t.Fatalf("handle inbound message: %v", err)
+	err = service.handleInboundMessage(context.Background(), message)
+	if err == nil {
+		t.Fatal("expected publish failure error")
+	}
+	if !strings.Contains(err.Error(), "publish failure response failed") {
+		t.Fatalf("expected caller publish failure in error, got %v", err)
 	}
 
 	if len(fake.publishCalls) != 1 {
@@ -889,7 +900,7 @@ func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *
 	if state.FollowUpTasks[0].Status != "pending_reviewer" {
 		t.Fatalf("expected pending reviewer follow-up, got %q", state.FollowUpTasks[0].Status)
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 }
@@ -918,7 +929,7 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub",
+					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 			},
 		}
@@ -942,8 +953,12 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 		},
 	}
 
-	if err := service.handleInboundMessage(context.Background(), message); err != nil {
-		t.Fatalf("handle inbound message: %v", err)
+	err = service.handleInboundMessage(context.Background(), message)
+	if err == nil {
+		t.Fatal("expected publish failure error")
+	}
+	if !strings.Contains(err.Error(), "publish failure response failed") {
+		t.Fatalf("expected caller publish failure in error, got %v", err)
 	}
 
 	if len(fake.publishCalls) != 1 {
@@ -954,13 +969,13 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 	}
 
 	state := service.store.Snapshot()
-	if len(state.PendingTasks) != 0 {
-		t.Fatalf("expected failed task to be removed, got %d pending", len(state.PendingTasks))
+	if len(state.PendingTasks) != 1 {
+		t.Fatalf("expected failed task to remain pending for retry, got %d pending", len(state.PendingTasks))
 	}
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected follow-up task, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected follow-up repos: %#v", got)
 	}
 }
@@ -996,7 +1011,7 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 		SkillName:     "run_task",
 		Repo:          "/tmp/repo",
 		LogPaths:      []string{"/tmp/repo/logs/failure.log"},
-		Payload:       "Issue an offline to moltenbot hub",
+		Payload:       "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 		PayloadFormat: "markdown",
 	})
 	if err == nil {
@@ -1012,6 +1027,9 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if fake.offlineCalls[0].Reason == "" {
 		t.Fatal("expected offline reason to describe the task failure")
 	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
+	}
 
 	state := service.store.Snapshot()
 	if len(state.PendingTasks) != 0 {
@@ -1020,7 +1038,7 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected follow-up task after failed dispatch, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
 		t.Fatalf("unexpected follow-up repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
@@ -1028,6 +1046,73 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	}
 	if got := state.FollowUpTasks[0].RunConfig.Prompt; got != followUpPrompt {
 		t.Fatalf("unexpected follow-up prompt: %q", got)
+	}
+}
+
+func TestHandleDownstreamFailureStillQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.publishErr = errors.New("publish caller failure")
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://dispatch/self"
+		state.PendingTasks = []PendingTask{
+			{
+				ID:                "task-1",
+				ParentRequestID:   "parent-req",
+				ChildRequestID:    "child-req",
+				OriginalSkillName: "run_task",
+				CallerAgentUUID:   "caller-uuid",
+				CallerRequestID:   "parent-req",
+				Repo:              "/tmp/repo",
+				LogPath:           filepath.Join(service.settings.DataDir, "logs", "task-1.log"),
+				CreatedAt:         time.Now().Add(-time.Minute),
+				ExpiresAt:         time.Now().Add(time.Minute),
+				DispatchPayload: map[string]any{
+					"repo":      "/tmp/repo",
+					"log_paths": []string{"/tmp/original.log"},
+					"input":     "Issue an offline to moltenbot hub",
+				},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-1",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:        "skill_result",
+			SkillName:   "run_task",
+			RequestID:   "child-req",
+			ReplyTo:     "parent-req",
+			OK:          boolPtr(false),
+			Error:       "task execution failed",
+			ErrorDetail: map[string]any{"stderr": "panic: boom"},
+			Payload:     map[string]any{"status": "failed"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected publish failure error")
+	}
+
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call despite caller publish failure, got %d", len(fake.offlineCalls))
+	}
+
+	state := service.store.Snapshot()
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected follow-up queue despite caller publish failure, got %d", len(state.FollowUpTasks))
+	}
+	if state.FollowUpTasks[0].Status != "pending_reviewer" {
+		t.Fatalf("expected local pending reviewer follow-up, got %q", state.FollowUpTasks[0].Status)
+	}
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
+		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 }
 
@@ -1132,6 +1217,9 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
 	if len(fake.baseURLCalls) != 1 || fake.baseURLCalls[0] != "https://runtime.na.hub.molten.bot" {
 		t.Fatalf("expected service to initialize client with persisted api_base, got %#v", fake.baseURLCalls)
