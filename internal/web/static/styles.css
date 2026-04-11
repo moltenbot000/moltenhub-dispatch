@@ -2552,24 +2552,23 @@ select.prompt-control {
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  min-height: 40px;
   min-width: 0;
-  padding: 8px 10px;
+  min-height: 0;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--input-background);
   box-shadow: none;
   color: var(--foreground);
   cursor: pointer;
-  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+  transition: color 200ms ease;
 }
 
 .hub-emoji-picker-toggle:hover,
 .hub-emoji-picker-toggle:focus-visible {
   transform: none;
-  border-color: color-mix(in srgb, var(--running) 24%, var(--border));
+  border-color: var(--border);
   background: var(--input-background);
-  color: var(--foreground);
 }
 
 .hub-emoji-picker-toggle:focus-visible,
@@ -2627,11 +2626,23 @@ select.prompt-control {
 
 .hub-emoji-picker-toggle-caret {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1;
   transform: rotate(0deg);
   transition: transform 180ms ease;
+}
+
+.hub-emoji-picker-toggle-caret svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .hub-emoji-picker-toggle.is-open .hub-emoji-picker-toggle-caret {
@@ -2651,10 +2662,26 @@ select.prompt-control {
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(40px) saturate(160%);
   -webkit-backdrop-filter: blur(40px) saturate(160%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.98);
+  transition:
+    opacity 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .hub-emoji-picker-panel[hidden] {
   display: none;
+}
+
+.hub-emoji-picker-panel[data-placement="top"] {
+  transform: translateY(4px) scale(0.98);
+}
+
+.hub-emoji-picker-panel.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
 }
 
 .hub-emoji-picker-panel-header {
@@ -2686,12 +2713,6 @@ select.prompt-control {
   letter-spacing: 0;
   text-transform: none;
   transition: color 180ms ease;
-}
-
-.hub-emoji-picker-clear:disabled {
-  opacity: 0.45;
-  transform: none;
-  cursor: default;
 }
 
 .hub-emoji-picker-clear:hover,
