@@ -106,7 +106,19 @@
           <p class="state-summary-label">{{.Binding.Label}}</p>
           <p class="state-summary-body">{{.Binding.Description}}</p>
         </div>
-        <form method="post" action="/bind" class="stack profile-shell">
+        <section class="onboarding-flow" id="onboarding-flow" data-stage="{{.Onboarding.Stage}}" data-active="{{if .Onboarding.Active}}true{{else}}false{{end}}">
+          <p class="state-summary-label">Onboarding Flow</p>
+          <ol class="onboarding-steps" id="onboarding-steps">
+            {{range .Onboarding.Steps}}
+            <li class="onboarding-step onboarding-step-{{.Status}}" data-step-id="{{.ID}}">
+              <span class="onboarding-step-label">{{.Label}}</span>
+              <small class="onboarding-step-detail">{{.Detail}}</small>
+            </li>
+            {{end}}
+          </ol>
+          <p class="hint onboarding-message" id="onboarding-message">{{.Onboarding.Message}}</p>
+        </section>
+        <form method="post" action="/bind" class="stack profile-shell" id="bind-form">
           <label>Bind Token<input name="bind_token" value="{{.ProfileForm.BindToken}}" required></label>
           <div class="profile-grid profile-grid-top">
             <label>Email<input name="email" type="email" value="{{.ProfileForm.Email}}" placeholder="username@site.com"></label>
@@ -126,7 +138,7 @@
           </div>
           <label>Bio<textarea name="profile_markdown" rows="4" placeholder="What this runtime is for">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           <p class="hint">Provide a handle explicitly, or provide an email so the hub handle defaults to its local-part. This console will not bind with a synthetic temporary handle.</p>
-          <button type="submit">Bind</button>
+          <button type="submit" id="bind-submit">Bind</button>
         </form>
         {{end}}
       </article>
@@ -272,6 +284,10 @@
       const globalSettingsForm = document.getElementById("global-settings-form");
       const subActions = document.getElementById("sub-actions");
       const subActionsNotice = document.getElementById("sub-actions-notice");
+      const bindForm = document.getElementById("bind-form");
+      const bindSubmit = document.getElementById("bind-submit");
+      const onboardingSteps = document.getElementById("onboarding-steps");
+      const onboardingMessage = document.getElementById("onboarding-message");
       if (!shell || !indicator || !label || !description || !subActions || !subActionsNotice) {
         return;
       }
@@ -289,6 +305,162 @@
       }
 
       const bound = shell.dataset.bound === "true";
+      const onboardingDefaults = () => ([
+        {
+          id: "bind",
+          label: "Bind",
+          status: "pending",
+          detail: "Exchange the bind token for an agent credential.",
+        },
+        {
+          id: "profile_set",
+          label: "Profile Set",
+          status: "pending",
+          detail: "Persist the dispatcher profile metadata in Molten Hub.",
+        },
+        {
+          id: "work_activate",
+          label: "Work",
+          status: "pending",
+          detail: "Verify runtime endpoints and confirm activation.",
+        },
+      ]);
+
+      const setBindBusy = (busy) => {
+        if (!bindForm) {
+          return;
+        }
+        bindForm.setAttribute("aria-busy", busy ? "true" : "false");
+        bindForm.querySelectorAll("input, textarea, select, button").forEach((field) => {
+          if (field instanceof HTMLButtonElement || field instanceof HTMLSelectElement) {
+            field.disabled = busy;
+            return;
+          }
+          if (field instanceof HTMLInputElement) {
+            if (field.type === "radio" || field.type === "checkbox" || field.type === "submit") {
+              field.disabled = busy;
+              return;
+            }
+            field.readOnly = busy;
+            return;
+          }
+          if (field instanceof HTMLTextAreaElement) {
+            field.readOnly = busy;
+          }
+        });
+        if (bindSubmit) {
+          bindSubmit.textContent = busy ? "Binding..." : "Bind";
+        }
+      };
+
+      const renderOnboarding = (flow) => {
+        if (!onboardingSteps) {
+          return;
+        }
+        const steps = Array.isArray(flow && flow.steps) && flow.steps.length
+          ? flow.steps
+          : onboardingDefaults();
+        onboardingSteps.innerHTML = "";
+        steps.forEach((step) => {
+          const status = String(step && step.status || "pending");
+          const detail = String(step && step.detail || "").trim();
+          const item = document.createElement("li");
+          item.className = `onboarding-step onboarding-step-${status}`;
+          item.setAttribute("data-step-id", String(step && step.id || ""));
+
+          const labelNode = document.createElement("span");
+          labelNode.className = "onboarding-step-label";
+          labelNode.textContent = String(step && step.label || "Step");
+          item.appendChild(labelNode);
+
+          const detailNode = document.createElement("small");
+          detailNode.className = "onboarding-step-detail";
+          detailNode.textContent = detail;
+          item.appendChild(detailNode);
+
+          onboardingSteps.appendChild(item);
+        });
+        if (onboardingMessage) {
+          onboardingMessage.textContent = String(flow && flow.message || "").trim();
+        }
+      };
+
+      const redirectWithMessage = (level, message) => {
+        window.location.assign(`/?level=${encodeURIComponent(level)}&message=${encodeURIComponent(message)}`);
+      };
+
+      if (bindForm && !bound) {
+        bindForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const formData = new FormData(bindForm);
+          renderOnboarding({
+            stage: "bind",
+            active: true,
+            message: "Exchanging bind token for an agent credential.",
+            steps: onboardingDefaults().map((step) => step.id === "bind" ? { ...step, status: "current" } : step),
+          });
+          setBindBusy(true);
+          let redirected = false;
+          try {
+            const response = await fetch("/api/onboarding", {
+              method: "POST",
+              headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                bind_token: String(formData.get("bind_token") || "").trim(),
+                email: String(formData.get("email") || "").trim(),
+                handle: String(formData.get("handle") || "").trim(),
+                display_name: String(formData.get("display_name") || "").trim(),
+                emoji: String(formData.get("emoji") || "").trim(),
+                profile_markdown: String(formData.get("profile_markdown") || "").trim(),
+              }),
+            });
+            let body = null;
+            try {
+              body = await response.json();
+            } catch (_parseError) {
+              body = null;
+            }
+            if (!response.ok || !body || body.ok !== true) {
+              const message = String(body && body.error || `onboarding request failed with ${response.status}`);
+              if (body && body.onboarding) {
+                renderOnboarding(body.onboarding);
+              } else {
+                renderOnboarding({
+                  stage: "bind",
+                  active: false,
+                  message,
+                  steps: onboardingDefaults().map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
+                });
+              }
+              if (body && body.bound) {
+                redirected = true;
+                redirectWithMessage("error", message);
+              }
+              return;
+            }
+            if (body.onboarding) {
+              renderOnboarding(body.onboarding);
+            }
+            redirected = true;
+            redirectWithMessage("info", String(body.message || "Agent bound and profile registered."));
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Unable to complete onboarding request.";
+            renderOnboarding({
+              stage: "bind",
+              active: false,
+              message,
+              steps: onboardingDefaults().map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
+            });
+          } finally {
+            if (!redirected) {
+              setBindBusy(false);
+            }
+          }
+        });
+      }
 
       const syncSubActions = (state) => {
         const connected = bound && state.status === "connected";

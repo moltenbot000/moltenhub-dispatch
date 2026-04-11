@@ -3523,9 +3523,27 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   -webkit-backdrop-filter: blur(18px) saturate(130%);
 }
 
+.shell[data-bound="false"] .connection-indicator {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .connection-text {
   display: grid;
   gap: 2px;
+}
+
+.shell[data-bound="false"] .connection-text {
+  display: none;
 }
 
 .connection-text strong {
@@ -3551,6 +3569,11 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   height: 20px;
 }
 
+.shell[data-bound="false"] .connection-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .connection-ring,
 .connection-core {
   border-radius: 999px;
@@ -3571,6 +3594,17 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--bad) 16%, transparent),
     0 0 10px color-mix(in srgb, var(--bad) 36%, transparent);
+}
+
+.shell[data-bound="false"] .connection-ring {
+  display: none;
+}
+
+.shell[data-bound="false"] .connection-core {
+  position: static;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 16%, transparent);
 }
 
 .connection-connected.connection-transport-http .connection-ring {
@@ -3866,6 +3900,65 @@ legend {
   color: var(--text);
 }
 
+.onboarding-flow {
+  margin-bottom: 16px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-library-bg);
+}
+
+.onboarding-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-step {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 12px;
+  background: var(--surface-control-bg);
+}
+
+.onboarding-step-label {
+  margin: 0;
+  color: var(--surface-label);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.onboarding-step-detail {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.onboarding-step-current {
+  border-color: rgba(10, 132, 255, 0.3);
+  background: linear-gradient(155deg, rgba(10, 132, 255, 0.12), rgba(255, 255, 255, 0.96));
+}
+
+.onboarding-step-completed {
+  border-color: rgba(22, 163, 74, 0.34);
+  background: linear-gradient(155deg, rgba(22, 163, 74, 0.11), rgba(255, 255, 255, 0.96));
+}
+
+.onboarding-step-error {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: linear-gradient(155deg, rgba(239, 68, 68, 0.12), rgba(255, 255, 255, 0.96));
+}
+
+.onboarding-message {
+  margin: 10px 0 0;
+  min-height: 1.2em;
+}
+
 .profile-shell {
   gap: 16px;
 }
@@ -3982,6 +4075,11 @@ pre {
   .connection-indicator {
     width: 100%;
     justify-content: center;
+  }
+
+  .shell[data-bound="false"] .connection-indicator {
+    width: 14px;
+    justify-content: flex-start;
   }
 
   .two-up,

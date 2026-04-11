@@ -69,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/status", s.handleStatus)
+	s.mux.HandleFunc("/api/onboarding", s.handleOnboarding)
 	s.mux.HandleFunc("/bind", s.handleBind)
 	s.mux.HandleFunc("/profile", s.handleProfile)
 	s.mux.HandleFunc("/agents", s.handleAgents)
@@ -78,7 +79,7 @@ func (s *Server) routes() {
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	s.renderIndex(w, r, "", false, agentProfileForm{})
+	s.renderIndex(w, r, "", false, agentProfileForm{}, nil)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
@@ -88,11 +89,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(view)
 }
 
-func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash string, isError bool, form agentProfileForm) {
+func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash string, isError bool, form agentProfileForm, onboarding *onboardingView) {
 	state := s.service.Snapshot()
 	selectedRuntime, err := app.ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
 	if err != nil {
 		selectedRuntime = app.DefaultHubRuntime()
+	}
+	currentOnboarding := defaultOnboardingView(state)
+	if onboarding != nil {
+		currentOnboarding = *onboarding
 	}
 	view := pageData{
 		State:           state,
@@ -105,6 +110,7 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		Connection:      connectionStatusView(state.Connection),
 		Binding:         bindingStateView(state, selectedRuntime),
 		SubActions:      subActionState(state),
+		Onboarding:      currentOnboarding,
 	}
 	if view.Flash == "" {
 		view.Flash = r.URL.Query().Get("message")
@@ -136,7 +142,8 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		Emoji:           form.Emoji,
 		ProfileMarkdown: form.ProfileMarkdown,
 	}); err != nil {
-		s.renderIndex(w, r, err.Error(), true, form)
+		onboarding := onboardingViewFromError(s.service.Snapshot(), err)
+		s.renderIndex(w, r, err.Error(), true, form, &onboarding)
 		return
 	}
 	s.redirectWithMessage(w, r, "info", "Agent bound and profile registered.")
@@ -158,10 +165,73 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		Emoji:           form.Emoji,
 		ProfileMarkdown: form.ProfileMarkdown,
 	}); err != nil {
-		s.renderIndex(w, r, err.Error(), true, form)
+		s.renderIndex(w, r, err.Error(), true, form, nil)
 		return
 	}
 	s.redirectWithMessage(w, r, "info", "Agent profile updated.")
+}
+
+func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":         true,
+			"onboarding": defaultOnboardingView(s.service.Snapshot()),
+		})
+		return
+	case http.MethodPost:
+	default:
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var payload struct {
+		BindToken       string `json:"bind_token"`
+		Email           string `json:"email"`
+		Handle          string `json:"handle"`
+		DisplayName     string `json:"display_name"`
+		Emoji           string `json:"emoji"`
+		ProfileMarkdown string `json:"profile_markdown"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		onboarding := onboardingViewFromError(s.service.Snapshot(), app.WrapOnboardingError(app.OnboardingStepBind, fmt.Errorf("decode onboarding payload: %w", err)))
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":         false,
+			"error":      "invalid onboarding request",
+			"onboarding": onboarding,
+			"bound":      false,
+		})
+		return
+	}
+
+	err := s.service.BindAndRegister(r.Context(), app.BindProfile{
+		BindToken:       strings.TrimSpace(payload.BindToken),
+		Email:           strings.TrimSpace(payload.Email),
+		Handle:          strings.TrimSpace(payload.Handle),
+		DisplayName:     strings.TrimSpace(payload.DisplayName),
+		Emoji:           strings.TrimSpace(payload.Emoji),
+		ProfileMarkdown: strings.TrimSpace(payload.ProfileMarkdown),
+	})
+	state := s.service.Snapshot()
+	if err != nil {
+		onboarding := onboardingViewFromError(state, err)
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":         false,
+			"error":      err.Error(),
+			"onboarding": onboarding,
+			"bound":      strings.TrimSpace(state.Session.AgentToken) != "",
+		})
+		return
+	}
+
+	onboarding := completedOnboardingView(state)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"message":    "Agent bound and profile registered.",
+		"onboarding": onboarding,
+		"bound":      true,
+	})
 }
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
@@ -330,6 +400,7 @@ type pageData struct {
 	Connection      connectionView
 	Binding         bindingView
 	SubActions      subActionView
+	Onboarding      onboardingView
 }
 
 type connectionView struct {
@@ -349,6 +420,20 @@ type bindingView struct {
 	Bound       bool
 	Label       string
 	Description string
+}
+
+type onboardingView struct {
+	Steps   []onboardingStepView `json:"steps"`
+	Stage   string               `json:"stage,omitempty"`
+	Active  bool                 `json:"active,omitempty"`
+	Message string               `json:"message,omitempty"`
+}
+
+type onboardingStepView struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type agentProfileForm struct {
@@ -473,4 +558,94 @@ func bindingStateView(state app.AppState, runtime app.HubRuntime) bindingView {
 		Label:       "Bound Session",
 		Description: description,
 	}
+}
+
+func defaultOnboardingView(state app.AppState) onboardingView {
+	steps := defaultOnboardingSteps()
+	if strings.TrimSpace(state.Session.AgentToken) != "" {
+		for i := range steps {
+			steps[i].Status = "completed"
+		}
+		return onboardingView{
+			Steps:   steps,
+			Stage:   app.OnboardingStepWorkActivate,
+			Active:  false,
+			Message: "Agent bound and profile registered.",
+		}
+	}
+	setOnboardingProgress(steps, app.OnboardingStepBind, "current", "")
+	return onboardingView{
+		Steps:  steps,
+		Stage:  app.OnboardingStepBind,
+		Active: false,
+	}
+}
+
+func completedOnboardingView(state app.AppState) onboardingView {
+	flow := defaultOnboardingView(state)
+	flow.Message = "Agent bound and profile registered."
+	flow.Active = false
+	return flow
+}
+
+func onboardingViewFromError(_ app.AppState, err error) onboardingView {
+	stage := app.OnboardingStageFromError(err)
+	steps := defaultOnboardingSteps()
+	setOnboardingProgress(steps, stage, "error", err.Error())
+	return onboardingView{
+		Steps:   steps,
+		Stage:   stage,
+		Active:  false,
+		Message: err.Error(),
+	}
+}
+
+func defaultOnboardingSteps() []onboardingStepView {
+	base := app.DefaultOnboardingSteps()
+	steps := make([]onboardingStepView, 0, len(base))
+	for _, step := range base {
+		steps = append(steps, onboardingStepView{
+			ID:     step.ID,
+			Label:  step.Label,
+			Status: step.Status,
+			Detail: step.Detail,
+		})
+	}
+	return steps
+}
+
+func setOnboardingProgress(steps []onboardingStepView, stage, status, detail string) {
+	stage = strings.TrimSpace(stage)
+	status = strings.TrimSpace(status)
+	if status == "" {
+		status = "pending"
+	}
+
+	stageIndex := 0
+	for i := range steps {
+		if steps[i].ID == stage {
+			stageIndex = i
+			break
+		}
+	}
+
+	for i := range steps {
+		switch {
+		case i < stageIndex:
+			steps[i].Status = "completed"
+		case i == stageIndex:
+			steps[i].Status = status
+			if strings.TrimSpace(detail) != "" {
+				steps[i].Detail = strings.TrimSpace(detail)
+			}
+		default:
+			steps[i].Status = "pending"
+		}
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
