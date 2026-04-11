@@ -347,6 +347,38 @@ func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 	}
 }
 
+func TestBindAndRegisterDerivesAPIBaseFromRuntimeMetadataEndpoint(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentToken: "agent-token",
+		AgentUUID:  "agent-uuid",
+		AgentURI:   "molten://dispatch/agent",
+		Handle:     "dispatch-agent",
+	}
+	fake.bindResponse.Endpoints.Metadata = "https://runtime.na.hub.molten.bot/runtime/profile"
+	fake.expectedMetadataURL = "https://runtime.na.hub.molten.bot"
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		BindToken:       "bind-token",
+		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err != nil {
+		t.Fatalf("bind and register: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if got := state.Session.APIBase; got != "https://runtime.na.hub.molten.bot" {
+		t.Fatalf("expected derived api_base, got %q", got)
+	}
+	if got := fake.baseURLCalls[len(fake.baseURLCalls)-1]; got != "https://runtime.na.hub.molten.bot" {
+		t.Fatalf("expected derived runtime api_base before metadata update, got %#v", fake.baseURLCalls)
+	}
+}
+
 func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -723,6 +755,54 @@ func TestUpdateAgentProfileUsesPersistedSessionRoutingAfterRestart(t *testing.T)
 	}
 	if !strings.Contains(string(configData), "\"agent_token\": \"agent-token\"") {
 		t.Fatalf("expected persisted agent token in config.json, got %s", string(configData))
+	}
+}
+
+func TestUpdateAgentProfileDerivesRuntimeAPIBaseFromPersistedEndpointAfterRestart(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	settings := DefaultSettings()
+	settings.DataDir = dir
+	store, err := NewStore(filepath.Join(dir, "config.json"), settings)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	err = store.Update(func(state *AppState) error {
+		state.Settings.HubURL = "https://na.hub.molten.bot"
+		state.Session.AgentToken = "agent-token"
+		state.Session.Handle = "dispatch-agent"
+		state.Session.HandleFinalized = true
+		state.Session.MetadataURL = "https://runtime.na.hub.molten.bot/runtime/profile"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	fake := &fakeHubClient{
+		currentBaseURL:      "https://na.hub.molten.bot",
+		expectedMetadataURL: "https://runtime.na.hub.molten.bot",
+	}
+	service := NewService(store, fake)
+	fake.currentBaseURL = "https://na.hub.molten.bot"
+
+	err = service.UpdateAgentProfile(context.Background(), AgentProfile{
+		DisplayName:     "Dispatch Agent",
+		Emoji:           "🤖",
+		ProfileMarkdown: "Updated after restart.",
+	})
+	if err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+
+	if got := fake.baseURLCalls[len(fake.baseURLCalls)-1]; got != "https://runtime.na.hub.molten.bot" {
+		t.Fatalf("expected derived runtime api_base before profile update, got %#v", fake.baseURLCalls)
+	}
+
+	state := service.store.Snapshot()
+	if got := state.Session.AgentToken; got != "agent-token" {
+		t.Fatalf("expected persisted agent token, got %q", got)
 	}
 }
 
@@ -1369,11 +1449,21 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
 		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
-	if len(fake.baseURLCalls) != 1 || fake.baseURLCalls[0] != "https://runtime.na.hub.molten.bot" {
-		t.Fatalf("expected service to initialize client with persisted api_base, got %#v", fake.baseURLCalls)
+	if len(fake.baseURLCalls) == 0 {
+		t.Fatal("expected service to configure a runtime api_base")
 	}
-	if len(fake.runtimeEndpoints) != 1 || fake.runtimeEndpoints[0].MetadataURL != "https://runtime.na.hub.molten.bot/profile" {
-		t.Fatalf("expected service to initialize runtime endpoints from persisted session, got %#v", fake.runtimeEndpoints)
+	for _, got := range fake.baseURLCalls {
+		if got != "https://runtime.na.hub.molten.bot" {
+			t.Fatalf("expected persisted runtime api_base on every sync, got %#v", fake.baseURLCalls)
+		}
+	}
+	if len(fake.runtimeEndpoints) == 0 {
+		t.Fatal("expected service to configure runtime endpoints")
+	}
+	for _, endpoints := range fake.runtimeEndpoints {
+		if endpoints.MetadataURL != "https://runtime.na.hub.molten.bot/profile" {
+			t.Fatalf("expected persisted runtime endpoints on every sync, got %#v", fake.runtimeEndpoints)
+		}
 	}
 
 	state := service.store.Snapshot()
