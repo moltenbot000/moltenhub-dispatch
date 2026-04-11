@@ -510,12 +510,12 @@ func connectionStatusView(state app.ConnectionState) connectionView {
 	case status == app.ConnectionStatusConnected:
 		view.Label = "HTTP Connected"
 		view.Description = "Connected to the hub over HTTP polling."
+	case view.Error != "":
+		view.Label = "Error"
+		view.Description = view.Error
 	default:
 		view.Label = "Offline"
 		view.Description = "Not currently connected to the hub."
-		if view.Error != "" {
-			view.Description = view.Error
-		}
 	}
 	return view
 }
