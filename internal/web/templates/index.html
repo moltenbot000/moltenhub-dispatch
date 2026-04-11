@@ -1418,8 +1418,7 @@
             ? body.connected_agents
             : [];
           renderConnectedAgents(agents);
-          const refreshedAt = new Date().toLocaleTimeString();
-          setConnectedAgentsRefreshState(false, `Updated ${refreshedAt}`);
+          setConnectedAgentsRefreshState(false, "Updated.");
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh connected agents.";
           setConnectedAgentsRefreshState(false, message, true);
