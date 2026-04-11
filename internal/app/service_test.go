@@ -618,7 +618,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 				"repo":              "/tmp/repo",
 				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
 				"payload": map[string]any{
-					"input": "Issue an offline to moltenbot hub",
+					"input": "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 				"payload_format": "json",
 			},
@@ -675,7 +675,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
 		t.Fatalf("unexpected follow-up log paths: %#v", got)
 	}
-	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub" {
+	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
 		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
 	}
 }
@@ -711,7 +711,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log", "/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub",
+					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 			},
 		}
@@ -806,7 +806,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" || got[1] != filepath.Join(service.settings.DataDir, "logs", "task-1.log") {
 		t.Fatalf("unexpected follow-up log paths: %#v", got)
 	}
-	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub" {
+	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
 		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
 	}
 
@@ -864,7 +864,7 @@ func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *
 				"repo":              "/tmp/repo",
 				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
 				"payload": map[string]any{
-					"input": "Issue an offline to moltenbot hub",
+					"input": "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 				"payload_format": "json",
 			},
@@ -918,7 +918,7 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub",
+					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 				},
 			},
 		}
@@ -996,7 +996,7 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 		SkillName:     "run_task",
 		Repo:          "/tmp/repo",
 		LogPaths:      []string{"/tmp/repo/logs/failure.log"},
-		Payload:       "Issue an offline to moltenbot hub",
+		Payload:       "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
 		PayloadFormat: "markdown",
 	})
 	if err == nil {

@@ -685,8 +685,8 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		"error":         report.Error,
 		"retryable":     report.Retryable,
 		"next_action":   report.NextAction,
-		"error_detail":  report.Detail,
-		"error_details": report.Detail,
+		"error_detail":  detail,
+		"error_details": detail,
 		"log_paths":     logPaths,
 	}
 
