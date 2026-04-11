@@ -3723,6 +3723,11 @@ body.settings-modal-open {
   -webkit-backdrop-filter: blur(10px) saturate(130%);
 }
 
+.settings-modal-backdrop[hidden],
+.onboarding-modal-backdrop[hidden] {
+  display: none !important;
+}
+
 .settings-modal {
   width: min(860px, 100%);
   max-height: min(92vh, 880px);

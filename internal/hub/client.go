@@ -206,19 +206,37 @@ func (c *Client) bindAgent(ctx context.Context, endpoint string, requestBody any
 }
 
 func (c *Client) UpdateMetadata(ctx context.Context, token string, req UpdateMetadataRequest) (map[string]any, error) {
-	var out map[string]any
-	endpoint := c.runtimeEndpoint(c.endpoints.MetadataURL, "/v1/agents/me/metadata")
-	err := c.doJSON(ctx, http.MethodPatch, endpoint, token, req, &out)
-	if err == nil {
-		return out, nil
+	candidates := []string{
+		strings.TrimSpace(c.endpoints.MetadataURL),
+		"/v1/agents/me/metadata",
+		"/v1/agents/me",
 	}
-	if c.endpoints.MetadataURL != "" || !isRouteNotFound(err) {
-		return out, err
-	}
+	seen := make(map[string]struct{}, len(candidates))
+	var lastErr error
+	for _, endpoint := range candidates {
+		endpoint = strings.TrimSpace(endpoint)
+		if endpoint == "" {
+			continue
+		}
+		if _, ok := seen[endpoint]; ok {
+			continue
+		}
+		seen[endpoint] = struct{}{}
 
-	out = nil
-	err = c.doJSON(ctx, http.MethodPatch, "/v1/agents/me", token, req, &out)
-	return out, err
+		var out map[string]any
+		err := c.doJSON(ctx, http.MethodPatch, endpoint, token, req, &out)
+		if err == nil {
+			return out, nil
+		}
+		if !isRouteNotFound(err) {
+			return nil, err
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, errors.New("metadata endpoint is not configured")
 }
 
 func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]any, error) {

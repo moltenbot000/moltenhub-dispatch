@@ -448,3 +448,71 @@ func TestUpdateMetadataUsesCanonicalMetadataEndpointWhenProvided(t *testing.T) {
 		t.Fatalf("update metadata: %v", err)
 	}
 }
+
+func TestUpdateMetadataFallsBackWhenCanonicalMetadataEndpointIsMissing(t *testing.T) {
+	t.Parallel()
+
+	var runtimeMetadataCalls int
+	var canonicalMetadataCalls int
+	var aliasCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/runtime/profile":
+			runtimeMetadataCalls++
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":   "not_found",
+				"message": "route not found",
+			})
+		case "/v1/agents/me/metadata":
+			canonicalMetadataCalls++
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":   "not_found",
+				"message": "route not found",
+			})
+		case "/v1/agents/me":
+			aliasCalls++
+			if r.Method != http.MethodPatch {
+				t.Fatalf("unexpected method: %s", r.Method)
+			}
+			var request hub.UpdateMetadataRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if request.Handle != "dispatch-agent" {
+				t.Fatalf("unexpected handle: %q", request.Handle)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":     true,
+				"result": map[string]any{"status": "ok"},
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
+		MetadataURL: server.URL + "/runtime/profile",
+	})
+
+	_, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
+		Handle:   "dispatch-agent",
+		Metadata: map[string]any{"agent_type": "dispatch"},
+	})
+	if err != nil {
+		t.Fatalf("update metadata: %v", err)
+	}
+	if runtimeMetadataCalls != 1 {
+		t.Fatalf("expected one runtime metadata call, got %d", runtimeMetadataCalls)
+	}
+	if canonicalMetadataCalls != 1 {
+		t.Fatalf("expected one canonical metadata fallback call, got %d", canonicalMetadataCalls)
+	}
+	if aliasCalls != 1 {
+		t.Fatalf("expected one alias fallback call, got %d", aliasCalls)
+	}
+}

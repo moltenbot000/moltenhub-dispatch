@@ -433,6 +433,38 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	}
 }
 
+func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/styles.css", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(body, `.settings-modal-backdrop[hidden],`) {
+		t.Fatalf("expected settings modal hidden override rule, body=%s", body)
+	}
+	if !strings.Contains(body, `.onboarding-modal-backdrop[hidden]`) {
+		t.Fatalf("expected onboarding modal hidden override rule, body=%s", body)
+	}
+	if !strings.Contains(body, `display: none !important;`) {
+		t.Fatalf("expected explicit hidden display override, body=%s", body)
+	}
+}
+
 func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	t.Parallel()
 
