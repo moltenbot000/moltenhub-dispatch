@@ -40,7 +40,7 @@ When a dispatched task fails, the app does all of the following:
 
 ```json
 {
-  "repos": ["<same_repo_as_failed_task>"],
+  "repos": ["git@github.com:Molten-Bot/moltenhub-code.git"],
   "baseBranch": "main",
   "targetSubdir": ".",
   "prompt": "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
@@ -89,6 +89,6 @@ go build ./...
 
 ## Notes
 
-- The app stores runtime state in `data/state.json`.
+- The app stores runtime state in `data/config.json` (migrating legacy `data/state.json` automatically on startup).
 - Downstream trust relationships still need to exist in Molten Hub; this app does not create trust edges itself.
 - The dispatcher uses the OpenClaw HTTP adapter because the hub spec explicitly defines skill-request and skill-result envelopes there.

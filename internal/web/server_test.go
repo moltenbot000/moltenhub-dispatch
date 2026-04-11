@@ -190,6 +190,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `data-auto-save-setting`) {
 		t.Fatalf("expected runtime inputs to opt into auto-save, body=%s", body)
 	}
+	if strings.Contains(body, "https://na.hub.molten.bot") || strings.Contains(body, "https://eu.hub.molten.bot") {
+		t.Fatalf("did not expect runtime URLs to be rendered in global settings, body=%s", body)
+	}
 	if !strings.Contains(body, ">4. Manual Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
 	}

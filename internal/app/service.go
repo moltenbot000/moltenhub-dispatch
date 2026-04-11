@@ -18,6 +18,7 @@ const (
 	dispatchSkillName      = "dispatch_skill_request"
 	failureReviewSkillName = "review_failure_logs"
 	dispatcherHarness      = "moltenhub-dispatch"
+	followUpRepoURL        = "git@github.com:Molten-Bot/moltenhub-code.git"
 )
 
 var advertisedSkills = []map[string]string{
@@ -585,7 +586,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 		FailedRepo:      fallbackRepo(pending.Repo),
 		LogPaths:        logPaths,
 		RunConfig: FollowUpRunConfig{
-			Repos:        []string{fallbackRepo(pending.Repo)},
+			Repos:        []string{followUpRepoURL},
 			BaseBranch:   "main",
 			TargetSubdir: ".",
 			Prompt:       "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results.",
@@ -812,8 +813,8 @@ func (s *Service) resolveDispatchTarget(state AppState, req DispatchRequest) (Co
 func (s *Service) failUIRequest(ctx context.Context, state AppState, task PendingTask, cause error) error {
 	report := failureFromError("Task failed before it reached the connected agent.", cause)
 	if err := s.writeTaskLog(task.LogPath, map[string]any{
-		"phase": "dispatch_failed",
-		"error": report.Error,
+		"phase":  "dispatch_failed",
+		"error":  report.Error,
 		"detail": report.Detail,
 	}); err != nil {
 		return fmt.Errorf("%w; task log write failed: %v", cause, err)

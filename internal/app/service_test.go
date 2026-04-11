@@ -594,6 +594,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if fake.offlineCalls[0].Reason == "" {
 		t.Fatal("expected offline reason to describe the task failure")
 	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
+	}
 
 	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
 	if !ok {
@@ -625,7 +628,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
@@ -707,6 +710,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
 	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
+	}
 
 	failureMessage := fake.publishCalls[0].Message
 	if failureMessage.Type != "skill_result" {
@@ -756,7 +762,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	if len(state.PendingTasks) != 0 {
 		t.Fatalf("expected task to be cleared, got %d pending", len(state.PendingTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
 		t.Fatalf("unexpected run config repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" || got[1] != filepath.Join(service.settings.DataDir, "logs", "task-1.log") {
@@ -806,9 +812,9 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 				FailureReviewer: true,
 			},
 			{
-				ID:          "worker-a",
-				Name:        "Worker A",
-				AgentUUID:   "worker-uuid",
+				ID:           "worker-a",
+				Name:         "Worker A",
+				AgentUUID:    "worker-uuid",
 				DefaultSkill: "run_task",
 			},
 		}
@@ -839,6 +845,9 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if fake.offlineCalls[0].Reason == "" {
 		t.Fatal("expected offline reason to describe the task failure")
 	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
+	}
 
 	state := service.store.Snapshot()
 	if len(state.PendingTasks) != 0 {
@@ -847,7 +856,7 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected follow-up task after failed dispatch, got %d", len(state.FollowUpTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != "/tmp/repo" {
+	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepoURL {
 		t.Fatalf("unexpected follow-up repos: %#v", got)
 	}
 	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
@@ -959,6 +968,9 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+	if fake.offlineCalls[0].SessionKey != service.settings.SessionKey {
+		t.Fatalf("expected offline session key %q, got %q", service.settings.SessionKey, fake.offlineCalls[0].SessionKey)
 	}
 	if len(fake.baseURLCalls) != 1 || fake.baseURLCalls[0] != "https://runtime.na.hub.molten.bot" {
 		t.Fatalf("expected service to initialize client with persisted api_base, got %#v", fake.baseURLCalls)
