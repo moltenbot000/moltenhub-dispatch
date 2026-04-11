@@ -328,6 +328,35 @@ func TestHandleIndexRendersAutoDismissingFlash(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.renderIndex(rec, req, "", false, agentProfileForm{}, nil)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `<title>Molten Hub Console</title>`) {
+		t.Fatalf("expected document title to be Molten Hub Console, body=%s", body)
+	}
+	if !strings.Contains(body, `>Molten Hub Console</p>`) {
+		t.Fatalf("expected page header title copy, body=%s", body)
+	}
+	if !strings.Contains(body, `>Dispatch work to your quiet army.</p>`) {
+		t.Fatalf("expected page header subtitle copy, body=%s", body)
+	}
+}
+
 func TestHandleIndexConsumesFlashOnlyOnce(t *testing.T) {
 	t.Parallel()
 

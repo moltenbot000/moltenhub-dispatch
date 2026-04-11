@@ -3426,6 +3426,11 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   flex-wrap: wrap;
 }
 
+.page-title-block {
+  display: grid;
+  gap: 6px;
+}
+
 .eyebrow {
   margin: 0;
   color: var(--surface-label);
@@ -3433,6 +3438,13 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   font-weight: 800;
   letter-spacing: 0.11em;
   text-transform: uppercase;
+}
+
+.page-subtitle {
+  color: var(--text-soft);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .connection-status-row {
