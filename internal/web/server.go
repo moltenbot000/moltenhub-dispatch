@@ -521,7 +521,8 @@ func subActionState(state app.AppState) subActionView {
 }
 
 func defaultOnboardingView(state app.AppState) onboardingView {
-	steps := defaultOnboardingSteps()
+	mode := onboardingModeForState(state)
+	steps := defaultOnboardingSteps(mode)
 	if strings.TrimSpace(state.Session.AgentToken) != "" {
 		for i := range steps {
 			steps[i].Status = "completed"
@@ -542,15 +543,21 @@ func defaultOnboardingView(state app.AppState) onboardingView {
 }
 
 func completedOnboardingView(state app.AppState) onboardingView {
-	flow := defaultOnboardingView(state)
-	flow.Message = "Agent bound and profile registered."
-	flow.Active = false
-	return flow
+	steps := defaultOnboardingSteps(app.OnboardingModeNew)
+	for i := range steps {
+		steps[i].Status = "completed"
+	}
+	return onboardingView{
+		Steps:   steps,
+		Stage:   app.OnboardingStepWorkActivate,
+		Active:  false,
+		Message: "Agent bound and profile registered.",
+	}
 }
 
 func onboardingViewFromError(_ app.AppState, err error) onboardingView {
 	stage := app.OnboardingStageFromError(err)
-	steps := defaultOnboardingSteps()
+	steps := defaultOnboardingSteps(app.OnboardingModeNew)
 	setOnboardingProgress(steps, stage, "error", err.Error())
 	return onboardingView{
 		Steps:   steps,
@@ -560,8 +567,8 @@ func onboardingViewFromError(_ app.AppState, err error) onboardingView {
 	}
 }
 
-func defaultOnboardingSteps() []onboardingStepView {
-	base := app.DefaultOnboardingSteps()
+func defaultOnboardingSteps(mode string) []onboardingStepView {
+	base := app.DefaultOnboardingStepsForMode(mode)
 	steps := make([]onboardingStepView, 0, len(base))
 	for _, step := range base {
 		steps = append(steps, onboardingStepView{
@@ -572,6 +579,13 @@ func defaultOnboardingSteps() []onboardingStepView {
 		})
 	}
 	return steps
+}
+
+func onboardingModeForState(state app.AppState) string {
+	if strings.TrimSpace(state.Session.AgentToken) != "" {
+		return app.OnboardingModeExisting
+	}
+	return app.OnboardingModeNew
 }
 
 func setOnboardingProgress(steps []onboardingStepView, stage, status, detail string) {

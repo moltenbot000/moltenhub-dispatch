@@ -835,32 +835,37 @@
       });
 
       const bound = shell.dataset.bound === "true";
-      const onboardingDefaults = () => ([
-        {
-          id: "bind",
-          label: "Bind",
-          status: "pending",
-          detail: "Exchange the bind token for an agent credential.",
-        },
-        {
-          id: "work_bind",
-          label: "Work",
-          status: "pending",
-          detail: "Resolve and verify Molten Hub credentials.",
-        },
-        {
-          id: "profile_set",
-          label: "Profile Set",
-          status: "pending",
-          detail: "Persist the dispatcher profile metadata in Molten Hub.",
-        },
-        {
-          id: "work_activate",
-          label: "Work",
-          status: "pending",
-          detail: "Apply the runtime transport and confirm activation.",
-        },
-      ]);
+      const onboardingDefaults = (mode = (bound ? "existing" : "new")) => {
+        const isNew = String(mode || "").trim() === "new";
+        return [
+          {
+            id: "bind",
+            label: "Bind",
+            status: "pending",
+            detail: isNew
+              ? "Exchange the bind token for an agent credential."
+              : "Verify the existing Molten Hub agent credential.",
+          },
+          {
+            id: "work_bind",
+            label: "Work",
+            status: "pending",
+            detail: "Resolve and verify Molten Hub credentials.",
+          },
+          {
+            id: "profile_set",
+            label: "Profile Set",
+            status: "pending",
+            detail: "Persist the agent profile in Molten Hub.",
+          },
+          {
+            id: "work_activate",
+            label: "Work",
+            status: "pending",
+            detail: "Apply the runtime transport and confirm activation.",
+          },
+        ];
+      };
 
       const setBindBusy = (busy) => {
         if (!bindForm) {
