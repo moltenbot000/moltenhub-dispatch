@@ -171,8 +171,7 @@ func (c *Client) BindAgent(ctx context.Context, req BindRequest) (BindResponse, 
 		Handle:    strings.TrimSpace(req.Handle),
 	}
 
-	var out BindResponse
-	bindErr := c.doJSON(ctx, http.MethodPost, "/v1/agents/bind", "", requestBody, &out)
+	out, bindErr := c.bindAgent(ctx, "/v1/agents/bind", requestBody)
 	if bindErr == nil {
 		return out, nil
 	}
@@ -186,7 +185,7 @@ func (c *Client) BindAgent(ctx context.Context, req BindRequest) (BindResponse, 
 		return BindResponse{}, fmt.Errorf("/v1/agents/bind: %w", bindErr)
 	}
 
-	bindTokensErr := c.doJSON(ctx, http.MethodPost, "/v1/agents/bind-tokens", "", requestBody, &out)
+	out, bindTokensErr := c.bindAgent(ctx, "/v1/agents/bind-tokens", requestBody)
 	if bindTokensErr == nil {
 		return out, nil
 	}
@@ -196,6 +195,14 @@ func (c *Client) BindAgent(ctx context.Context, req BindRequest) (BindResponse, 
 	}
 
 	return BindResponse{}, fmt.Errorf("bind flow failed: /v1/agents/bind: %v; /v1/agents/bind-tokens: %v", bindErr, bindTokensErr)
+}
+
+func (c *Client) bindAgent(ctx context.Context, endpoint string, requestBody any) (BindResponse, error) {
+	var payload json.RawMessage
+	if err := c.doJSON(ctx, http.MethodPost, endpoint, "", requestBody, &payload); err != nil {
+		return BindResponse{}, err
+	}
+	return parseBindResponsePayload(payload)
 }
 
 func (c *Client) UpdateMetadata(ctx context.Context, token string, req UpdateMetadataRequest) (map[string]any, error) {
@@ -311,22 +318,29 @@ func (c *Client) doJSON(ctx context.Context, method, endpoint, token string, bod
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return decodeAPIError(resp)
 	}
+
+	rawBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read hub response: %w", err)
+	}
 	if out == nil {
-		io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 
+	if len(bytes.TrimSpace(rawBody)) == 0 {
+		return nil
+	}
+
+	payload := rawBody
 	envelope := struct {
 		OK     bool            `json:"ok"`
 		Result json.RawMessage `json:"result"`
 	}{}
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-		return fmt.Errorf("decode hub response: %w", err)
+	if err := json.Unmarshal(rawBody, &envelope); err == nil && len(bytes.TrimSpace(envelope.Result)) > 0 {
+		payload = envelope.Result
 	}
-	if out != nil && len(envelope.Result) > 0 {
-		if err := json.Unmarshal(envelope.Result, out); err != nil {
-			return fmt.Errorf("decode hub result payload: %w", err)
-		}
+	if err := json.Unmarshal(payload, out); err != nil {
+		return fmt.Errorf("decode hub result payload: %w", err)
 	}
 	return nil
 }
@@ -369,10 +383,195 @@ func (c *Client) newRequest(ctx context.Context, method, endpoint, token string,
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if bearer := strings.TrimSpace(token); bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
 	return req, nil
+}
+
+func parseBindResponsePayload(payload json.RawMessage) (BindResponse, error) {
+	if len(bytes.TrimSpace(payload)) == 0 {
+		return BindResponse{}, errors.New("bind response missing result payload")
+	}
+
+	var out BindResponse
+	if err := json.Unmarshal(payload, &out); err != nil {
+		return BindResponse{}, fmt.Errorf("decode bind response: %w", err)
+	}
+
+	var parsed any
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		return BindResponse{}, fmt.Errorf("decode bind response payload: %w", err)
+	}
+	normalizeBindResponse(&out, parsed)
+
+	if strings.TrimSpace(out.AgentToken) == "" {
+		return BindResponse{}, errors.New("bind response missing agent token")
+	}
+	return out, nil
+}
+
+func normalizeBindResponse(out *BindResponse, payload any) {
+	if out == nil {
+		return
+	}
+
+	out.AgentToken = firstNonEmptyString(
+		strings.TrimSpace(out.AgentToken),
+		extractStringFromAny(payload, "agent_token", "access_token", "bearer_token", "token"),
+	)
+	out.AgentUUID = firstNonEmptyString(
+		strings.TrimSpace(out.AgentUUID),
+		extractStringFromAny(payload, "agent_uuid", "agentUUID"),
+	)
+	out.AgentURI = firstNonEmptyString(
+		strings.TrimSpace(out.AgentURI),
+		extractStringFromAny(payload, "agent_uri", "agentURI"),
+	)
+	out.Handle = firstNonEmptyString(
+		strings.TrimSpace(out.Handle),
+		extractStringFromAny(payload, "handle"),
+	)
+	out.APIBase = firstNonEmptyString(
+		strings.TrimSpace(out.APIBase),
+		extractStringFromAny(payload, "api_base", "apiBase", "base_url", "baseUrl"),
+	)
+
+	if endpoints := extractMapByKey(payload, "endpoints"); len(endpoints) > 0 {
+		applyBindEndpoints(out, endpoints)
+	}
+
+	out.Endpoints.Manifest = strings.TrimSpace(out.Endpoints.Manifest)
+	out.Endpoints.Capabilities = strings.TrimSpace(out.Endpoints.Capabilities)
+	out.Endpoints.Metadata = strings.TrimSpace(out.Endpoints.Metadata)
+	out.Endpoints.MessagesPull = strings.TrimSpace(out.Endpoints.MessagesPull)
+	out.Endpoints.MessagesPush = strings.TrimSpace(out.Endpoints.MessagesPush)
+	out.Endpoints.OpenClawPull = strings.TrimSpace(out.Endpoints.OpenClawPull)
+	out.Endpoints.OpenClawPush = strings.TrimSpace(out.Endpoints.OpenClawPush)
+	out.Endpoints.Offline = strings.TrimSpace(out.Endpoints.Offline)
+}
+
+func applyBindEndpoints(out *BindResponse, endpoints map[string]any) {
+	if out == nil || len(endpoints) == 0 {
+		return
+	}
+
+	out.Endpoints.Manifest = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.Manifest),
+		stringFromMap(endpoints, "manifest", "manifest_url", "manifestURL"),
+	)
+	out.Endpoints.Capabilities = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.Capabilities),
+		stringFromMap(endpoints, "capabilities", "capabilities_url", "capabilitiesURL"),
+	)
+	out.Endpoints.Metadata = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.Metadata),
+		stringFromMap(endpoints, "metadata", "metadata_url", "metadataURL", "profile", "profile_url", "profileURL"),
+	)
+	out.Endpoints.MessagesPull = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.MessagesPull),
+		stringFromMap(endpoints, "messages_pull", "messagesPull"),
+	)
+	out.Endpoints.MessagesPush = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.MessagesPush),
+		stringFromMap(endpoints, "messages_publish", "messagesPush"),
+	)
+	out.Endpoints.OpenClawPull = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.OpenClawPull),
+		stringFromMap(endpoints, "openclaw_messages_pull", "openclaw_pull", "openclawPull"),
+	)
+	out.Endpoints.OpenClawPush = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.OpenClawPush),
+		stringFromMap(endpoints, "openclaw_messages_publish", "openclaw_publish", "openclawPush"),
+	)
+	out.Endpoints.Offline = firstNonEmptyString(
+		strings.TrimSpace(out.Endpoints.Offline),
+		stringFromMap(endpoints, "openclaw_offline", "offline", "openclawOffline"),
+	)
+}
+
+func extractStringFromAny(value any, keys ...string) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, key := range keys {
+			if raw, ok := typed[key]; ok {
+				if str, ok := raw.(string); ok && strings.TrimSpace(str) != "" {
+					return strings.TrimSpace(str)
+				}
+			}
+		}
+		for _, nestedKey := range []string{"data", "result", "agent", "payload"} {
+			if nested, ok := typed[nestedKey]; ok {
+				if value := extractStringFromAny(nested, keys...); value != "" {
+					return value
+				}
+			}
+		}
+		for _, nested := range typed {
+			if value := extractStringFromAny(nested, keys...); value != "" {
+				return value
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			if value := extractStringFromAny(entry, keys...); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
+}
+
+func extractMapByKey(value any, key string) map[string]any {
+	switch typed := value.(type) {
+	case map[string]any:
+		if raw, ok := typed[key]; ok {
+			if parsed, ok := raw.(map[string]any); ok {
+				return parsed
+			}
+		}
+		for _, nestedKey := range []string{"data", "result", "agent", "payload"} {
+			if nested, ok := typed[nestedKey]; ok {
+				if parsed := extractMapByKey(nested, key); len(parsed) > 0 {
+					return parsed
+				}
+			}
+		}
+		for _, nested := range typed {
+			if parsed := extractMapByKey(nested, key); len(parsed) > 0 {
+				return parsed
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			if parsed := extractMapByKey(entry, key); len(parsed) > 0 {
+				return parsed
+			}
+		}
+	}
+	return nil
+}
+
+func stringFromMap(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		raw, ok := values[key]
+		if !ok {
+			continue
+		}
+		if value, ok := raw.(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func joinURLPath(basePath, endpoint string) string {

@@ -82,6 +82,95 @@ func TestBindAgentParsesRuntimeEnvelope(t *testing.T) {
 	}
 }
 
+func TestBindAgentParsesNestedAgentAccessToken(t *testing.T) {
+	t.Parallel()
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/bind" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"agent": map[string]any{
+					"access_token": "  agent-token  ",
+					"agent_uuid":   "agent-uuid",
+					"agent_uri":    "molten://agent/dispatch",
+					"handle":       "dispatch",
+				},
+				"api_base": server.URL + "/v1",
+				"endpoints": map[string]any{
+					"capabilities": server.URL + "/runtime/capabilities",
+					"metadata":     server.URL + "/runtime/profile",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	response, err := client.BindAgent(context.Background(), hub.BindRequest{
+		BindToken: "bind-token",
+		Handle:    "dispatch",
+	})
+	if err != nil {
+		t.Fatalf("bind agent: %v", err)
+	}
+
+	if got, want := response.AgentToken, "agent-token"; got != want {
+		t.Fatalf("agent token = %q, want %q", got, want)
+	}
+	if got, want := response.AgentUUID, "agent-uuid"; got != want {
+		t.Fatalf("agent uuid = %q, want %q", got, want)
+	}
+	if got, want := response.AgentURI, "molten://agent/dispatch"; got != want {
+		t.Fatalf("agent uri = %q, want %q", got, want)
+	}
+	if got, want := response.Endpoints.Capabilities, server.URL+"/runtime/capabilities"; got != want {
+		t.Fatalf("capabilities endpoint = %q, want %q", got, want)
+	}
+	if got, want := response.Endpoints.Metadata, server.URL+"/runtime/profile"; got != want {
+		t.Fatalf("metadata endpoint = %q, want %q", got, want)
+	}
+}
+
+func TestBindAgentParsesTopLevelPayloadWithoutRuntimeEnvelope(t *testing.T) {
+	t.Parallel()
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/bind" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"agent_token": "agent-token",
+			"agent_uuid":  "agent-uuid",
+			"agent_uri":   "molten://agent/dispatch",
+			"handle":      "dispatch",
+			"api_base":    server.URL + "/v1",
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	response, err := client.BindAgent(context.Background(), hub.BindRequest{
+		BindToken: "bind-token",
+	})
+	if err != nil {
+		t.Fatalf("bind agent: %v", err)
+	}
+
+	if got, want := response.AgentToken, "agent-token"; got != want {
+		t.Fatalf("agent token = %q, want %q", got, want)
+	}
+	if got, want := response.APIBase, server.URL+"/v1"; got != want {
+		t.Fatalf("api_base = %q, want %q", got, want)
+	}
+}
+
 func TestBindAgentDoesNotFallbackToBindTokensRouteOnInvalidBindPayload(t *testing.T) {
 	t.Parallel()
 
@@ -257,6 +346,27 @@ func TestUpdateMetadataUsesAPIBasePathWithoutDoublingVersionPrefix(t *testing.T)
 
 	if requestPath != "/v1/agents/me/metadata" {
 		t.Fatalf("unexpected request path: %s", requestPath)
+	}
+}
+
+func TestGetCapabilitiesTrimsAuthorizationBearerToken(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.Header.Get("Authorization"), "Bearer agent-token"; got != want {
+			t.Fatalf("authorization header = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": map[string]any{"advertised_skills": []any{}},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	if _, err := client.GetCapabilities(context.Background(), "  agent-token  "); err != nil {
+		t.Fatalf("get capabilities: %v", err)
 	}
 }
 
