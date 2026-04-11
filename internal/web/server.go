@@ -635,7 +635,7 @@ func subActionState(state app.AppState) subActionView {
 	if len(state.ConnectedAgents) == 0 {
 		return subActionView{
 			Visible:                 false,
-			Reason:                  "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Manual Dispatch.",
+			Reason:                  "No connected agents are available yet. Connect agents in Molten Bot Hub to enable Dispatch.",
 			RequiresAgentConnection: true,
 			AgentConnectURL:         "https://app.molten.bot/hub",
 		}
