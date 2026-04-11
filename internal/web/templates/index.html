@@ -335,10 +335,11 @@
       const PANEL_MAX_WIDTH = 360;
       const PANEL_ESTIMATED_HEIGHT = 430;
       const DEFAULT_EMOJI = "🙂";
-      const EMOJI_MART_REACT_MODULE = "https://esm.sh/@emoji-mart/react@1.1.1?bundle";
+      const REACT_VERSION = "18.2.0";
+      const EMOJI_MART_REACT_MODULE = `https://esm.sh/@emoji-mart/react@1.1.1?deps=react@${REACT_VERSION}`;
       const EMOJI_MART_DATA_MODULE = "https://esm.sh/@emoji-mart/data@1.2.1";
-      const REACT_MODULE = "https://esm.sh/react@18.2.0?bundle";
-      const REACT_DOM_CLIENT_MODULE = "https://esm.sh/react-dom@18.2.0/client?bundle";
+      const REACT_MODULE = `https://esm.sh/react@${REACT_VERSION}`;
+      const REACT_DOM_CLIENT_MODULE = `https://esm.sh/react-dom@${REACT_VERSION}/client?deps=react@${REACT_VERSION}`;
 
       let emojiMartModulesPromise = null;
       const loadEmojiMartModules = async () => {
@@ -386,6 +387,18 @@
         }
         const fallback = Array.from(trimmed);
         return fallback.length ? fallback[0] : "";
+      };
+
+      const eventIncludesNode = (event, node) => {
+        if (!(node instanceof Node)) {
+          return false;
+        }
+        if (typeof event.composedPath === "function") {
+          const path = event.composedPath();
+          return path.some((entry) => entry === node || (entry instanceof Node && node.contains(entry)));
+        }
+        const target = event.target;
+        return target instanceof Node && node.contains(target);
       };
 
       let closeActiveEmojiPicker = null;
@@ -577,11 +590,7 @@
         };
 
         function handleDocumentPointerDown(event) {
-          const target = event.target;
-          if (!(target instanceof Node)) {
-            return;
-          }
-          if (root.contains(target) || panel.contains(target)) {
+          if (eventIncludesNode(event, root) || eventIncludesNode(event, panel)) {
             return;
           }
           closePanel();

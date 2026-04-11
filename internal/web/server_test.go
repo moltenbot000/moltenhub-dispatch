@@ -433,7 +433,10 @@ func TestHandleIndexRendersInteractiveEmojiPicker(t *testing.T) {
 	if !strings.Contains(body, `document.body.appendChild(panel);`) {
 		t.Fatalf("expected emoji picker panel to portal to document body, body=%s", body)
 	}
-	if !strings.Contains(body, `https://esm.sh/@emoji-mart/react@1.1.1?bundle`) {
+	if !strings.Contains(body, `const REACT_VERSION = "18.2.0";`) {
+		t.Fatalf("expected shared React version constant for emoji picker modules, body=%s", body)
+	}
+	if !strings.Contains(body, `https://esm.sh/@emoji-mart/react@1.1.1?deps=react@${REACT_VERSION}`) {
 		t.Fatalf("expected @emoji-mart/react module usage, body=%s", body)
 	}
 	if !strings.Contains(body, `https://esm.sh/@emoji-mart/data@1.2.1`) {
