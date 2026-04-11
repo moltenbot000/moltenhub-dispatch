@@ -80,38 +80,26 @@
             <fieldset class="emoji-fieldset">
               <legend>Emoji</legend>
               <div class="hub-emoji-picker" data-hub-emoji-picker>
-                <div class="hub-emoji-picker-control">
-                  <input
-                    class="hub-emoji-picker-input"
-                    type="text"
-                    name="emoji"
-                    value="{{.ProfileForm.Emoji}}"
-                    maxlength="16"
-                    placeholder="🙂"
-                    autocomplete="off"
-                    data-hub-emoji-input
-                    aria-label="Emoji"
-                  >
-                  <button
-                    type="button"
-                    class="hub-emoji-picker-toggle"
-                    data-hub-emoji-toggle
-                    aria-haspopup="dialog"
-                    aria-expanded="false"
-                    aria-label="Choose an emoji"
-                  >
-                    <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                  </button>
-                </div>
+                <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
+                <button
+                  type="button"
+                  class="hub-emoji-picker-toggle"
+                  data-hub-emoji-toggle
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-label="{{if .ProfileForm.Emoji}}Selected emoji: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}"
+                >
+                  <span class="hub-emoji-picker-toggle-content">
+                    <span class="hub-emoji-picker-toggle-chip">
+                      <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
+                    </span>
+                    <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
+                  </span>
+                  <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">⌄</span>
+                </button>
                 <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
-                  <div class="hub-emoji-picker-selected">
-                    <div class="hub-emoji-picker-selected-chip">
-                      <span class="hub-emoji-picker-selected-emoji" data-hub-emoji-selected>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                      <span class="hub-emoji-picker-selected-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
-                    </div>
-                  </div>
-                  <div class="hub-emoji-picker-toolbar">
-                    <div class="hub-emoji-picker-categories" data-hub-emoji-categories></div>
+                  <div class="hub-emoji-picker-panel-header">
+                    <p class="hub-emoji-picker-label">Pick one emoji</p>
                     <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
                   </div>
                   <div class="hub-emoji-picker-search-wrap">
@@ -147,38 +135,26 @@
             <fieldset class="emoji-fieldset">
               <legend>Emoji</legend>
               <div class="hub-emoji-picker" data-hub-emoji-picker>
-                <div class="hub-emoji-picker-control">
-                  <input
-                    class="hub-emoji-picker-input"
-                    type="text"
-                    name="emoji"
-                    value="{{.ProfileForm.Emoji}}"
-                    maxlength="16"
-                    placeholder="🙂"
-                    autocomplete="off"
-                    data-hub-emoji-input
-                    aria-label="Emoji"
-                  >
-                  <button
-                    type="button"
-                    class="hub-emoji-picker-toggle"
-                    data-hub-emoji-toggle
-                    aria-haspopup="dialog"
-                    aria-expanded="false"
-                    aria-label="Choose an emoji"
-                  >
-                    <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                  </button>
-                </div>
+                <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
+                <button
+                  type="button"
+                  class="hub-emoji-picker-toggle"
+                  data-hub-emoji-toggle
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-label="{{if .ProfileForm.Emoji}}Selected emoji: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}"
+                >
+                  <span class="hub-emoji-picker-toggle-content">
+                    <span class="hub-emoji-picker-toggle-chip">
+                      <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
+                    </span>
+                    <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
+                  </span>
+                  <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">⌄</span>
+                </button>
                 <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
-                  <div class="hub-emoji-picker-selected">
-                    <div class="hub-emoji-picker-selected-chip">
-                      <span class="hub-emoji-picker-selected-emoji" data-hub-emoji-selected>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                      <span class="hub-emoji-picker-selected-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
-                    </div>
-                  </div>
-                  <div class="hub-emoji-picker-toolbar">
-                    <div class="hub-emoji-picker-categories" data-hub-emoji-categories></div>
+                  <div class="hub-emoji-picker-panel-header">
+                    <p class="hub-emoji-picker-label">Pick one emoji</p>
                     <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
                   </div>
                   <div class="hub-emoji-picker-search-wrap">
@@ -378,11 +354,16 @@
       }
 
       const normalizeSearchText = (value) => String(value || "").trim().toLowerCase();
+      const VIEWPORT_GUTTER = 8;
+      const PANEL_OFFSET = 8;
+      const PANEL_MAX_WIDTH = 360;
+      const PANEL_ESTIMATED_HEIGHT = 430;
+      const DEFAULT_EMOJI = "🙂";
+
       const emojiCatalog = [
         {
           id: "frequent",
           label: "Frequent",
-          icon: "⭐",
           entries: [
             { emoji: "🤖", label: "Robot", keywords: ["bot", "agent", "dispatch", "assistant"] },
             { emoji: "💯", label: "Hundred", keywords: ["100", "done", "ship"] },
@@ -397,7 +378,6 @@
         {
           id: "smileys",
           label: "Smileys",
-          icon: "🙂",
           entries: [
             { emoji: "😀", label: "Grinning face", keywords: ["happy", "smile"] },
             { emoji: "😄", label: "Grinning face with eyes", keywords: ["happy", "joy"] },
@@ -416,7 +396,6 @@
         {
           id: "animals",
           label: "Animals",
-          icon: "🐾",
           entries: [
             { emoji: "🐶", label: "Dog face", keywords: ["pet"] },
             { emoji: "🐱", label: "Cat face", keywords: ["pet"] },
@@ -431,7 +410,6 @@
         {
           id: "food",
           label: "Food",
-          icon: "🍜",
           entries: [
             { emoji: "☕", label: "Hot beverage", keywords: ["coffee"] },
             { emoji: "🍵", label: "Tea", keywords: [] },
@@ -446,7 +424,6 @@
         {
           id: "travel",
           label: "Travel",
-          icon: "🗺️",
           entries: [
             { emoji: "✈️", label: "Airplane", keywords: ["flight"] },
             { emoji: "🚗", label: "Car", keywords: ["drive"] },
@@ -461,7 +438,6 @@
         {
           id: "objects",
           label: "Objects",
-          icon: "💡",
           entries: [
             { emoji: "💡", label: "Light bulb", keywords: ["idea"] },
             { emoji: "📌", label: "Pushpin", keywords: ["pin"] },
@@ -476,7 +452,6 @@
         {
           id: "symbols",
           label: "Symbols",
-          icon: "🔣",
           entries: [
             { emoji: "✅", label: "Check mark button", keywords: ["ok", "pass"] },
             { emoji: "❌", label: "Cross mark", keywords: ["fail", "error"] },
@@ -522,10 +497,8 @@
         const input = root.querySelector("[data-hub-emoji-input]");
         const toggle = root.querySelector("[data-hub-emoji-toggle]");
         const preview = root.querySelector("[data-hub-emoji-preview]");
-        const panel = root.querySelector("[data-hub-emoji-panel]");
-        const selected = root.querySelector("[data-hub-emoji-selected]");
         const selectedText = root.querySelector("[data-hub-emoji-selected-text]");
-        const categories = root.querySelector("[data-hub-emoji-categories]");
+        const panel = root.querySelector("[data-hub-emoji-panel]");
         const clearButton = root.querySelector("[data-hub-emoji-clear]");
         const searchInput = root.querySelector("[data-hub-emoji-search]");
         const results = root.querySelector("[data-hub-emoji-results]");
@@ -533,10 +506,8 @@
           !(input instanceof HTMLInputElement) ||
           !(toggle instanceof HTMLButtonElement) ||
           !(preview instanceof HTMLElement) ||
-          !(panel instanceof HTMLElement) ||
-          !(selected instanceof HTMLElement) ||
           !(selectedText instanceof HTMLElement) ||
-          !(categories instanceof HTMLElement) ||
+          !(panel instanceof HTMLElement) ||
           !(clearButton instanceof HTMLButtonElement) ||
           !(searchInput instanceof HTMLInputElement) ||
           !(results instanceof HTMLElement)
@@ -544,54 +515,24 @@
           return;
         }
 
-        const findCategoryIDForEmoji = (emojiValue) => {
-          if (!emojiValue) {
-            return "";
-          }
-          for (const category of emojiCatalog) {
-            if (category.entries.some((entry) => entry.emoji === emojiValue)) {
-              return category.id;
-            }
-          }
-          return "";
-        };
-
         let open = false;
         let searchQuery = "";
-        let activeCategoryID = findCategoryIDForEmoji(firstEmojiGrapheme(input.value)) || emojiCatalog[0].id;
 
         const syncSelectedState = () => {
           const emojiValue = firstEmojiGrapheme(input.value);
           if (emojiValue !== input.value) {
             input.value = emojiValue;
           }
-          const previewEmoji = emojiValue || "🙂";
+          const previewEmoji = emojiValue || DEFAULT_EMOJI;
           preview.textContent = previewEmoji;
-          selected.textContent = previewEmoji;
           selectedText.textContent = emojiValue ? `Selected: ${emojiValue}` : "Choose an emoji";
           toggle.setAttribute("aria-label", emojiValue ? `Selected emoji: ${emojiValue}` : "Choose an emoji");
           clearButton.disabled = emojiValue === "";
         };
 
-        const renderCategories = () => {
-          categories.innerHTML = "";
-          emojiCatalog.forEach((category) => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "hub-emoji-picker-category";
-            button.setAttribute("data-category-id", category.id);
-            button.setAttribute("aria-label", category.label);
-            if (activeCategoryID === category.id) {
-              button.classList.add("active");
-            }
-            button.textContent = category.icon;
-            categories.appendChild(button);
-          });
-        };
-
         const renderResults = () => {
           const selectedEmoji = firstEmojiGrapheme(input.value);
-          const matchesByCategory = emojiCatalog
+          const visibleCategories = emojiCatalog
             .map((category) => ({
               ...category,
               entries: category.entries.filter((entry) => {
@@ -602,10 +543,6 @@
               }),
             }))
             .filter((category) => category.entries.length > 0);
-
-          const visibleCategories = searchQuery
-            ? matchesByCategory
-            : matchesByCategory.filter((category) => category.id === activeCategoryID);
 
           results.innerHTML = "";
           if (!visibleCategories.length) {
@@ -648,27 +585,26 @@
           if (!open) {
             return;
           }
-          const viewportGutter = 8;
-          const panelOffset = 8;
-          const panelEstimatedHeight = 430;
-          const maxPanelWidth = Math.max(240, window.innerWidth - viewportGutter * 2);
-          const panelWidth = Math.min(392, maxPanelWidth);
           const rect = root.getBoundingClientRect();
-          const maxLeft = Math.max(viewportGutter, window.innerWidth - panelWidth - viewportGutter);
-          const left = Math.min(Math.max(rect.left, viewportGutter), maxLeft);
+          const viewportWidth = window.innerWidth;
+          const maxPanelWidth = Math.max(240, viewportWidth - VIEWPORT_GUTTER * 2);
+          const panelWidth = Math.min(PANEL_MAX_WIDTH, maxPanelWidth);
+          const maxLeft = Math.max(VIEWPORT_GUTTER, viewportWidth - panelWidth - VIEWPORT_GUTTER);
+          const left = Math.min(Math.max(rect.left, VIEWPORT_GUTTER), maxLeft);
 
-          const spaceBelow = window.innerHeight - rect.bottom - viewportGutter;
-          const spaceAbove = rect.top - viewportGutter;
-          const placeBelow = spaceBelow >= panelEstimatedHeight || spaceBelow >= spaceAbove;
+          const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_GUTTER;
+          const spaceAbove = rect.top - VIEWPORT_GUTTER;
+          const placeBelow = spaceBelow >= PANEL_ESTIMATED_HEIGHT || spaceBelow >= spaceAbove;
 
           panel.style.left = `${left}px`;
-          panel.style.right = "auto";
+          panel.style.width = `min(${PANEL_MAX_WIDTH}px, calc(100vw - ${VIEWPORT_GUTTER * 2}px))`;
+          panel.style.maxHeight = `calc(100vh - ${VIEWPORT_GUTTER * 2}px)`;
           panel.style.top = "auto";
           panel.style.bottom = "auto";
           if (placeBelow) {
-            panel.style.top = `${rect.bottom + panelOffset}px`;
+            panel.style.top = `${rect.bottom + PANEL_OFFSET}px`;
           } else {
-            panel.style.bottom = `${window.innerHeight - rect.top + panelOffset}px`;
+            panel.style.bottom = `${window.innerHeight - rect.top + PANEL_OFFSET}px`;
           }
         };
 
@@ -686,6 +622,7 @@
           }
           open = false;
           panel.hidden = true;
+          toggle.classList.remove("is-open");
           toggle.setAttribute("aria-expanded", "false");
           detachPanelListeners();
           if (closeActiveEmojiPicker === closePanel) {
@@ -704,9 +641,9 @@
           open = true;
           searchQuery = "";
           searchInput.value = "";
-          renderCategories();
           renderResults();
           panel.hidden = false;
+          toggle.classList.add("is-open");
           toggle.setAttribute("aria-expanded", "true");
           positionPanel();
           window.addEventListener("mousedown", handleDocumentPointerDown);
@@ -717,16 +654,13 @@
           searchInput.focus({ preventScroll: true });
         };
 
-        const setEmojiValue = (nextValue, renderWhenClosed = false) => {
+        const setEmojiValue = (nextValue, closeWhenDone = false) => {
           input.value = firstEmojiGrapheme(nextValue);
-          const categoryID = findCategoryIDForEmoji(input.value);
-          if (categoryID) {
-            activeCategoryID = categoryID;
-          }
           syncSelectedState();
-          renderCategories();
-          if (open || renderWhenClosed) {
-            renderResults();
+          renderResults();
+          if (closeWhenDone) {
+            closePanel();
+            toggle.focus({ preventScroll: true });
           }
         };
 
@@ -744,7 +678,7 @@
         function handleWindowKeydown(event) {
           if (event.key === "Escape") {
             closePanel();
-            toggle.focus();
+            toggle.focus({ preventScroll: true });
           }
         }
 
@@ -759,46 +693,8 @@
           openPanel();
         });
 
-        input.addEventListener("input", () => {
-          setEmojiValue(input.value, true);
-        });
-
-        input.addEventListener("blur", () => {
-          setEmojiValue(input.value, true);
-        });
-
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            openPanel();
-          }
-        });
-
         clearButton.addEventListener("click", () => {
           setEmojiValue("", true);
-          closePanel();
-          input.focus();
-        });
-
-        categories.addEventListener("click", (event) => {
-          const target = event.target;
-          if (!(target instanceof Element)) {
-            return;
-          }
-          const button = target.closest("button[data-category-id]");
-          if (!(button instanceof HTMLButtonElement)) {
-            return;
-          }
-          const categoryID = String(button.getAttribute("data-category-id") || "").trim();
-          if (!categoryID) {
-            return;
-          }
-          activeCategoryID = categoryID;
-          searchQuery = "";
-          searchInput.value = "";
-          renderCategories();
-          renderResults();
-          searchInput.focus({ preventScroll: true });
         });
 
         searchInput.addEventListener("input", () => {
@@ -821,11 +717,9 @@
             return;
           }
           setEmojiValue(value, true);
-          closePanel();
-          input.focus();
         });
 
-        setEmojiValue(input.value, true);
+        setEmojiValue(input.value);
       };
 
       document.querySelectorAll("[data-hub-emoji-picker]").forEach((picker) => {

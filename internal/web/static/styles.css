@@ -2544,58 +2544,33 @@ select.prompt-control {
   min-width: 0;
 }
 
-.hub-emoji-picker-control {
-  position: relative;
+.hub-emoji-picker-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
+  min-height: 44px;
   min-width: 0;
-}
-
-.hub-emoji-picker-input {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-width: 0;
-  padding-left: 14px;
-  padding-right: 52px;
-  text-align: center;
-  font-size: 1.15rem;
-  line-height: 1;
-}
-
-.hub-emoji-picker-toggle {
-  position: absolute;
-  top: 50%;
-  right: 7px;
-  z-index: 2;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(112, 163, 221, 0.28);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  padding: 8px 10px;
+  border: 1px solid var(--surface-control-border);
+  border-radius: 14px;
+  background: var(--surface-control-bg);
+  box-shadow: var(--surface-control-shadow);
   color: var(--text);
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, color 180ms ease;
 }
 
 .hub-emoji-picker-toggle:hover,
 .hub-emoji-picker-toggle:focus-visible {
-  transform: translateY(calc(-50% - 1px));
-  border-color: rgba(10, 132, 255, 0.26);
-  background: rgba(244, 250, 255, 0.98);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 6px 16px rgba(83, 132, 197, 0.16);
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--running) 30%, var(--surface-control-border));
+  background: color-mix(in srgb, var(--surface-control-bg) 88%, var(--running) 12%);
+  color: var(--surface-tab-active-text);
 }
 
 .hub-emoji-picker-toggle:focus-visible,
 .hub-emoji-picker-clear:focus-visible,
-.hub-emoji-picker-category:focus-visible,
 .hub-emoji-picker-option:focus-visible,
 .hub-emoji-picker-search:focus-visible {
   outline: 2px solid rgba(10, 132, 255, 0.24);
@@ -2604,21 +2579,68 @@ select.prompt-control {
 
 .hub-emoji-picker-toggle:disabled {
   opacity: 0.55;
+  transform: none;
+  cursor: not-allowed;
+}
+
+.hub-emoji-picker-toggle-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.hub-emoji-picker-toggle-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--surface-control-border) 84%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-control-bg-strong) 92%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 8%, white);
 }
 
 .hub-emoji-picker-toggle-preview {
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
+}
+
+.hub-emoji-picker-toggle-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.hub-emoji-picker-toggle-caret {
+  flex: 0 0 auto;
+  color: var(--surface-label);
+  font-size: 0.9rem;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.hub-emoji-picker-toggle.is-open .hub-emoji-picker-toggle-caret {
+  transform: rotate(180deg);
+  color: var(--surface-tab-active-text);
 }
 
 .hub-emoji-picker-panel {
   position: fixed;
   z-index: 95;
-  width: min(392px, calc(100vw - 16px));
+  width: min(360px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
-  padding: 12px;
+  padding: 10px;
   border: 1px solid color-mix(in srgb, var(--surface-control-border) 92%, transparent);
-  border-radius: 22px;
+  border-radius: 18px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg-panel-strong) 97%, transparent), color-mix(in srgb, var(--bg-panel) 98%, transparent)),
     radial-gradient(circle at top left, color-mix(in srgb, var(--running) 14%, transparent), transparent 34%);
@@ -2633,96 +2655,41 @@ select.prompt-control {
   display: none;
 }
 
-.hub-emoji-picker-selected {
+.hub-emoji-picker-panel-header {
   display: flex;
   align-items: center;
-  gap: 10px;
   justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.hub-emoji-picker-selected-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--surface-control-border) 84%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-control-bg) 96%, transparent);
-  box-shadow: var(--surface-control-shadow);
-  color: var(--text);
-}
-
-.hub-emoji-picker-selected-emoji {
-  flex: 0 0 auto;
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.hub-emoji-picker-selected-text {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-soft);
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hub-emoji-picker-toolbar {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--surface-header-border) 88%, transparent);
+  margin-bottom: 10px;
+  padding: 0 2px;
 }
 
-.hub-emoji-picker-categories {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+.hub-emoji-picker-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.hub-emoji-picker-categories::-webkit-scrollbar {
-  display: none;
-}
-
-.hub-emoji-picker-category,
 .hub-emoji-picker-clear {
   transition: transform 180ms ease, border-color 180ms ease, color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
 
-.hub-emoji-picker-category {
-  flex: 0 0 auto;
-  min-width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--surface-tab-text);
-  font-size: 0.96rem;
-  opacity: 0.88;
-}
-
 .hub-emoji-picker-clear {
   flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 14px;
+  min-height: 30px;
+  padding: 0 12px;
   border: 1px solid color-mix(in srgb, var(--surface-control-border) 88%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-control-bg) 96%, transparent);
   box-shadow: var(--surface-control-shadow);
   color: var(--surface-tab-text);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .hub-emoji-picker-clear:disabled {
@@ -2730,9 +2697,6 @@ select.prompt-control {
   transform: none;
 }
 
-.hub-emoji-picker-category:hover,
-.hub-emoji-picker-category:focus-visible,
-.hub-emoji-picker-category.active,
 .hub-emoji-picker-clear:hover,
 .hub-emoji-picker-clear:focus-visible {
   transform: translateY(-1px);
@@ -2741,15 +2705,10 @@ select.prompt-control {
   color: var(--surface-tab-active-text);
 }
 
-.hub-emoji-picker-category.active {
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--running) 64%, transparent);
-  opacity: 1;
-}
-
 .hub-emoji-picker-search-wrap {
   position: relative;
   display: block;
-  margin-top: 12px;
+  margin-bottom: 10px;
 }
 
 .hub-emoji-picker-search-icon {
@@ -2776,9 +2735,8 @@ select.prompt-control {
 
 .hub-emoji-picker-results {
   display: grid;
-  gap: 14px;
-  max-height: min(326px, calc(100vh - 176px));
-  margin-top: 12px;
+  gap: 12px;
+  max-height: min(318px, calc(100vh - 178px));
   padding-right: 4px;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -2787,13 +2745,14 @@ select.prompt-control {
 
 .hub-emoji-picker-group {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .hub-emoji-picker-group-label {
   color: var(--text-soft);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .hub-emoji-picker-grid {
@@ -2803,13 +2762,13 @@ select.prompt-control {
 }
 
 .hub-emoji-picker-option {
-  min-height: 36px;
+  min-height: 34px;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   background: transparent;
   color: inherit;
-  font-size: 1.32rem;
+  font-size: 1.22rem;
   line-height: 1;
   transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
@@ -2827,10 +2786,6 @@ select.prompt-control {
   color: var(--muted);
   text-align: center;
   font-size: 0.82rem;
-}
-
-.hub-emoji-picker-disabled {
-  opacity: 0.82;
 }
 
 .hub-setup-profile-text {
@@ -3763,7 +3718,6 @@ legend {
 .shell textarea:focus,
 .shell select:focus,
 .shell button:focus-visible,
-.emoji-option:focus-visible,
 .runtime-option:focus-within {
   outline: 2px solid rgba(10, 132, 255, 0.24);
   outline-offset: 2px;
@@ -3827,7 +3781,7 @@ legend {
 
 .checkbox input,
 .runtime-option input,
-.emoji-option input {
+.hub-emoji-picker input[type="hidden"] {
   width: auto;
   min-height: 0;
   box-shadow: none;
@@ -3985,47 +3939,6 @@ legend {
 .emoji-fieldset {
   display: grid;
   gap: 8px;
-}
-
-.emoji-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px;
-  min-height: 100%;
-  border: 1px solid var(--surface-control-border);
-  border-radius: 14px;
-  background: var(--surface-control-bg);
-}
-
-.emoji-option {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-button-bg);
-  cursor: pointer;
-}
-
-.emoji-option input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.emoji-option span {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.emoji-option:has(input:checked) {
-  border-color: rgba(10, 132, 255, 0.3);
-  background: linear-gradient(155deg, rgba(10, 132, 255, 0.14), rgba(255, 255, 255, 0.96));
-  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.16);
 }
 
 .list {

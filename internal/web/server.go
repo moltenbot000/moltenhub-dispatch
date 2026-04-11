@@ -106,7 +106,6 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		RuntimeOptions:  app.SupportedHubRuntimes(),
 		SelectedRuntime: selectedRuntime,
 		ProfileForm:     defaultProfileForm(state, form),
-		EmojiOptions:    emojiOptions(),
 		Connection:      connectionStatusView(state.Connection),
 		SubActions:      subActionState(state),
 		Onboarding:      currentOnboarding,
@@ -392,7 +391,6 @@ type pageData struct {
 	RuntimeOptions  []app.HubRuntime
 	SelectedRuntime app.HubRuntime
 	ProfileForm     agentProfileForm
-	EmojiOptions    []string
 	Connection      connectionView
 	SubActions      subActionView
 	Onboarding      onboardingView
@@ -466,10 +464,6 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 		form.Emoji = "🤖"
 	}
 	return form
-}
-
-func emojiOptions() []string {
-	return []string{"🤖", "💯", "🛠️", "⚙️", "🚀", "🧠"}
 }
 
 func connectionStatusView(state app.ConnectionState) connectionView {
