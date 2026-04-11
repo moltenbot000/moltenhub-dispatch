@@ -3517,6 +3517,11 @@ p,
   gap: 12px;
 }
 
+.manual-dispatch-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -3632,6 +3637,25 @@ legend {
 .settings-modal button:hover {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--running) 45%, var(--theme-button-border));
+  color: var(--running);
+}
+
+.shell button.dispatch-task-button {
+  min-height: 38px;
+  min-inline-size: 120px;
+  border-radius: 14px;
+  padding: 8px 13px;
+  font-size: 0.77rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-color: rgba(10, 132, 255, 0.16);
+  color: var(--running);
+  background: var(--surface-button-bg);
+  box-shadow: var(--surface-button-shadow);
+}
+
+.shell button.dispatch-task-button:hover {
+  border-color: color-mix(in srgb, var(--running) 36%, var(--border));
   color: var(--running);
 }
 

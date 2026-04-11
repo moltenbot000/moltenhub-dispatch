@@ -69,7 +69,9 @@
             </label>
             <label>Payload<textarea name="payload" rows="7" placeholder='{"task":"Run the fix", "repos":["/tmp/repo"]}' required></textarea></label>
             <label>Timeout Seconds<input name="timeout_seconds" value="300"></label>
-            <button type="submit">Dispatch Task</button>
+            <div class="manual-dispatch-actions">
+              <button type="submit" class="dispatch-task-button prompt-action-button">Dispatch Task</button>
+            </div>
           </form>
         </article>
       </section>

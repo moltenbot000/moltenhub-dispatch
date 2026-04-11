@@ -470,6 +470,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="grid manual-dispatch-grid"`) {
 		t.Fatalf("expected manual dispatch section to render full-width grid class, body=%s", body)
 	}
+	if !strings.Contains(body, `class="manual-dispatch-actions"`) {
+		t.Fatalf("expected manual dispatch submit action wrapper, body=%s", body)
+	}
+	if !strings.Contains(body, `class="dispatch-task-button prompt-action-button"`) {
+		t.Fatalf("expected dispatch task button to use action button class, body=%s", body)
+	}
 	if !strings.Contains(body, `id="sub-actions-notice" class="panel" hidden`) {
 		t.Fatalf("expected sub-action notice to be hidden when bound and connected, body=%s", body)
 	}
@@ -580,6 +586,12 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `grid-template-columns: minmax(0, 1fr);`) {
 		t.Fatalf("expected manual dispatch section to force a single full-width column, body=%s", body)
+	}
+	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
+		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
+	}
+	if !strings.Contains(body, `.shell button.dispatch-task-button {`) {
+		t.Fatalf("expected dispatch task button style override for action button look, body=%s", body)
 	}
 	if !strings.Contains(body, `display: none !important;`) {
 		t.Fatalf("expected explicit hidden display override, body=%s", body)
