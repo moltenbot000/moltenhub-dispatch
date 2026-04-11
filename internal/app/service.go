@@ -145,7 +145,7 @@ func (s *Service) syncHubClient(state AppState) {
 }
 
 func (s *Service) setHubBaseURL(baseURL string) {
-	baseURL = strings.TrimSpace(baseURL)
+	baseURL = NormalizeHubEndpointURL(baseURL)
 	if baseURL == "" {
 		return
 	}
@@ -155,6 +155,7 @@ func (s *Service) setHubBaseURL(baseURL string) {
 }
 
 func (s *Service) setRuntimeEndpoints(endpoints hub.RuntimeEndpoints) {
+	endpoints = sanitizeRuntimeEndpoints(endpoints)
 	if setter, ok := s.hub.(runtimeEndpointSetter); ok {
 		setter.SetRuntimeEndpoints(endpoints)
 	}
@@ -187,10 +188,34 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if result.AgentToken == "" {
 		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing agent token"))
 	}
-	result.APIBase = coalesceTrimmed(strings.TrimSpace(result.APIBase), runtimeAPIBaseFromBind(result), defaultAPIBaseForHub(runtime.HubURL))
+	if rawAPIBase := strings.TrimSpace(result.APIBase); rawAPIBase != "" && NormalizeHubEndpointURL(rawAPIBase) == "" {
+		return WrapOnboardingError(OnboardingStepBind, fmt.Errorf("bind response returned unsupported api_base %q", rawAPIBase))
+	}
+	runtimeEndpoints := runtimeEndpointsFromBind(result)
+	if invalid := invalidRuntimeEndpoints(runtimeEndpoints); len(invalid) > 0 {
+		return WrapOnboardingError(OnboardingStepBind, fmt.Errorf("bind response returned unsupported runtime endpoint(s): %s", strings.Join(invalid, ", ")))
+	}
+	runtimeEndpoints = sanitizeRuntimeEndpoints(runtimeEndpoints)
+	result.APIBase = coalesceTrimmed(
+		NormalizeHubEndpointURL(strings.TrimSpace(result.APIBase)),
+		NormalizeHubEndpointURL(runtimeAPIBaseFromSession(Session{
+			APIBase:         strings.TrimSpace(result.APIBase),
+			BaseURL:         strings.TrimSpace(result.APIBase),
+			ManifestURL:     runtimeEndpoints.ManifestURL,
+			MetadataURL:     runtimeEndpoints.MetadataURL,
+			Capabilities:    runtimeEndpoints.CapabilitiesURL,
+			OpenClawPullURL: runtimeEndpoints.OpenClawPullURL,
+			OpenClawPushURL: runtimeEndpoints.OpenClawPushURL,
+			OfflineURL:      runtimeEndpoints.OpenClawOfflineURL,
+		})),
+		NormalizeHubEndpointURL(defaultAPIBaseForHub(runtime.HubURL)),
+	)
+	if result.APIBase == "" {
+		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing supported api_base"))
+	}
 	result.Handle = strings.TrimSpace(result.Handle)
 	s.setHubBaseURL(result.APIBase)
-	s.setRuntimeEndpoints(runtimeEndpointsFromBind(result))
+	s.setRuntimeEndpoints(runtimeEndpoints)
 	if strings.TrimSpace(result.Handle) != "" {
 		agentProfile.Handle = strings.TrimSpace(result.Handle)
 	}
@@ -212,12 +237,12 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			DisplayName:     agentProfile.DisplayName,
 			Emoji:           agentProfile.Emoji,
 			ProfileBio:      agentProfile.ProfileMarkdown,
-			ManifestURL:     result.Endpoints.Manifest,
-			MetadataURL:     result.Endpoints.Metadata,
-			Capabilities:    result.Endpoints.Capabilities,
-			OpenClawPullURL: result.Endpoints.OpenClawPull,
-			OpenClawPushURL: result.Endpoints.OpenClawPush,
-			OfflineURL:      result.Endpoints.Offline,
+			ManifestURL:     runtimeEndpoints.ManifestURL,
+			MetadataURL:     runtimeEndpoints.MetadataURL,
+			Capabilities:    runtimeEndpoints.CapabilitiesURL,
+			OpenClawPullURL: runtimeEndpoints.OpenClawPullURL,
+			OpenClawPushURL: runtimeEndpoints.OpenClawPushURL,
+			OfflineURL:      runtimeEndpoints.OpenClawOfflineURL,
 			OfflineMarked:   false,
 		}
 		connectionBaseURL, connectionDomain := hubConnectionTarget(result.APIBase, runtime.HubURL)
@@ -1475,6 +1500,44 @@ func runtimeEndpointsFromSession(session Session) hub.RuntimeEndpoints {
 	}
 }
 
+func sanitizeRuntimeEndpoints(endpoints hub.RuntimeEndpoints) hub.RuntimeEndpoints {
+	return hub.RuntimeEndpoints{
+		ManifestURL:        NormalizeHubEndpointURL(endpoints.ManifestURL),
+		CapabilitiesURL:    NormalizeHubEndpointURL(endpoints.CapabilitiesURL),
+		MetadataURL:        NormalizeHubEndpointURL(endpoints.MetadataURL),
+		OpenClawPullURL:    NormalizeHubEndpointURL(endpoints.OpenClawPullURL),
+		OpenClawPushURL:    NormalizeHubEndpointURL(endpoints.OpenClawPushURL),
+		OpenClawOfflineURL: NormalizeHubEndpointURL(endpoints.OpenClawOfflineURL),
+	}
+}
+
+func invalidRuntimeEndpoints(endpoints hub.RuntimeEndpoints) []string {
+	type endpoint struct {
+		name  string
+		value string
+	}
+	fields := []endpoint{
+		{name: "manifest", value: endpoints.ManifestURL},
+		{name: "capabilities", value: endpoints.CapabilitiesURL},
+		{name: "metadata", value: endpoints.MetadataURL},
+		{name: "openclaw_pull", value: endpoints.OpenClawPullURL},
+		{name: "openclaw_push", value: endpoints.OpenClawPushURL},
+		{name: "openclaw_offline", value: endpoints.OpenClawOfflineURL},
+	}
+
+	invalid := make([]string, 0, len(fields))
+	for _, field := range fields {
+		value := strings.TrimSpace(field.value)
+		if value == "" {
+			continue
+		}
+		if NormalizeHubEndpointURL(value) == "" {
+			invalid = append(invalid, fmt.Sprintf("%s=%q", field.name, value))
+		}
+	}
+	return invalid
+}
+
 func newSkillRequestMessage(timestamp time.Time, skillName string, payload any, payloadFormat, requestID, replyTo string) hub.OpenClawMessage {
 	message := hub.OpenClawMessage{
 		Protocol:      openClawHTTPProtocol,
@@ -1587,9 +1650,9 @@ func sleepWithContext(ctx context.Context, wait time.Duration) bool {
 }
 
 func hubConnectionTarget(apiBase, fallback string) (string, string) {
-	baseURL := strings.TrimSpace(apiBase)
+	baseURL := NormalizeHubEndpointURL(apiBase)
 	if baseURL == "" {
-		baseURL = strings.TrimSpace(fallback)
+		baseURL = NormalizeHubEndpointURL(fallback)
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	if baseURL == "" {

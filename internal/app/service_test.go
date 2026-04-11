@@ -444,6 +444,37 @@ func TestBindAndRegisterDefaultsAPIBaseToVersionedHubEndpoint(t *testing.T) {
 	}
 }
 
+func TestBindAndRegisterRejectsUnsupportedAPIBase(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentToken: "agent-token",
+		AgentUUID:  "agent-uuid",
+		AgentURI:   "molten://dispatch/agent",
+		Handle:     "dispatch-agent",
+		APIBase:    "http://127.0.0.1:37581/v1",
+	}
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		BindToken: "bind-token",
+		Handle:    "dispatch-agent",
+	})
+	if err == nil {
+		t.Fatal("expected bind to fail for unsupported api_base")
+	}
+	if !strings.Contains(err.Error(), "unsupported api_base") {
+		t.Fatalf("expected unsupported api_base error, got %v", err)
+	}
+	if len(fake.updateMetadataCalls) != 0 {
+		t.Fatalf("expected metadata update to be skipped, got %d calls", len(fake.updateMetadataCalls))
+	}
+	state := service.store.Snapshot()
+	if state.Session.AgentToken != "" {
+		t.Fatalf("expected session token to stay empty, got %q", state.Session.AgentToken)
+	}
+}
+
 func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	t.Parallel()
 

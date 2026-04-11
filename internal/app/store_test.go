@@ -116,3 +116,49 @@ func TestNewStoreNormalizesLegacySessionAliases(t *testing.T) {
 		t.Fatalf("base_url = %q, want %q", got, want)
 	}
 }
+
+func TestNewStoreRejectsNonHubSessionEndpoints(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "settings": {
+    "hub_region": "na",
+    "hub_url": "http://127.0.0.1:37581"
+  },
+  "session": {
+    "base_url": "http://127.0.0.1:37581/v1",
+    "metadata_url": "http://127.0.0.1:37581/v1/agents/me/metadata"
+  },
+  "connection": {
+    "base_url": "http://127.0.0.1:37581/v1",
+    "domain": "127.0.0.1:37581"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	state := store.Snapshot()
+	if got, want := state.Settings.HubURL, "https://na.hub.molten.bot"; got != want {
+		t.Fatalf("hub_url = %q, want %q", got, want)
+	}
+	if state.Session.APIBase != "" {
+		t.Fatalf("expected invalid api_base to be cleared, got %q", state.Session.APIBase)
+	}
+	if state.Session.MetadataURL != "" {
+		t.Fatalf("expected invalid metadata_url to be cleared, got %q", state.Session.MetadataURL)
+	}
+	if got, want := state.Connection.BaseURL, "https://na.hub.molten.bot"; got != want {
+		t.Fatalf("connection base_url = %q, want %q", got, want)
+	}
+	if got, want := state.Connection.Domain, "na.hub.molten.bot"; got != want {
+		t.Fatalf("connection domain = %q, want %q", got, want)
+	}
+}
