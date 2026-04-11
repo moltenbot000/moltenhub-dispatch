@@ -857,8 +857,8 @@
         }
       };
 
-      const redirectWithMessage = (level, message) => {
-        window.location.assign(`/?level=${encodeURIComponent(level)}&message=${encodeURIComponent(message)}`);
+      const redirectToConsole = () => {
+        window.location.assign("/");
       };
 
       if (bindForm && !bound) {
@@ -909,7 +909,7 @@
               }
               if (body && body.bound) {
                 redirected = true;
-                redirectWithMessage("error", message);
+                redirectToConsole();
               }
               return;
             }
@@ -917,7 +917,7 @@
               renderOnboarding(body.onboarding);
             }
             redirected = true;
-            redirectWithMessage("info", String(body.message || "Agent bound and profile registered."));
+            redirectToConsole();
           } catch (error) {
             const message = error instanceof Error ? error.message : "Unable to complete onboarding request.";
             renderOnboarding({

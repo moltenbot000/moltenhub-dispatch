@@ -98,6 +98,36 @@ func (s *Service) Snapshot() AppState {
 	return s.store.Snapshot()
 }
 
+func (s *Service) SetFlash(level, message string) error {
+	level = normalizedFlashLevel(level)
+	message = strings.TrimSpace(message)
+	return s.store.Update(func(state *AppState) error {
+		if message == "" {
+			state.Flash = FlashMessage{}
+			return nil
+		}
+		state.Flash = FlashMessage{
+			Level:   level,
+			Message: message,
+		}
+		return nil
+	})
+}
+
+func (s *Service) ConsumeFlash() (FlashMessage, error) {
+	snapshot := s.store.Snapshot()
+	if strings.TrimSpace(snapshot.Flash.Message) == "" {
+		return FlashMessage{}, nil
+	}
+	var consumed FlashMessage
+	err := s.store.Update(func(state *AppState) error {
+		consumed = state.Flash
+		state.Flash = FlashMessage{}
+		return nil
+	})
+	return consumed, err
+}
+
 func (s *Service) configureHubClient(state AppState) {
 	baseURL := runtimeAPIBaseFromSession(state.Session)
 	if baseURL == "" {
@@ -836,6 +866,13 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 
 func boolPtr(value bool) *bool {
 	return &value
+}
+
+func normalizedFlashLevel(level string) string {
+	if strings.EqualFold(strings.TrimSpace(level), "error") {
+		return "error"
+	}
+	return "info"
 }
 
 func (s *Service) updateAgentProfile(ctx context.Context, token string, profile AgentProfile) error {

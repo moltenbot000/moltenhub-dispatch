@@ -87,6 +87,11 @@ type RuntimeEvent struct {
 	LogPath string    `json:"log_path"`
 }
 
+type FlashMessage struct {
+	Level   string `json:"level"`
+	Message string `json:"message"`
+}
+
 type PendingTask struct {
 	ID                string         `json:"id"`
 	ParentRequestID   string         `json:"parent_request_id"`
@@ -133,6 +138,7 @@ type AppState struct {
 	Settings        Settings         `json:"settings"`
 	Session         Session          `json:"session"`
 	Connection      ConnectionState  `json:"connection"`
+	Flash           FlashMessage     `json:"flash"`
 	ConnectedAgents []ConnectedAgent `json:"connected_agents"`
 	PendingTasks    []PendingTask    `json:"pending_tasks"`
 	FollowUpTasks   []FollowUpTask   `json:"follow_up_tasks"`

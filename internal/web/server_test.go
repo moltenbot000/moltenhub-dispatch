@@ -20,6 +20,7 @@ type stubService struct {
 	bindErr           error
 	updateProfileErr  error
 	updateSettingsErr error
+	setFlashErr       error
 	bindStateOnError  bool
 	lastBindProfile   app.BindProfile
 }
@@ -77,10 +78,32 @@ func (s *stubService) UpdateSettings(mutator func(*app.Settings) error) error {
 	return mutator(&s.state.Settings)
 }
 
+func (s *stubService) SetFlash(level, message string) error {
+	if s.setFlashErr != nil {
+		return s.setFlashErr
+	}
+	level = strings.ToLower(strings.TrimSpace(level))
+	if level != "error" {
+		level = "info"
+	}
+	s.state.Flash = app.FlashMessage{
+		Level:   level,
+		Message: strings.TrimSpace(message),
+	}
+	return nil
+}
+
+func (s *stubService) ConsumeFlash() (app.FlashMessage, error) {
+	flash := s.state.Flash
+	s.state.Flash = app.FlashMessage{}
+	return flash, nil
+}
+
 func TestHandleBindRedirectsOnFailure(t *testing.T) {
 	t.Parallel()
 
-	server, err := New(&stubService{bindErr: errors.New("bind failed")})
+	stub := &stubService{bindErr: errors.New("bind failed")}
+	server, err := New(stub)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}
@@ -94,12 +117,11 @@ func TestHandleBindRedirectsOnFailure(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("expected redirect response, got %d", rec.Code)
 	}
-	location := rec.Header().Get("Location")
-	if !strings.Contains(location, "level=error") {
-		t.Fatalf("expected error redirect level, location=%q", location)
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("expected root redirect location, got %q", got)
 	}
-	if !strings.Contains(location, "bind+failed") {
-		t.Fatalf("expected bind failure message in redirect location, location=%q", location)
+	if got := stub.state.Flash; got.Level != "error" || got.Message != "bind failed" {
+		t.Fatalf("unexpected flash after bind failure: %#v", got)
 	}
 }
 
@@ -276,13 +298,17 @@ func TestHandleIndexRendersAutoDismissingFlash(t *testing.T) {
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
+			Flash: app.FlashMessage{
+				Level:   "info",
+				Message: "Settings updated.",
+			},
 		},
 	})
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/?level=info&message=Settings+updated.", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
 	server.Handler().ServeHTTP(rec, req)
@@ -299,6 +325,67 @@ func TestHandleIndexRendersAutoDismissingFlash(t *testing.T) {
 	}
 	if !strings.Contains(body, `window.setTimeout(() => {`) || !strings.Contains(body, `: 12000;`) {
 		t.Fatalf("expected flash fallback timeout to 12000ms, body=%s", body)
+	}
+}
+
+func TestHandleIndexConsumesFlashOnlyOnce(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Flash: app.FlashMessage{
+				Level:   "error",
+				Message: "hub API 401 unauthorized: missing or invalid bearer token",
+			},
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	firstReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	firstRec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(firstRec, firstReq)
+
+	firstBody := firstRec.Body.String()
+	if !strings.Contains(firstBody, "missing or invalid bearer token") {
+		t.Fatalf("expected first render to include flash message, body=%s", firstBody)
+	}
+
+	secondReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	secondRec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(secondRec, secondReq)
+
+	secondBody := secondRec.Body.String()
+	if strings.Contains(secondBody, "missing or invalid bearer token") {
+		t.Fatalf("did not expect consumed flash on second render, body=%s", secondBody)
+	}
+}
+
+func TestHandleIndexIgnoresFlashQueryParams(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?level=error&message=hub+API+401+unauthorized%3A+missing+or+invalid+bearer+token", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "missing or invalid bearer token") {
+		t.Fatalf("did not expect flash query params to render, body=%s", body)
+	}
+	if strings.Contains(body, `class="flash`) {
+		t.Fatalf("did not expect flash banner without app-state flash, body=%s", body)
 	}
 }
 
@@ -762,11 +849,8 @@ func TestHandleBindShowsEditProfileAfterSessionBecomesBound(t *testing.T) {
 	}
 
 	location := rec.Header().Get("Location")
-	if !strings.Contains(location, "level=error") {
-		t.Fatalf("expected error redirect level, location=%q", location)
-	}
-	if !strings.Contains(location, "agent+bound%2C+but+profile+registration+failed") {
-		t.Fatalf("expected surfaced bind error in redirect, location=%q", location)
+	if location != "/" {
+		t.Fatalf("expected root redirect location, got %q", location)
 	}
 
 	followReq := httptest.NewRequest(http.MethodGet, location, nil)
@@ -815,12 +899,8 @@ func TestHandleProfileRedirectsOnFailure(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("expected redirect response, got %d", rec.Code)
 	}
-	location := rec.Header().Get("Location")
-	if !strings.Contains(location, "level=error") {
-		t.Fatalf("expected error redirect level, location=%q", location)
-	}
-	if !strings.Contains(location, "profile+update+failed") {
-		t.Fatalf("expected update failure message in redirect location, location=%q", location)
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("expected root redirect location, got %q", got)
 	}
 }
 

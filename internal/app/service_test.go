@@ -1800,6 +1800,54 @@ func TestConsumeRealtimeSessionMarksWebsocketConnectivityAndAcksDeliveries(t *te
 	}
 }
 
+func TestSetAndConsumeFlashState(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+
+	if err := service.SetFlash("error", "hub API 401 unauthorized: missing or invalid bearer token"); err != nil {
+		t.Fatalf("set flash: %v", err)
+	}
+
+	snapshot := service.Snapshot()
+	if got := snapshot.Flash.Level; got != "error" {
+		t.Fatalf("flash level = %q, want error", got)
+	}
+	if got := snapshot.Flash.Message; got != "hub API 401 unauthorized: missing or invalid bearer token" {
+		t.Fatalf("unexpected flash message: %q", got)
+	}
+
+	flash, err := service.ConsumeFlash()
+	if err != nil {
+		t.Fatalf("consume flash: %v", err)
+	}
+	if flash.Level != "error" || flash.Message == "" {
+		t.Fatalf("unexpected consumed flash: %#v", flash)
+	}
+
+	if got := service.Snapshot().Flash; got.Message != "" || got.Level != "" {
+		t.Fatalf("expected consumed flash to be cleared, got %#v", got)
+	}
+}
+
+func TestSetFlashNormalizesInfoLevel(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+
+	if err := service.SetFlash("warn", "settings updated"); err != nil {
+		t.Fatalf("set flash: %v", err)
+	}
+
+	flash := service.Snapshot().Flash
+	if flash.Level != "info" {
+		t.Fatalf("expected info level fallback, got %#v", flash)
+	}
+	if flash.Message != "settings updated" {
+		t.Fatalf("unexpected flash message: %#v", flash)
+	}
+}
+
 func newTestService(t *testing.T) (*Service, *fakeHubClient) {
 	t.Helper()
 

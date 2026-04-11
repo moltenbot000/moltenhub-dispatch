@@ -254,6 +254,7 @@ func normalizeStateAliases(state *AppState) {
 		return
 	}
 	normalizeSessionAliases(&state.Session)
+	normalizeFlash(&state.Flash)
 }
 
 func normalizeSessionAliases(session *Session) {
@@ -264,6 +265,23 @@ func normalizeSessionAliases(session *Session) {
 	session.BindToken = coalesceTrimmed(session.BindToken, session.AgentToken)
 	session.APIBase = coalesceTrimmed(session.APIBase, session.BaseURL)
 	session.BaseURL = coalesceTrimmed(session.BaseURL, session.APIBase)
+}
+
+func normalizeFlash(flash *FlashMessage) {
+	if flash == nil {
+		return
+	}
+	flash.Level = strings.ToLower(strings.TrimSpace(flash.Level))
+	flash.Message = strings.TrimSpace(flash.Message)
+	switch flash.Level {
+	case "error":
+	default:
+		if flash.Message == "" {
+			flash.Level = ""
+		} else {
+			flash.Level = "info"
+		}
+	}
 }
 
 func cloneState(state AppState) AppState {

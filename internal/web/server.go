@@ -25,6 +25,8 @@ type service interface {
 	AddConnectedAgent(agent app.ConnectedAgent) error
 	DispatchFromUI(ctx context.Context, req app.DispatchRequest) (app.PendingTask, error)
 	UpdateSettings(mutator func(*app.Settings) error) error
+	SetFlash(level, message string) error
+	ConsumeFlash() (app.FlashMessage, error)
 }
 
 type Server struct {
@@ -100,6 +102,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash string, isError bool, form agentProfileForm, onboarding *onboardingView) {
+	if strings.TrimSpace(flash) == "" {
+		if pendingFlash, err := s.service.ConsumeFlash(); err == nil {
+			flash = pendingFlash.Message
+			isError = strings.EqualFold(pendingFlash.Level, "error")
+		}
+	}
 	state := s.service.Snapshot()
 	selectedRuntime, err := app.ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
 	if err != nil {
@@ -119,10 +127,6 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		Connection:      connectionStatusView(state),
 		SubActions:      subActionState(state),
 		Onboarding:      currentOnboarding,
-	}
-	if view.Flash == "" {
-		view.Flash = r.URL.Query().Get("message")
-		view.IsError = r.URL.Query().Get("level") == "error"
 	}
 	var rendered bytes.Buffer
 	if err := s.templates.ExecuteTemplate(&rendered, "index.html", view); err != nil {
@@ -236,6 +240,9 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	state := s.service.Snapshot()
 	if err != nil {
 		onboarding := onboardingViewFromError(state, err)
+		if strings.TrimSpace(state.Session.AgentToken) != "" {
+			_ = s.service.SetFlash("error", err.Error())
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":         false,
 			"error":      err.Error(),
@@ -246,6 +253,7 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	onboarding := completedOnboardingView(state)
+	_ = s.service.SetFlash("info", "Agent bound and profile registered.")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
 		"message":    "Agent bound and profile registered.",
@@ -377,8 +385,11 @@ func (s *Server) applyRuntimeSelection(runtimeID string) error {
 }
 
 func (s *Server) redirectWithMessage(w http.ResponseWriter, r *http.Request, level, message string) {
-	target := "/?level=" + url.QueryEscape(level) + "&message=" + url.QueryEscape(message)
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	if err := s.service.SetFlash(level, message); err != nil {
+		http.Error(w, "persist flash message: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func parseSkills(raw string) []app.Skill {
