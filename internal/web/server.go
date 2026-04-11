@@ -94,7 +94,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := s.service.Snapshot()
-	view := connectionStatusView(state.Connection)
+	view := connectionStatusView(state)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(view)
 }
@@ -116,7 +116,7 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		RuntimeOptions:  app.SupportedHubRuntimes(),
 		SelectedRuntime: selectedRuntime,
 		ProfileForm:     defaultProfileForm(state, form),
-		Connection:      connectionStatusView(state.Connection),
+		Connection:      connectionStatusView(state),
 		SubActions:      subActionState(state),
 		Onboarding:      currentOnboarding,
 	}
@@ -427,11 +427,16 @@ type pageData struct {
 }
 
 type connectionView struct {
-	Status      string `json:"status"`
-	Transport   string `json:"transport"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-	Error       string `json:"error,omitempty"`
+	Status       string `json:"status"`
+	Transport    string `json:"transport"`
+	Label        string `json:"label"`
+	Description  string `json:"description"`
+	Error        string `json:"error,omitempty"`
+	HubConnected bool   `json:"hub_connected"`
+	HubTransport string `json:"hub_transport,omitempty"`
+	HubBaseURL   string `json:"hub_base_url,omitempty"`
+	HubDomain    string `json:"hub_domain,omitempty"`
+	HubDetail    string `json:"hub_detail,omitempty"`
 }
 
 type subActionView struct {
@@ -496,7 +501,8 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 	return form
 }
 
-func connectionStatusView(state app.ConnectionState) connectionView {
+func connectionStatusView(appState app.AppState) connectionView {
+	state := appState.Connection
 	status := strings.TrimSpace(state.Status)
 	if status == "" {
 		status = app.ConnectionStatusDisconnected
@@ -505,27 +511,85 @@ func connectionStatusView(state app.ConnectionState) connectionView {
 	if transport == "" {
 		transport = app.ConnectionTransportOffline
 	}
+	baseURL := strings.TrimSpace(state.BaseURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(appState.Session.APIBase)
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(appState.Settings.HubURL)
+	}
+	domain := strings.TrimSpace(state.Domain)
+	if domain == "" {
+		if parsed, err := url.Parse(baseURL); err == nil {
+			domain = strings.TrimSpace(parsed.Host)
+		}
+	}
+	detail := strings.TrimSpace(state.Detail)
+	if detail == "" {
+		detail = strings.TrimSpace(state.Error)
+	}
+	target := domain
+	if target == "" {
+		target = baseURL
+	}
 
 	view := connectionView{
-		Status:    status,
-		Transport: transport,
-		Error:     strings.TrimSpace(state.Error),
+		Status:       status,
+		Transport:    transport,
+		Error:        strings.TrimSpace(state.Error),
+		HubConnected: status == app.ConnectionStatusConnected,
+		HubTransport: transport,
+		HubBaseURL:   baseURL,
+		HubDomain:    domain,
+		HubDetail:    detail,
 	}
 	switch {
-	case status == app.ConnectionStatusConnected && transport == app.ConnectionTransportWebSocket:
+	case transport == app.ConnectionTransportWebSocket:
 		view.Label = "WS Connected"
-		view.Description = "Connected to the hub over WebSocket."
-	case status == app.ConnectionStatusConnected:
+		view.Description = fmt.Sprintf("Connected via WebSocket to %s", fallbackTarget(target))
+	case transport == app.ConnectionTransportHTTPLong || transport == app.ConnectionTransportHTTP:
 		view.Label = "HTTP Connected"
-		view.Description = "Connected to the hub over HTTP polling."
-	case view.Error != "":
+		view.Description = fmt.Sprintf("Connected via HTTP long polling to %s", fallbackTarget(target))
+	case status == app.ConnectionStatusConnected:
+		view.Label = "Connected"
+		view.Description = fmt.Sprintf("Connected to %s (transport pending)", fallbackTarget(target))
+	case transport == app.ConnectionTransportReachable:
+		view.Label = "Connecting"
+		view.Description = firstNonEmpty(detail, fmt.Sprintf("Hub endpoint is live at %s. Connecting...", fallbackTarget(target)))
+	case transport == app.ConnectionTransportRetrying:
+		view.Label = "Retrying"
+		view.Description = firstNonEmpty(detail, fmt.Sprintf("Hub endpoint is waking up at %s. Retrying ping every 12s.", fallbackTarget(target)))
+	case target != "":
+		view.Label = "Disconnected"
+		view.Description = firstNonEmpty(detail, fmt.Sprintf("Disconnected from %s", target))
+	case view.Error != "" || detail != "":
 		view.Label = "Error"
-		view.Description = view.Error
+		view.Description = firstNonEmpty(detail, view.Error)
+	case strings.TrimSpace(appState.Session.AgentToken) != "":
+		view.Label = "Disconnected"
+		view.Description = "Configured locally. Restart runtime to connect."
 	default:
 		view.Label = "Offline"
-		view.Description = "Not currently connected to the hub."
+		view.Description = "Connect to Molten Hub"
 	}
 	return view
+}
+
+func fallbackTarget(target string) string {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "hub"
+	}
+	return target
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func subActionState(state app.AppState) subActionView {

@@ -25,7 +25,7 @@
         >
           <span
             id="hub-conn-dot"
-            class="dot{{if and (eq .Connection.Status "connected") (eq .Connection.Transport "ws")}} online{{else if and (eq .Connection.Status "connected") (or (eq .Connection.Transport "http") (eq .Connection.Transport "http_long_poll"))}} http{{else}} disconnected{{end}}"
+            class="dot{{if or (eq .Connection.Transport "ws") (eq .Connection.Transport "connected")}} online{{else if or (eq .Connection.Transport "http") (eq .Connection.Transport "http_long_poll")}} http{{else}} disconnected{{end}}"
           ></span>
           <span id="hub-conn-text" class="status-tooltip">Molten Hub: {{.Connection.Label}} - {{.Connection.Description}}</span>
         </div>
@@ -934,11 +934,14 @@
         });
       }
 
+      const HUB_LOGIN_URL = "https://app.molten.bot/signin?target=hub";
+      const HUB_DASHBOARD_URL = "https://app.molten.bot/hub";
+
       const syncSubActions = (state) => {
         if (!subActions || !subActionsNotice) {
           return;
         }
-        const connected = bound && state.status === "connected";
+        const connected = bound && (state.status === "connected" || state.transport === "ws" || state.transport === "http_long_poll" || state.transport === "connected");
         subActions.hidden = !connected;
         subActionsNotice.hidden = connected;
         if (!connected) {
@@ -952,23 +955,23 @@
         }
       };
 
-      const applyHubDotMode = (status, transport) => {
+      const applyHubDotMode = (mode) => {
         if (!hubConnDot) {
           return;
         }
         hubConnDot.classList.remove("online", "http", "disconnected");
-        if (status === "connected" && transport === "ws") {
+        if (mode === "ws" || mode === "connected") {
           hubConnDot.classList.add("online");
           return;
         }
-        if (status === "connected" && (transport === "http" || transport === "http_long_poll")) {
+        if (mode === "http_long_poll" || mode === "http") {
           hubConnDot.classList.add("http");
           return;
         }
         hubConnDot.classList.add("disconnected");
       };
 
-      const setHubConnectionActionable = (actionable, tone) => {
+      const setHubConnectionActionable = (actionable, tone, targetURL = "") => {
         if (!hubConnItem) {
           return;
         }
@@ -976,26 +979,97 @@
         hubConnItem.classList.toggle("status-item-action-online", actionable && tone === "online");
         hubConnItem.classList.toggle("status-item-action-offline", actionable && tone === "offline");
         hubConnItem.dataset.actionable = actionable ? "true" : "false";
+        hubConnItem.dataset.href = actionable ? targetURL : "";
       };
 
-      const applyState = (state) => {
+      const setHubConnection = (mode, text) => {
         if (!hubConnItem || !hubConnText) {
           return;
         }
-        const status = state.status || "disconnected";
-        const transport = state.transport || "offline";
-        const labelText = state.label || (status === "connected" ? "Connected" : "Offline");
-        const descriptionText = state.description || "Not currently connected to the hub.";
-        const message = `Molten Hub: ${labelText} - ${descriptionText}`;
-        hubConnItem.dataset.status = status;
-        hubConnItem.dataset.transport = transport;
+        const connected = mode === "ws" || mode === "http_long_poll" || mode === "connected";
+        const actionable = connected || mode === "disconnected";
+        const actionTone = connected ? "online" : (mode === "disconnected" ? "offline" : "");
+        const targetURL = connected || bound ? HUB_DASHBOARD_URL : HUB_LOGIN_URL;
+        let messageText = String(text || "").trim();
+        if (mode === "disconnected" && !messageText) {
+          messageText = bound
+            ? "Configured locally. Restart runtime to connect."
+            : "Connect to Molten Hub";
+        }
+        const message = `Molten Hub: ${messageText}`;
+        hubConnItem.dataset.status = connected ? "connected" : "disconnected";
+        hubConnItem.dataset.transport = mode || "offline";
         hubConnItem.title = message;
         hubConnItem.setAttribute("aria-label", message);
         hubConnText.textContent = message;
-        applyHubDotMode(status, transport);
-        const actionable = status === "connected" || status === "disconnected";
-        setHubConnectionActionable(actionable, status === "connected" ? "online" : "offline");
-        syncSubActions({ status, transport });
+        applyHubDotMode(mode);
+        setHubConnectionActionable(actionable, actionTone, targetURL);
+        syncSubActions({
+          status: connected ? "connected" : "disconnected",
+          transport: mode || "offline",
+        });
+      };
+
+      const renderHubConnection = (state) => {
+        if (!state || typeof state !== "object") {
+          setHubConnection("disconnected", "Hub status unavailable");
+          return;
+        }
+        const status = String(state.status || "").trim();
+        const transport = String(state.hub_transport || state.transport || "").trim() || "offline";
+        const hubConnected = Boolean(state.hub_connected) || status === "connected";
+        const domain = String(state.hub_domain || "").trim();
+        const baseURL = String(state.hub_base_url || "").trim();
+        const detail = String(state.hub_detail || state.description || state.error || "").trim();
+        const target = domain || baseURL || "hub";
+
+        if (transport === "ws") {
+          setHubConnection("ws", `Connected via WebSocket to ${target}`);
+          return;
+        }
+        if (transport === "http_long_poll" || transport === "http") {
+          setHubConnection("http_long_poll", `Connected via HTTP long polling to ${target}`);
+          return;
+        }
+        if (hubConnected) {
+          setHubConnection("connected", `Connected to ${target} (transport pending)`);
+          return;
+        }
+        if (transport === "reachable") {
+          setHubConnection("reachable", detail || `Hub endpoint is live at ${target}. Connecting...`);
+          return;
+        }
+        if (transport === "retrying") {
+          setHubConnection("retrying", detail || `Hub endpoint is waking up at ${target}. Retrying ping every 12s.`);
+          return;
+        }
+        if (domain || baseURL) {
+          setHubConnection("disconnected", detail || `Disconnected from ${target}`);
+          return;
+        }
+        if (bound) {
+          setHubConnection("disconnected", "Configured locally. Restart runtime to connect.");
+          return;
+        }
+        setHubConnection("disconnected", "Connect to Molten Hub");
+      };
+
+      const maybeOpenHubConnectPage = (event) => {
+        if (!hubConnItem || hubConnItem.dataset.actionable !== "true") {
+          return;
+        }
+        const href = String(hubConnItem.dataset.href || "").trim();
+        if (!href) {
+          return;
+        }
+        if (event) {
+          event.preventDefault();
+        }
+        if (typeof window.open === "function") {
+          window.open(href, "_blank", "noopener,noreferrer");
+          return;
+        }
+        window.location.assign(href);
       };
 
       const refreshState = async () => {
@@ -1004,16 +1078,21 @@
           if (!response.ok) {
             throw new Error(`status request failed with ${response.status}`);
           }
-          applyState(await response.json());
+          renderHubConnection(await response.json());
         } catch (error) {
-          applyState({
-            status: "disconnected",
-            transport: "offline",
-            label: "Offline",
-            description: error instanceof Error ? error.message : "Unable to refresh hub status.",
-          });
+          const message = error instanceof Error ? error.message : "Unable to refresh hub status.";
+          setHubConnection("disconnected", message);
         }
       };
+
+      if (hubConnItem) {
+        hubConnItem.addEventListener("click", maybeOpenHubConnectPage);
+        hubConnItem.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            maybeOpenHubConnectPage(event);
+          }
+        });
+      }
 
       if (shell && hubConnItem && hubConnText && subActions && subActionsNotice) {
         refreshState();

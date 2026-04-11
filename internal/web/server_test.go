@@ -849,9 +849,11 @@ func TestHandleStatusReturnsConnectionView(t *testing.T) {
 	}
 
 	var view struct {
-		Status    string `json:"status"`
-		Transport string `json:"transport"`
-		Label     string `json:"label"`
+		Status       string `json:"status"`
+		Transport    string `json:"transport"`
+		Label        string `json:"label"`
+		HubConnected bool   `json:"hub_connected"`
+		HubTransport string `json:"hub_transport"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
 		t.Fatalf("decode status response: %v", err)
@@ -864,6 +866,12 @@ func TestHandleStatusReturnsConnectionView(t *testing.T) {
 	}
 	if view.Label != "HTTP Connected" {
 		t.Fatalf("unexpected label: %#v", view)
+	}
+	if !view.HubConnected {
+		t.Fatalf("expected hub_connected=true, got %#v", view)
+	}
+	if view.HubTransport != app.ConnectionTransportHTTP {
+		t.Fatalf("unexpected hub transport: %#v", view)
 	}
 }
 
@@ -897,6 +905,7 @@ func TestHandleStatusReturnsErrorConnectionView(t *testing.T) {
 		Transport   string `json:"transport"`
 		Label       string `json:"label"`
 		Description string `json:"description"`
+		HubDetail   string `json:"hub_detail"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
 		t.Fatalf("decode status response: %v", err)
@@ -912,6 +921,56 @@ func TestHandleStatusReturnsErrorConnectionView(t *testing.T) {
 	}
 	if view.Description != "status request failed with 503" {
 		t.Fatalf("unexpected description: %#v", view)
+	}
+	if view.HubDetail != "status request failed with 503" {
+		t.Fatalf("unexpected hub detail: %#v", view)
+	}
+}
+
+func TestHandleStatusReturnsRetryingConnectionView(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.Settings{HubURL: "https://na.hub.molten.bot"},
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportRetrying,
+				Detail:    "Hub endpoint ping failed; retrying every 12s until live. Error: GET https://na.hub.molten.bot/ping returned status=503",
+				BaseURL:   "https://na.hub.molten.bot/v1",
+				Domain:    "na.hub.molten.bot",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	var view struct {
+		Label       string `json:"label"`
+		Description string `json:"description"`
+		HubDetail   string `json:"hub_detail"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode status response: %v", err)
+	}
+	if view.Label != "Retrying" {
+		t.Fatalf("unexpected label: %#v", view)
+	}
+	if !strings.Contains(view.Description, "retrying every 12s") {
+		t.Fatalf("unexpected description: %#v", view)
+	}
+	if view.HubDetail == "" {
+		t.Fatalf("expected retry detail in status payload: %#v", view)
 	}
 }
 

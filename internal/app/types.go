@@ -4,6 +4,10 @@ import "time"
 
 const (
 	ConnectionTransportHTTP      = "http"
+	ConnectionTransportConnected = "connected"
+	ConnectionTransportReachable = "reachable"
+	ConnectionTransportRetrying  = "retrying"
+	ConnectionTransportHTTPLong  = "http_long_poll"
 	ConnectionTransportWebSocket = "ws"
 	ConnectionTransportOffline   = "offline"
 
@@ -26,6 +30,9 @@ type ConnectionState struct {
 	Transport     string    `json:"transport"`
 	LastChangedAt time.Time `json:"last_changed_at"`
 	Error         string    `json:"error,omitempty"`
+	Detail        string    `json:"detail,omitempty"`
+	BaseURL       string    `json:"base_url,omitempty"`
+	Domain        string    `json:"domain,omitempty"`
 }
 
 type Session struct {

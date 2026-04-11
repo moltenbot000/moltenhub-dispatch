@@ -657,3 +657,57 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckPingUsesRootPingPathFromVersionedBaseURL(t *testing.T) {
+	t.Parallel()
+
+	var requestPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL + "/v1")
+	detail, err := client.CheckPing(context.Background())
+	if err != nil {
+		t.Fatalf("check ping: %v", err)
+	}
+	if requestPath != "/ping" {
+		t.Fatalf("unexpected ping path: %q", requestPath)
+	}
+	if detail != server.URL+"/ping status=204" {
+		t.Fatalf("unexpected ping detail: %q", detail)
+	}
+}
+
+func TestCheckPingReturnsErrorWhenPingStatusIsNotSuccess(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL + "/v1")
+	_, err := client.CheckPing(context.Background())
+	if err == nil {
+		t.Fatal("expected ping status error")
+	}
+	if !strings.Contains(err.Error(), server.URL+"/ping returned status=503") {
+		t.Fatalf("unexpected ping error: %v", err)
+	}
+}
+
+func TestCheckPingRejectsUnsupportedBaseURLScheme(t *testing.T) {
+	t.Parallel()
+
+	client := hub.NewClient("ftp://na.hub.molten.bot/v1")
+	_, err := client.CheckPing(context.Background())
+	if err == nil {
+		t.Fatal("expected scheme validation error")
+	}
+	if !strings.Contains(err.Error(), "base URL must use http or https") {
+		t.Fatalf("unexpected ping scheme error: %v", err)
+	}
+}
