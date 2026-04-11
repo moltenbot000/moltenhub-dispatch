@@ -10,6 +10,9 @@ const (
 	OnboardingStepWorkBind     = "work_bind"
 	OnboardingStepProfileSet   = "profile_set"
 	OnboardingStepWorkActivate = "work_activate"
+
+	OnboardingModeNew      = "new"
+	OnboardingModeExisting = "existing"
 )
 
 type OnboardingStep struct {
@@ -63,7 +66,11 @@ func OnboardingStageFromError(err error) string {
 }
 
 func DefaultOnboardingSteps() []OnboardingStep {
-	return []OnboardingStep{
+	return DefaultOnboardingStepsForMode(OnboardingModeNew)
+}
+
+func DefaultOnboardingStepsForMode(mode string) []OnboardingStep {
+	steps := []OnboardingStep{
 		{
 			ID:     OnboardingStepBind,
 			Label:  "Bind",
@@ -80,7 +87,7 @@ func DefaultOnboardingSteps() []OnboardingStep {
 			ID:     OnboardingStepProfileSet,
 			Label:  "Profile Set",
 			Status: "pending",
-			Detail: "Persist the dispatcher profile metadata in Molten Hub.",
+			Detail: "Persist the agent profile in Molten Hub.",
 		},
 		{
 			ID:     OnboardingStepWorkActivate,
@@ -89,4 +96,8 @@ func DefaultOnboardingSteps() []OnboardingStep {
 			Detail: "Apply the runtime transport and confirm activation.",
 		},
 	}
+	if strings.EqualFold(strings.TrimSpace(mode), OnboardingModeExisting) {
+		steps[0].Detail = "Verify the existing Molten Hub agent credential."
+	}
+	return steps
 }

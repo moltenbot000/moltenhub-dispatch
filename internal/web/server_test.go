@@ -186,9 +186,15 @@ func TestHandleOnboardingAPIReturnsSuccess(t *testing.T) {
 	}
 
 	var body struct {
-		OK      bool   `json:"ok"`
-		Message string `json:"message"`
-		Bound   bool   `json:"bound"`
+		OK         bool   `json:"ok"`
+		Message    string `json:"message"`
+		Bound      bool   `json:"bound"`
+		Onboarding struct {
+			Steps []struct {
+				ID     string `json:"id"`
+				Detail string `json:"detail"`
+			} `json:"steps"`
+		} `json:"onboarding"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -198,6 +204,12 @@ func TestHandleOnboardingAPIReturnsSuccess(t *testing.T) {
 	}
 	if body.Message != "Agent bound and profile registered." {
 		t.Fatalf("unexpected message: %#v", body)
+	}
+	if len(body.Onboarding.Steps) != 4 {
+		t.Fatalf("expected four onboarding steps, got %#v", body.Onboarding.Steps)
+	}
+	if got, want := body.Onboarding.Steps[0].Detail, "Exchange the bind token for an agent credential."; got != want {
+		t.Fatalf("bind step detail = %q, want %q", got, want)
 	}
 }
 
@@ -451,6 +463,12 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `onboarding-step onboarding-step-current" data-step-id="bind"`) {
 		t.Fatalf("expected bind step to render as current in unbound state, body=%s", body)
 	}
+	if !strings.Contains(body, "Exchange the bind token for an agent credential.") {
+		t.Fatalf("expected unbound onboarding bind detail to match hub flow, body=%s", body)
+	}
+	if !strings.Contains(body, "Persist the agent profile in Molten Hub.") {
+		t.Fatalf("expected unbound onboarding profile detail to match hub flow, body=%s", body)
+	}
 }
 
 func TestHandleIndexRendersCompletedOnboardingFlowForBoundSession(t *testing.T) {
@@ -490,6 +508,9 @@ func TestHandleIndexRendersCompletedOnboardingFlowForBoundSession(t *testing.T) 
 	}
 	if !strings.Contains(body, `id="onboarding-message">Agent bound and profile registered.`) {
 		t.Fatalf("expected completed onboarding message once bound, body=%s", body)
+	}
+	if !strings.Contains(body, "Verify the existing Molten Hub agent credential.") {
+		t.Fatalf("expected bound onboarding bind detail to match hub existing-mode flow, body=%s", body)
 	}
 }
 
