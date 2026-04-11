@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -226,18 +227,18 @@ func NewID(prefix string) string {
 }
 
 func mergeDefaultSettings(settings *Settings, defaults Settings) {
-	if runtime, err := ResolveHubRuntime(settings.HubRegion, settings.HubURL); err == nil {
-		settings.HubRegion = runtime.ID
-		settings.HubURL = runtime.HubURL
+	runtime, err := ResolveHubRuntime(settings.HubRegion, settings.HubURL)
+	if err != nil {
+		runtime, err = ResolveHubRuntime(defaults.HubRegion, defaults.HubURL)
+		if err != nil {
+			runtime = DefaultHubRuntime()
+		}
 	}
+	settings.HubRegion = runtime.ID
+	settings.HubURL = runtime.HubURL
+
 	if settings.ListenAddr == "" {
 		settings.ListenAddr = defaults.ListenAddr
-	}
-	if settings.HubRegion == "" {
-		settings.HubRegion = defaults.HubRegion
-	}
-	if settings.HubURL == "" {
-		settings.HubURL = defaults.HubURL
 	}
 	if settings.SessionKey == "" {
 		settings.SessionKey = defaults.SessionKey
@@ -257,8 +258,22 @@ func normalizeStateAliases(state *AppState) {
 	if state == nil {
 		return
 	}
+	normalizeSettingsAliases(&state.Settings)
 	normalizeSessionAliases(&state.Session)
+	normalizeConnectionAliases(&state.Connection, state.Session, state.Settings)
 	normalizeFlash(&state.Flash)
+}
+
+func normalizeSettingsAliases(settings *Settings) {
+	if settings == nil {
+		return
+	}
+	runtime, err := ResolveHubRuntime(settings.HubRegion, settings.HubURL)
+	if err != nil {
+		runtime = DefaultHubRuntime()
+	}
+	settings.HubRegion = runtime.ID
+	settings.HubURL = runtime.HubURL
 }
 
 func normalizeSessionAliases(session *Session) {
@@ -267,8 +282,44 @@ func normalizeSessionAliases(session *Session) {
 	}
 	session.AgentToken = coalesceTrimmed(session.AgentToken, session.BindToken)
 	session.BindToken = coalesceTrimmed(session.BindToken, session.AgentToken)
-	session.APIBase = coalesceTrimmed(session.APIBase, session.BaseURL)
-	session.BaseURL = coalesceTrimmed(session.BaseURL, session.APIBase)
+	session.HubURL = normalizeHubRuntimeURL(session.HubURL)
+
+	session.ManifestURL = NormalizeHubEndpointURL(session.ManifestURL)
+	session.MetadataURL = NormalizeHubEndpointURL(session.MetadataURL)
+	session.Capabilities = NormalizeHubEndpointURL(session.Capabilities)
+	session.OpenClawPullURL = NormalizeHubEndpointURL(session.OpenClawPullURL)
+	session.OpenClawPushURL = NormalizeHubEndpointURL(session.OpenClawPushURL)
+	session.OfflineURL = NormalizeHubEndpointURL(session.OfflineURL)
+
+	session.APIBase = NormalizeHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))
+	if session.APIBase == "" {
+		session.APIBase = NormalizeHubEndpointURL(runtimeAPIBaseFromSession(*session))
+	}
+	session.BaseURL = session.APIBase
+}
+
+func normalizeConnectionAliases(connection *ConnectionState, session Session, settings Settings) {
+	if connection == nil {
+		return
+	}
+	connection.BaseURL = NormalizeHubEndpointURL(connection.BaseURL)
+	if connection.BaseURL == "" {
+		connection.BaseURL = coalesceTrimmed(
+			NormalizeHubEndpointURL(session.APIBase),
+			NormalizeHubEndpointURL(settings.HubURL),
+		)
+	}
+	if connection.BaseURL == "" {
+		connection.Domain = ""
+		return
+	}
+
+	parsed, err := url.Parse(connection.BaseURL)
+	if err != nil || strings.TrimSpace(parsed.Hostname()) == "" {
+		connection.Domain = ""
+		return
+	}
+	connection.Domain = strings.TrimSpace(strings.ToLower(parsed.Hostname()))
 }
 
 func normalizeFlash(flash *FlashMessage) {

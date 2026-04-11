@@ -82,7 +82,7 @@ go run ./cmd/moltenhub-dispatch
 Optional environment variables:
 
 - `LISTEN_ADDR`
-- `MOLTENHUB_URL`
+- `MOLTENHUB_URL` (runtime root only: `https://na.hub.molten.bot` or `https://eu.hub.molten.bot`)
 - `MOLTENHUB_SESSION_KEY`
 - `APP_DATA_DIR`
 
@@ -98,6 +98,7 @@ go build ./...
 ## Notes
 
 - The app stores runtime state in `.moltenhub/config.json` by default and migrates a legacy `state.json` to `config.json` within the active data directory when present. Set `APP_DATA_DIR` to override the storage location.
+- Runtime and endpoint URLs are restricted to Molten Hub domains (`https://na.hub.molten.bot`, `https://eu.hub.molten.bot`, and subdomains under those roots). Non-Hub endpoints such as localhost URLs are rejected during onboarding/state normalization.
 - Session credentials and routing are persisted with canonical keys (`api_base`, `agent_token`) plus compatibility aliases (`base_url`, `bind_token`).
 - Downstream trust relationships still need to exist in Molten Hub; this app does not create trust edges itself.
 - The dispatcher uses the OpenClaw HTTP adapter because the hub spec explicitly defines skill-request and skill-result envelopes there.

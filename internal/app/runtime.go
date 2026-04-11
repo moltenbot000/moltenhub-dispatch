@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	HubRegionNA = "na"
-	HubRegionEU = "eu"
+	HubRegionNA   = "na"
+	HubRegionEU   = "eu"
+	hubBaseDomain = "hub.molten.bot"
 )
 
 type HubRuntime struct {
@@ -23,13 +24,13 @@ var supportedHubRuntimes = []HubRuntime{
 		ID:          HubRegionNA,
 		Label:       "NA",
 		Description: "North America",
-		HubURL:      "https://na.hub.molten.bot",
+		HubURL:      hubURLForRegion(HubRegionNA),
 	},
 	{
 		ID:          HubRegionEU,
 		Label:       "EU",
 		Description: "Europe",
-		HubURL:      "https://eu.hub.molten.bot",
+		HubURL:      hubURLForRegion(HubRegionEU),
 	},
 }
 
@@ -77,15 +78,82 @@ func hubRuntimeByURL(hubURL string) (HubRuntime, bool) {
 }
 
 func normalizeHubRuntimeURL(raw string) string {
-	raw = strings.TrimSpace(strings.ToLower(raw))
+	normalized := NormalizeHubEndpointURL(raw)
+	if normalized == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(normalized)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	runtime, ok := runtimeFromHost(parsed.Hostname())
+	if !ok {
+		return ""
+	}
+	return runtime.HubURL
+}
+
+func NormalizeHubEndpointURL(raw string) string {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
 
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host == "" {
-		return strings.TrimRight(raw, "/")
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	if !strings.EqualFold(parsed.Scheme, "https") {
+		return ""
+	}
+	if parsed.User != nil || strings.TrimSpace(parsed.Port()) != "" {
+		return ""
 	}
 
-	return strings.TrimRight(parsed.Scheme+"://"+parsed.Host, "/")
+	host := strings.TrimSpace(strings.ToLower(parsed.Hostname()))
+	if !isAllowedHubHost(host) {
+		return ""
+	}
+
+	parsed.Scheme = "https"
+	parsed.Host = host
+	parsed.User = nil
+	return strings.TrimRight(parsed.String(), "/")
+}
+
+func isAllowedHubHost(host string) bool {
+	_, ok := runtimeFromHost(host)
+	return ok
+}
+
+func runtimeFromHost(host string) (HubRuntime, bool) {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return HubRuntime{}, false
+	}
+
+	for _, runtime := range supportedHubRuntimes {
+		rootHost := hubHostForRegion(runtime.ID)
+		if host == rootHost || strings.HasSuffix(host, "."+rootHost) {
+			return runtime, true
+		}
+	}
+	return HubRuntime{}, false
+}
+
+func hubHostForRegion(region string) string {
+	region = strings.TrimSpace(strings.ToLower(region))
+	if region == "" {
+		return ""
+	}
+	return region + "." + hubBaseDomain
+}
+
+func hubURLForRegion(region string) string {
+	host := hubHostForRegion(region)
+	if host == "" {
+		return ""
+	}
+	return "https://" + host
 }
