@@ -465,9 +465,6 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 	if form.Emoji == "" {
 		form.Emoji = "🤖"
 	}
-	if form.ProfileMarkdown == "" {
-		form.ProfileMarkdown = "Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks."
-	}
 	return form
 }
 

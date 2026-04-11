@@ -352,6 +352,36 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	}
 }
 
+func TestHandleIndexUsesBioPlaceholderWithoutPrefilledDefaultText(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportOffline,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `placeholder="Please write the bio of your agent..."`) {
+		t.Fatalf("expected bio placeholder hint text, body=%s", body)
+	}
+	if strings.Contains(body, "Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks.") {
+		t.Fatalf("did not expect default bio sentence to be prefilled, body=%s", body)
+	}
+}
+
 func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing.T) {
 	t.Parallel()
 

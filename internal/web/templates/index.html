@@ -89,7 +89,7 @@
               </div>
             </fieldset>
           </div>
-          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="What this runtime is for">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
+          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           {{if .State.Session.HandleFinalized}}
           <p class="hint">The bind token is removed only after the agent is successfully bound. The finalized handle stays visible but immutable here.</p>
           {{else}}
@@ -116,7 +116,7 @@
               </div>
             </fieldset>
           </div>
-          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="What this runtime is for">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
+          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           <button type="submit" id="bind-submit">Bind</button>
         </form>
         {{end}}
