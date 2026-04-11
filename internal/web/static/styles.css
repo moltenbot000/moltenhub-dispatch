@@ -3503,6 +3503,10 @@ p,
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.manual-dispatch-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .panel {
   padding: 20px;
   min-width: 0;
