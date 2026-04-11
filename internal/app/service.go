@@ -401,10 +401,13 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
 			if err == nil {
 				s.noteHubInteraction(nil, ConnectionTransportWebSocket)
-				if err := s.consumeRealtimeSession(ctx, session); err != nil && ctx.Err() == nil {
-					s.noteHubInteraction(err, ConnectionTransportWebSocket)
+				err = s.consumeRealtimeSession(ctx, session)
+				if err == nil || ctx.Err() != nil {
+					continue
 				}
-				continue
+				s.noteHubInteraction(err, ConnectionTransportWebSocket)
+			} else {
+				s.noteHubInteraction(err, ConnectionTransportWebSocket)
 			}
 		}
 

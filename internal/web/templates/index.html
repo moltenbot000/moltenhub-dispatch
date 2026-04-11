@@ -955,31 +955,43 @@
         }
       };
 
+      const setIndicator = (itemNode, dot, textNode, label, online, text) => {
+        const message = `${label}: ${text}`;
+        if (dot) {
+          dot.classList.toggle("online", online);
+        }
+        if (textNode) {
+          textNode.textContent = message;
+        }
+        if (itemNode) {
+          itemNode.title = message;
+          itemNode.setAttribute("aria-label", message);
+        }
+      };
+
       const applyHubDotMode = (mode) => {
         if (!hubConnDot) {
           return;
         }
-        hubConnDot.classList.remove("online", "http", "disconnected");
-        if (mode === "ws" || mode === "connected") {
-          hubConnDot.classList.add("online");
-          return;
-        }
-        if (mode === "http_long_poll" || mode === "http") {
+        hubConnDot.classList.remove("http", "disconnected");
+        if (mode === "http_long_poll") {
           hubConnDot.classList.add("http");
           return;
         }
-        hubConnDot.classList.add("disconnected");
+        if (mode === "disconnected") {
+          hubConnDot.classList.add("disconnected");
+        }
       };
 
-      const setHubConnectionActionable = (actionable, tone, targetURL = "") => {
+      const setHubConnectionActionable = (actionable, targetURL = "", tone = "") => {
         if (!hubConnItem) {
           return;
         }
         hubConnItem.classList.toggle("status-item-action", actionable);
         hubConnItem.classList.toggle("status-item-action-online", actionable && tone === "online");
         hubConnItem.classList.toggle("status-item-action-offline", actionable && tone === "offline");
-        hubConnItem.dataset.actionable = actionable ? "true" : "false";
-        hubConnItem.dataset.href = actionable ? targetURL : "";
+        hubConnItem.setAttribute("data-actionable", actionable ? "true" : "false");
+        hubConnItem.setAttribute("data-href", targetURL);
       };
 
       const setHubConnection = (mode, text) => {
@@ -987,6 +999,7 @@
           return;
         }
         const connected = mode === "ws" || mode === "http_long_poll" || mode === "connected";
+        const online = connected;
         const actionable = connected || mode === "disconnected";
         const actionTone = connected ? "online" : (mode === "disconnected" ? "offline" : "");
         const targetURL = connected || bound ? HUB_DASHBOARD_URL : HUB_LOGIN_URL;
@@ -996,14 +1009,11 @@
             ? "Configured locally. Restart runtime to connect."
             : "Connect to Molten Hub";
         }
-        const message = `Molten Hub: ${messageText}`;
         hubConnItem.dataset.status = connected ? "connected" : "disconnected";
         hubConnItem.dataset.transport = mode || "offline";
-        hubConnItem.title = message;
-        hubConnItem.setAttribute("aria-label", message);
-        hubConnText.textContent = message;
+        setIndicator(hubConnItem, hubConnDot, hubConnText, "Molten Hub", online, messageText);
         applyHubDotMode(mode);
-        setHubConnectionActionable(actionable, actionTone, targetURL);
+        setHubConnectionActionable(actionable, targetURL, actionTone);
         syncSubActions({
           status: connected ? "connected" : "disconnected",
           transport: mode || "offline",
@@ -1055,10 +1065,10 @@
       };
 
       const maybeOpenHubConnectPage = (event) => {
-        if (!hubConnItem || hubConnItem.dataset.actionable !== "true") {
+        if (!hubConnItem || hubConnItem.getAttribute("data-actionable") !== "true") {
           return;
         }
-        const href = String(hubConnItem.dataset.href || "").trim();
+        const href = String(hubConnItem.getAttribute("data-href") || "").trim();
         if (!href) {
           return;
         }

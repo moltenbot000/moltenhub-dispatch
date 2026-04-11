@@ -247,6 +247,7 @@ func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {
 	query := u.Query()
 	if strings.TrimSpace(sessionKey) != "" {
 		query.Set("session_key", strings.TrimSpace(sessionKey))
+		query.Set("sessionKey", strings.TrimSpace(sessionKey))
 	}
 	u.RawQuery = query.Encode()
 	return u.String(), nil
