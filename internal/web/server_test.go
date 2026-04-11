@@ -1314,8 +1314,8 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));`) {
 		t.Fatalf("expected shared manual refresh button hooks, body=%s", body)
 	}
-	if !strings.Contains(body, `setConnectedAgentsRefreshState(false, "Updated.");`) {
-		t.Fatalf("expected refresh completion message without timestamp, body=%s", body)
+	if !strings.Contains(body, `setConnectedAgentsRefreshState(false, "");`) {
+		t.Fatalf("expected refresh completion to clear the status text, body=%s", body)
 	}
 	if strings.Contains(body, "toLocaleTimeString") {
 		t.Fatalf("did not expect connected agents refresh timestamp formatting, body=%s", body)

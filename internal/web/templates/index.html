@@ -1418,7 +1418,7 @@
             ? body.connected_agents
             : [];
           renderConnectedAgents(agents);
-          setConnectedAgentsRefreshState(false, "Updated.");
+          setConnectedAgentsRefreshState(false, "");
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh connected agents.";
           setConnectedAgentsRefreshState(false, message, true);
