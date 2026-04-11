@@ -25,6 +25,7 @@ const (
 	followUpPrompt         = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 	hubPingRetryInterval   = 12 * time.Second
 	hubPingRequestTimeout  = 6 * time.Second
+	wsFallbackWindow       = 30 * time.Second
 )
 
 var advertisedSkills = []Skill{
@@ -63,6 +64,7 @@ type Service struct {
 	settings            Settings
 	hubPingRetryDelay   time.Duration
 	hubPingCheckTimeout time.Duration
+	wsFallbackWindow    time.Duration
 }
 
 type failureReport struct {
@@ -89,6 +91,7 @@ func NewService(store *Store, hubClient HubClient) *Service {
 		settings:            snapshot.Settings,
 		hubPingRetryDelay:   hubPingRetryInterval,
 		hubPingCheckTimeout: hubPingRequestTimeout,
+		wsFallbackWindow:    wsFallbackWindow,
 	}
 	service.configureHubClient(snapshot)
 	return service
@@ -399,9 +402,6 @@ func (s *Service) PollOnce(ctx context.Context) error {
 }
 
 func (s *Service) RunHubLoop(ctx context.Context) {
-	ticker := time.NewTicker(s.pollInterval())
-	defer ticker.Stop()
-
 	for {
 		if ctx.Err() != nil {
 			return
@@ -409,10 +409,8 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 
 		state := s.store.Snapshot()
 		if strings.TrimSpace(state.Session.AgentToken) == "" {
-			select {
-			case <-ctx.Done():
+			if !sleepWithContext(ctx, s.pollInterval()) {
 				return
-			case <-ticker.C:
 			}
 			continue
 		}
@@ -435,20 +433,49 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 				if err == nil || ctx.Err() != nil {
 					continue
 				}
-				s.noteHubInteraction(err, ConnectionTransportWebSocket)
-			} else {
-				s.noteHubInteraction(err, ConnectionTransportWebSocket)
 			}
+			s.noteHubInteraction(err, ConnectionTransportWebSocket)
+			if err := s.runHTTPFallbackWindow(ctx); err != nil {
+				return
+			}
+			continue
 		}
 
-		pollCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
-		_ = s.PollOnce(pollCtx)
-		cancel()
-
-		select {
-		case <-ctx.Done():
+		if err := s.pollOnceWithTimeout(ctx); err != nil {
 			return
-		case <-ticker.C:
+		}
+		if !sleepWithContext(ctx, s.pollInterval()) {
+			return
+		}
+	}
+}
+
+func (s *Service) pollOnceWithTimeout(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	pollCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
+	_ = s.PollOnce(pollCtx)
+	cancel()
+	return ctx.Err()
+}
+
+func (s *Service) runHTTPFallbackWindow(ctx context.Context) error {
+	window := s.wsFallbackWindow
+	if window <= 0 {
+		window = wsFallbackWindow
+	}
+	deadline := time.Now().Add(window)
+
+	for {
+		if err := s.pollOnceWithTimeout(ctx); err != nil {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return nil
+		}
+		if !sleepWithContext(ctx, s.pollInterval()) {
+			return ctx.Err()
 		}
 	}
 }

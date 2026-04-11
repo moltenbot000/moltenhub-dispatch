@@ -199,6 +199,15 @@
         <span class="prompt-mode-link-tooltip" aria-hidden="true">Agent Settings</span>
         <span class="sr-only">Open agent settings</span>
       </button>
+      <span class="prompt-mode-divider" aria-hidden="true"></span>
+      <button id="theme-toggle" class="prompt-mode-link theme-toggle theme-toggle-dock" type="button" aria-label="Switch theme. Currently: Dark" title="Dark">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-link-tooltip" id="theme-toggle-tooltip" aria-hidden="true">Dark</span>
+        <span id="theme-toggle-label">Dark</span>
+      </button>
     </div>
   </div>
   {{if .State.Session.AgentToken}}
@@ -371,6 +380,14 @@
       const onboardingSteps = document.getElementById("onboarding-steps");
       const onboardingMessage = document.getElementById("onboarding-message");
       const flash = document.querySelector(".flash[data-auto-dismiss-seconds]");
+      const themeToggleButton = document.getElementById("theme-toggle");
+      const themeToggleLabel = document.getElementById("theme-toggle-label");
+      const themeToggleIcon = document.getElementById("theme-toggle-icon");
+      const themeToggleTooltip = document.getElementById("theme-toggle-tooltip");
+
+      const THEME_KEY = "hubui.theme";
+      const THEME_MODES = ["light", "dark", "night"];
+      const DEFAULT_THEME_MODE = "dark";
 
       if (flash) {
         const configuredSeconds = Number.parseFloat(flash.dataset.autoDismissSeconds || "");
@@ -486,6 +503,78 @@
         if (focusTarget instanceof HTMLElement) {
           window.requestAnimationFrame(() => {
             focusTarget.focus({ preventScroll: true });
+          });
+        }
+      };
+
+      const loadThemeMode = () => {
+        try {
+          const raw = localStorage.getItem(THEME_KEY);
+          return THEME_MODES.includes(raw) ? raw : DEFAULT_THEME_MODE;
+        } catch (_err) {
+          return DEFAULT_THEME_MODE;
+        }
+      };
+
+      const themeLabel = (theme) => {
+        const normalized = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      };
+
+      const currentThemeMode = () => {
+        const activeTheme = document.documentElement.getAttribute("data-theme");
+        return THEME_MODES.includes(activeTheme) ? activeTheme : loadThemeMode();
+      };
+
+      const nextThemeMode = (theme) => {
+        const currentIndex = THEME_MODES.indexOf(theme);
+        const safeIndex = currentIndex >= 0 ? currentIndex : Math.max(0, THEME_MODES.indexOf(DEFAULT_THEME_MODE));
+        return THEME_MODES[(safeIndex + 1) % THEME_MODES.length];
+      };
+
+      const THEME_ICONS = {
+        light: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+        dark: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a8 8 0 1 0 9 9 6 6 0 0 1-9-9z"/></svg>',
+        night: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>',
+      };
+
+      const syncThemeToggle = (theme) => {
+        if (!themeToggleButton || !themeToggleLabel || !themeToggleIcon) {
+          return;
+        }
+        const currentTheme = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
+        const currentLabel = themeLabel(currentTheme);
+        themeToggleLabel.textContent = currentLabel;
+        themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";
+        if (themeToggleTooltip) {
+          themeToggleTooltip.textContent = currentLabel;
+        }
+        themeToggleButton.title = currentLabel;
+        themeToggleButton.setAttribute("aria-label", `Switch theme. Currently: ${currentLabel}`);
+      };
+
+      const applyThemeMode = (theme, persist) => {
+        const normalized = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
+        const root = document.documentElement;
+        root.classList.remove("light", "dark", "night");
+        root.classList.add(normalized);
+        root.setAttribute("data-theme", normalized);
+        syncThemeToggle(normalized);
+        if (!persist) {
+          return;
+        }
+        try {
+          localStorage.setItem(THEME_KEY, normalized);
+        } catch (_err) {
+          // Ignore localStorage failures.
+        }
+      };
+
+      const initAppearanceControls = () => {
+        applyThemeMode(loadThemeMode(), false);
+        if (themeToggleButton) {
+          themeToggleButton.addEventListener("click", () => {
+            applyThemeMode(nextThemeMode(currentThemeMode()), true);
           });
         }
       };
@@ -644,7 +733,7 @@
                 skinTonePosition: "none",
                 searchPosition: "sticky",
                 maxFrequentRows: 2,
-                theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+                theme: currentThemeMode() === "light" ? "light" : "dark",
               }),
             );
             pickerMounted = true;
@@ -725,6 +814,8 @@
 
         setEmojiValue(input.value);
       };
+
+      initAppearanceControls();
 
       document.querySelectorAll("[data-hub-emoji-picker]").forEach((picker) => {
         if (picker instanceof HTMLElement) {

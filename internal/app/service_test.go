@@ -38,6 +38,7 @@ type fakeHubClient struct {
 	pingCalls             int
 	connectErr            error
 	connectSession        hub.RealtimeSession
+	connectCalls          int
 	publishErr            error
 }
 
@@ -121,6 +122,7 @@ func (f *fakeHubClient) SetBaseURL(baseURL string) {
 }
 
 func (f *fakeHubClient) ConnectOpenClaw(_ context.Context, _ string, _ string) (hub.RealtimeSession, error) {
+	f.connectCalls++
 	if len(f.baseURLCalls) == 0 {
 		f.baseURLCalls = append(f.baseURLCalls, f.currentBaseURL)
 	}
@@ -1654,6 +1656,7 @@ func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T)
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
 		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.PollInterval = 10 * time.Millisecond
 		return nil
 	})
 	if err != nil {
@@ -1680,9 +1683,13 @@ func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+	time.Sleep(120 * time.Millisecond)
 
 	cancel()
 	<-done
+	if fake.connectCalls != 1 {
+		t.Fatalf("expected one websocket connect attempt during HTTP fallback window, got %d", fake.connectCalls)
+	}
 
 	state := service.store.Snapshot()
 	if state.Connection.Status != ConnectionStatusConnected {
@@ -1706,6 +1713,7 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) 
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
 		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.PollInterval = 10 * time.Millisecond
 		return nil
 	})
 	if err != nil {
@@ -1732,9 +1740,13 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) 
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+	time.Sleep(120 * time.Millisecond)
 
 	cancel()
 	<-done
+	if fake.connectCalls != 1 {
+		t.Fatalf("expected one websocket reconnect attempt before HTTP fallback window, got %d", fake.connectCalls)
+	}
 
 	state := service.store.Snapshot()
 	if state.Connection.Status != ConnectionStatusConnected {

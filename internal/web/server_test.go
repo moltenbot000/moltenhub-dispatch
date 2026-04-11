@@ -510,6 +510,15 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	if !strings.Contains(body, `id="agent-settings-dock-button"`) {
 		t.Fatalf("expected settings dock button, body=%s", body)
 	}
+	if !strings.Contains(body, `id="theme-toggle"`) {
+		t.Fatalf("expected theme toggle dock button, body=%s", body)
+	}
+	if !strings.Contains(body, `<span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true"></span>`) {
+		t.Fatalf("expected theme toggle icon slot, body=%s", body)
+	}
+	if !strings.Contains(body, `<span id="theme-toggle-label">Dark</span>`) {
+		t.Fatalf("expected dark as the initial theme label, body=%s", body)
+	}
 	if !strings.Contains(body, `id="agent-settings-modal-backdrop"`) {
 		t.Fatalf("expected agent settings dialog markup, body=%s", body)
 	}
@@ -518,6 +527,21 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	}
 	if !strings.Contains(body, `const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");`) {
 		t.Fatalf("expected settings dock JS hook, body=%s", body)
+	}
+	if !strings.Contains(body, `const themeToggleButton = document.getElementById("theme-toggle");`) {
+		t.Fatalf("expected theme toggle JS hook, body=%s", body)
+	}
+	if !strings.Contains(body, `const THEME_MODES = ["light", "dark", "night"];`) || !strings.Contains(body, `const DEFAULT_THEME_MODE = "dark";`) {
+		t.Fatalf("expected theme cycle constants, body=%s", body)
+	}
+	if !strings.Contains(body, `const THEME_ICONS = {`) {
+		t.Fatalf("expected theme icon map for toggle button, body=%s", body)
+	}
+	if !strings.Contains(body, `const initAppearanceControls = () => {`) || !strings.Contains(body, `applyThemeMode(loadThemeMode(), false);`) {
+		t.Fatalf("expected theme controls initialization, body=%s", body)
+	}
+	if !strings.Contains(body, `themeToggleButton.addEventListener("click", () => {`) || !strings.Contains(body, `applyThemeMode(nextThemeMode(currentThemeMode()), true);`) {
+		t.Fatalf("expected theme toggle click cycle handler, body=%s", body)
 	}
 	if !strings.Contains(body, `const setAgentSettingsModalOpen = (open, returnFocus = false) => {`) {
 		t.Fatalf("expected settings dialog open/close handler, body=%s", body)
