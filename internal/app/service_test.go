@@ -411,6 +411,37 @@ func TestBindAndRegisterDerivesAPIBaseFromRuntimeMetadataEndpoint(t *testing.T) 
 	}
 }
 
+func TestBindAndRegisterDefaultsAPIBaseToVersionedHubEndpoint(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.bindResponse = hub.BindResponse{
+		AgentToken: "agent-token",
+		AgentUUID:  "agent-uuid",
+		AgentURI:   "molten://dispatch/agent",
+		Handle:     "dispatch-agent",
+	}
+	fake.expectedMetadataURL = "https://na.hub.molten.bot/v1"
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		BindToken:       "bind-token",
+		Handle:          "dispatch-agent",
+		DisplayName:     "Dispatch Agent",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err != nil {
+		t.Fatalf("bind and register: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if got, want := state.Session.APIBase, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("api_base = %q, want %q", got, want)
+	}
+	if got, want := state.Session.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("base_url = %q, want %q", got, want)
+	}
+}
+
 func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	t.Parallel()
 
@@ -787,6 +818,12 @@ func TestUpdateAgentProfileUsesPersistedSessionRoutingAfterRestart(t *testing.T)
 	}
 	if !strings.Contains(string(configData), "\"agent_token\": \"agent-token\"") {
 		t.Fatalf("expected persisted agent token in config.json, got %s", string(configData))
+	}
+	if !strings.Contains(string(configData), "\"bind_token\": \"agent-token\"") {
+		t.Fatalf("expected persisted bind token alias in config.json, got %s", string(configData))
+	}
+	if !strings.Contains(string(configData), "\"base_url\": \"https://runtime.na.hub.molten.bot\"") {
+		t.Fatalf("expected persisted base_url alias in config.json, got %s", string(configData))
 	}
 }
 

@@ -122,3 +122,42 @@ func TestResolveStorePathMigratesLegacyDefaultConfigIntoMoltenhubDir(t *testing.
 		t.Fatalf("expected legacy default config to be migrated away, stat err=%v", err)
 	}
 }
+
+func TestNewStoreNormalizesLegacySessionAliases(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "settings": {
+    "hub_region": "na",
+    "hub_url": "https://na.hub.molten.bot"
+  },
+  "session": {
+    "bind_token": "legacy-agent-token",
+    "base_url": "https://na.hub.molten.bot/v1"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	state := store.Snapshot()
+	if got, want := state.Session.AgentToken, "legacy-agent-token"; got != want {
+		t.Fatalf("agent_token = %q, want %q", got, want)
+	}
+	if got, want := state.Session.BindToken, "legacy-agent-token"; got != want {
+		t.Fatalf("bind_token = %q, want %q", got, want)
+	}
+	if got, want := state.Session.APIBase, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("api_base = %q, want %q", got, want)
+	}
+	if got, want := state.Session.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("base_url = %q, want %q", got, want)
+	}
+}

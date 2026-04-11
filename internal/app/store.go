@@ -133,6 +133,7 @@ func NewStore(path string, defaults Settings) (*Store, error) {
 	}
 
 	mergeDefaultSettings(&store.state.Settings, defaults)
+	normalizeStateAliases(&store.state)
 	if strings.TrimSpace(store.state.Connection.Status) == "" {
 		store.state.Connection.Status = ConnectionStatusDisconnected
 	}
@@ -155,6 +156,7 @@ func (s *Store) Update(fn func(*AppState) error) error {
 	if err := fn(&s.state); err != nil {
 		return err
 	}
+	normalizeStateAliases(&s.state)
 	return s.saveLocked()
 }
 
@@ -277,6 +279,23 @@ func mergeDefaultSettings(settings *Settings, defaults Settings) {
 	if settings.DataDir == "" {
 		settings.DataDir = defaults.DataDir
 	}
+}
+
+func normalizeStateAliases(state *AppState) {
+	if state == nil {
+		return
+	}
+	normalizeSessionAliases(&state.Session)
+}
+
+func normalizeSessionAliases(session *Session) {
+	if session == nil {
+		return
+	}
+	session.AgentToken = coalesceTrimmed(session.AgentToken, session.BindToken)
+	session.BindToken = coalesceTrimmed(session.BindToken, session.AgentToken)
+	session.APIBase = coalesceTrimmed(session.APIBase, session.BaseURL)
+	session.BaseURL = coalesceTrimmed(session.BaseURL, session.APIBase)
 }
 
 func cloneState(state AppState) AppState {

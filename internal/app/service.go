@@ -154,7 +154,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if result.AgentToken == "" {
 		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing agent token"))
 	}
-	result.APIBase = coalesceTrimmed(strings.TrimSpace(result.APIBase), runtimeAPIBaseFromBind(result))
+	result.APIBase = coalesceTrimmed(strings.TrimSpace(result.APIBase), runtimeAPIBaseFromBind(result), defaultAPIBaseForHub(runtime.HubURL))
 	result.Handle = strings.TrimSpace(result.Handle)
 	s.setHubBaseURL(result.APIBase)
 	s.setRuntimeEndpoints(runtimeEndpointsFromBind(result))
@@ -170,6 +170,8 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			HubURL:          runtime.HubURL,
 			APIBase:         result.APIBase,
 			AgentToken:      result.AgentToken,
+			BaseURL:         result.APIBase,
+			BindToken:       result.AgentToken,
 			AgentUUID:       result.AgentUUID,
 			AgentURI:        result.AgentURI,
 			Handle:          agentProfile.Handle,
@@ -1326,7 +1328,7 @@ func runtimeAPIBaseFromBind(result hub.BindResponse) string {
 }
 
 func runtimeAPIBaseFromSession(session Session) string {
-	if apiBase := strings.TrimSpace(session.APIBase); apiBase != "" {
+	if apiBase := coalesceTrimmed(session.APIBase, session.BaseURL); apiBase != "" {
 		return apiBase
 	}
 	for _, endpoint := range []string{
@@ -1352,6 +1354,14 @@ func coalesceTrimmed(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func defaultAPIBaseForHub(hubURL string) string {
+	hubURL = strings.TrimRight(strings.TrimSpace(hubURL), "/")
+	if hubURL == "" {
+		return ""
+	}
+	return hubURL + "/v1"
 }
 
 func runtimeAPIBaseFromEndpoint(raw string) string {

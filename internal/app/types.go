@@ -40,6 +40,8 @@ type Session struct {
 	HubURL          string    `json:"hub_url"`
 	APIBase         string    `json:"api_base"`
 	AgentToken      string    `json:"agent_token"`
+	BaseURL         string    `json:"base_url,omitempty"`
+	BindToken       string    `json:"bind_token,omitempty"`
 	AgentUUID       string    `json:"agent_uuid"`
 	AgentURI        string    `json:"agent_uri"`
 	Handle          string    `json:"handle"`

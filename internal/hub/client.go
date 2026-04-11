@@ -214,7 +214,7 @@ func (c *Client) UpdateMetadata(ctx context.Context, token string, req UpdateMet
 		if err == nil {
 			return out, nil
 		}
-		if !isRouteNotFound(err) {
+		if !shouldRetryMetadataEndpoint(err) {
 			return nil, err
 		}
 		lastErr = err
@@ -341,6 +341,30 @@ func isRouteNotFound(err error) bool {
 	return apiErr.StatusCode == http.StatusNotFound && strings.EqualFold(strings.TrimSpace(apiErr.Code), "not_found")
 }
 
+func shouldRetryMetadataEndpoint(err error) bool {
+	if isRouteNotFound(err) {
+		return true
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	if apiErr.StatusCode != http.StatusUnauthorized {
+		return false
+	}
+
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	if code == "unauthorized" {
+		return true
+	}
+	if strings.Contains(message, "missing or invalid bearer token") {
+		return true
+	}
+	return false
+}
+
 func (c *Client) doJSON(ctx context.Context, method, endpoint, token string, body any, out any) error {
 	req, err := c.newRequest(ctx, method, endpoint, token, body)
 	if err != nil {
@@ -456,7 +480,7 @@ func normalizeBindResponse(out *BindResponse, payload any) {
 
 	out.AgentToken = firstNonEmptyString(
 		strings.TrimSpace(out.AgentToken),
-		extractStringFromAny(payload, "agent_token", "access_token", "bearer_token", "token"),
+		extractStringFromAny(payload, "agent_token", "access_token", "bearer_token", "bind_token", "bindToken", "token"),
 	)
 	out.AgentUUID = firstNonEmptyString(
 		strings.TrimSpace(out.AgentUUID),

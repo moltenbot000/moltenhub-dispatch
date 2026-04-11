@@ -173,6 +173,44 @@ func TestBindAgentParsesTopLevelPayloadWithoutRuntimeEnvelope(t *testing.T) {
 	}
 }
 
+func TestBindAgentParsesBaseURLAndBindTokenAliases(t *testing.T) {
+	t.Parallel()
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/bind" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"bind_token": "agent-token",
+				"base_url":   server.URL + "/v1",
+				"agent_uuid": "agent-uuid",
+				"agent_uri":  "molten://agent/dispatch",
+				"handle":     "dispatch",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	response, err := client.BindAgent(context.Background(), hub.BindRequest{
+		BindToken: "bind-token",
+	})
+	if err != nil {
+		t.Fatalf("bind agent: %v", err)
+	}
+
+	if got, want := response.AgentToken, "agent-token"; got != want {
+		t.Fatalf("agent token = %q, want %q", got, want)
+	}
+	if got, want := response.APIBase, server.URL+"/v1"; got != want {
+		t.Fatalf("api_base = %q, want %q", got, want)
+	}
+}
+
 func TestBindAgentDoesNotFallbackToBindTokensRouteOnInvalidBindPayload(t *testing.T) {
 	t.Parallel()
 
@@ -495,6 +533,52 @@ func TestUpdateMetadataFallsBackWhenCanonicalMetadataEndpointIsMissing(t *testin
 	}
 	if aliasCalls != 1 {
 		t.Fatalf("expected one alias fallback call, got %d", aliasCalls)
+	}
+}
+
+func TestUpdateMetadataFallsBackWhenRuntimeMetadataEndpointReturnsUnauthorized(t *testing.T) {
+	t.Parallel()
+
+	var runtimeMetadataCalls int
+	var canonicalMetadataCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/runtime/profile":
+			runtimeMetadataCalls++
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":   "unauthorized",
+				"message": "missing or invalid bearer token",
+			})
+		case "/v1/agents/me/metadata":
+			canonicalMetadataCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":     true,
+				"result": map[string]any{"status": "ok"},
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
+		MetadataURL: server.URL + "/runtime/profile",
+	})
+
+	_, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
+		Metadata: map[string]any{"agent_type": "dispatch"},
+	})
+	if err != nil {
+		t.Fatalf("update metadata: %v", err)
+	}
+	if runtimeMetadataCalls != 1 {
+		t.Fatalf("expected one runtime metadata call, got %d", runtimeMetadataCalls)
+	}
+	if canonicalMetadataCalls != 1 {
+		t.Fatalf("expected one canonical metadata fallback call, got %d", canonicalMetadataCalls)
 	}
 }
 
