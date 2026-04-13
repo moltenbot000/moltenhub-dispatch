@@ -1635,19 +1635,7 @@ func connectedAgentFromCapabilityEntry(entry map[string]any, state AppState, exi
 
 	previous := existingConnectedAgent(existingByRef, handle, agentUUID, agentURI)
 	name := firstCapabilityString(sources, "display_name", "name", "handle", "agent_id", "id")
-	emoji := firstCapabilityString(sources,
-		"emoji",
-		"avatar_emoji",
-		"display_emoji",
-		"profile_emoji",
-		"icon_emoji",
-		"emoji_native",
-		"avatarEmoji",
-		"displayEmoji",
-		"emojiNative",
-		"avatar",
-		"icon",
-	)
+	emoji := capabilityEmoji(sources)
 	skills := capabilitySkills(entry, metadata, agentSection)
 
 	agent := previous
@@ -1756,6 +1744,38 @@ func firstCapabilityString(sources []map[string]any, keys ...string) string {
 			}
 		}
 	}
+	return ""
+}
+
+func capabilityEmoji(sources []map[string]any) string {
+	if emoji := firstCapabilityString(sources,
+		"emoji",
+		"avatar_emoji",
+		"display_emoji",
+		"profile_emoji",
+		"icon_emoji",
+		"emoji_native",
+		"avatarEmoji",
+		"displayEmoji",
+		"emojiNative",
+		"avatar",
+		"icon",
+	); emoji != "" {
+		return emoji
+	}
+
+	for _, source := range sources {
+		for _, key := range []string{"avatar", "icon"} {
+			nested := nestedMap(source, key)
+			if len(nested) == 0 {
+				continue
+			}
+			if emoji := stringFromMap(nested, "emoji", "native", "emoji_native", "emojiNative"); emoji != "" {
+				return emoji
+			}
+		}
+	}
+
 	return ""
 }
 
