@@ -483,6 +483,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="hub-conn-item"`) {
 		t.Fatalf("expected connection indicator in page, body=%s", body)
 	}
+	if !strings.Contains(body, `id="local-conn-item"`) {
+		t.Fatalf("expected local connection indicator in page, body=%s", body)
+	}
 	if strings.Contains(body, "Awaiting Bind") {
 		t.Fatalf("did not expect removed bind state section, body=%s", body)
 	}

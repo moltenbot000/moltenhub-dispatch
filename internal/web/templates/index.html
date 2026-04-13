@@ -29,6 +29,16 @@
       </div>
       <div class="status-row connection-status-row" aria-live="polite">
         <div
+          id="local-conn-item"
+          class="status-item status-item-compact"
+          title="Local: Connecting..."
+          aria-label="Local: Connecting..."
+          tabindex="0"
+        >
+          <span id="local-conn-dot" class="dot"></span>
+          <span id="local-conn-text" class="status-tooltip">Local: Connecting...</span>
+        </div>
+        <div
           id="hub-conn-item"
           class="status-item status-item-compact"
           data-status="{{.Connection.Status}}"
@@ -482,6 +492,9 @@
   <script>
     (() => {
       const shell = document.querySelector(".shell");
+      const localConnItem = document.getElementById("local-conn-item");
+      const localConnDot = document.getElementById("local-conn-dot");
+      const localConnText = document.getElementById("local-conn-text");
       const hubConnItem = document.getElementById("hub-conn-item");
       const hubConnDot = document.getElementById("hub-conn-dot");
       const hubConnText = document.getElementById("hub-conn-text");
@@ -1387,7 +1400,7 @@
 
       const setIndicator = (itemNode, dot, textNode, label, online, text) => {
         const message = `${label}: ${text}`;
-        if (dot) {
+        if (dot instanceof HTMLElement) {
           dot.classList.toggle("online", online);
         }
         if (textNode) {
@@ -1397,6 +1410,10 @@
           itemNode.title = message;
           itemNode.setAttribute("aria-label", message);
         }
+      };
+
+      const setLocalConnection = (online, text) => {
+        setIndicator(localConnItem, localConnDot, localConnText, "Local", online, text);
       };
 
       const applyHubDotMode = (mode) => {
@@ -2061,9 +2078,12 @@
           if (!response.ok) {
             throw new Error(`status request failed with ${response.status}`);
           }
-          renderHubConnection(await response.json());
+          const snapshot = await response.json();
+          setLocalConnection(true, "Connected");
+          renderHubConnection(snapshot);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh hub status.";
+          setLocalConnection(false, "Reconnecting...");
           setHubConnection("disconnected", message);
         }
       };
