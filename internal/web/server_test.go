@@ -729,6 +729,41 @@ func TestHandleDispatchAPIAcceptsMinimalTargetOnlyForm(t *testing.T) {
 	}
 }
 
+func TestHandleDispatchAPIAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "selectedAgentRef=worker-a&selectedSkill=code_for_me&payload_format=text&payload=Issue+an+offline+to+moltenbot+hub"
+	req := httptest.NewRequest(http.MethodPost, "/api/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	if got := stub.lastDispatchReq.TargetAgentRef; got != "worker-a" {
+		t.Fatalf("unexpected target agent ref: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.SkillName; got != "code_for_me" {
+		t.Fatalf("unexpected skill name: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "markdown" {
+		t.Fatalf("expected payload format markdown, got %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.Payload; got != "Issue an offline to moltenbot hub" {
+		t.Fatalf("unexpected payload value: %#v", stub.lastDispatchReq.Payload)
+	}
+}
+
 func TestHandleDispatchMapsTextPayloadFormatAliasToMarkdown(t *testing.T) {
 	t.Parallel()
 
@@ -2140,6 +2175,12 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if strings.Contains(body, `const setConnectedAgentsRefreshCountdown = (remainingMs, busy) => {`) {
 		t.Fatalf("did not expect removed refresh countdown helper, body=%s", body)
+	}
+	if strings.Contains(body, `setConnectedAgentsRefreshCountdown(`) {
+		t.Fatalf("did not expect removed refresh countdown calls, body=%s", body)
+	}
+	if strings.Contains(body, `connectedAgentsRefreshNextNodes`) {
+		t.Fatalf("did not expect removed refresh countdown node references, body=%s", body)
 	}
 	if !strings.Contains(body, `setConnectedAgentsRefreshState(false, "");`) {
 		t.Fatalf("expected refresh completion to clear the status text, body=%s", body)

@@ -1410,16 +1410,39 @@ func (p *dispatchPayload) fromJSONBytes(data []byte) error {
 
 func (p *dispatchPayload) fromMap(raw map[string]any) {
 	*p = dispatchPayload{
-		AgentRef:        stringFromMap(raw, "target_agent_ref", "targetAgentRef", "agent_ref", "agentRef"),
-		TargetAgentUUID: stringFromMap(raw, "target_agent_uuid", "targetAgentUUID"),
-		TargetAgentURI:  stringFromMap(raw, "target_agent_uri", "targetAgentURI"),
-		SkillName:       stringFromMap(raw, "skill_name", "skillName"),
-		SelectedTask:    stringFromMap(raw, "selected_task", "selectedTask", "task_name", "taskName", "task"),
-		Repo:            stringFromMap(raw, "repo"),
-		LogPaths:        support.StringSliceFromAny(firstMapValue(raw, "log_paths", "logPaths")),
-		Payload:         firstMapValue(raw, "payload"),
-		PayloadFormat:   stringFromMap(raw, "payload_format", "payloadFormat"),
-		raw:             raw,
+		AgentRef: stringFromMap(
+			raw,
+			"target_agent_ref", "targetAgentRef",
+			"selected_agent_ref", "selectedAgentRef",
+			"agent_ref", "agentRef",
+		),
+		TargetAgentUUID: stringFromMap(
+			raw,
+			"target_agent_uuid", "targetAgentUUID", "targetAgentUuid",
+			"selected_agent_uuid", "selectedAgentUUID", "selectedAgentUuid",
+		),
+		TargetAgentURI: stringFromMap(
+			raw,
+			"target_agent_uri", "targetAgentURI", "targetAgentUri",
+			"selected_agent_uri", "selectedAgentURI", "selectedAgentUri",
+		),
+		SkillName: stringFromMap(
+			raw,
+			"skill_name", "skillName",
+			"selected_skill", "selectedSkill",
+			"selected_skill_name", "selectedSkillName",
+		),
+		SelectedTask: stringFromMap(
+			raw,
+			"selected_task", "selectedTask",
+			"task_name", "taskName",
+			"task",
+		),
+		Repo:          stringFromMap(raw, "repo"),
+		LogPaths:      support.StringSliceFromAny(firstMapValue(raw, "log_paths", "logPaths")),
+		Payload:       firstMapValue(raw, "payload"),
+		PayloadFormat: stringFromMap(raw, "payload_format", "payloadFormat"),
+		raw:           raw,
 	}
 }
 
@@ -1468,10 +1491,15 @@ func (p dispatchPayload) TaskPayload() any {
 func dispatchPayloadControlField(key string) bool {
 	switch strings.ToLower(strings.TrimSpace(key)) {
 	case "target_agent_ref", "targetagentref",
+		"selected_agent_ref", "selectedagentref",
 		"agent_ref", "agentref",
 		"target_agent_uuid", "targetagentuuid",
+		"selected_agent_uuid", "selectedagentuuid",
 		"target_agent_uri", "targetagenturi",
+		"selected_agent_uri", "selectedagenturi",
 		"skill_name", "skillname",
+		"selected_skill", "selectedskill",
+		"selected_skill_name", "selectedskillname",
 		"selected_task", "selectedtask",
 		"task_name", "taskname",
 		"task",

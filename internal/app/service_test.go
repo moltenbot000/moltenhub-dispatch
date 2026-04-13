@@ -2055,6 +2055,82 @@ func TestHandleSkillRequestAcceptsSelectedTaskAliasAndInlinePayload(t *testing.T
 	}
 }
 
+func TestHandleSkillRequestAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{
+			{
+				ID:               "worker-a",
+				Name:             "Worker A",
+				AgentUUID:        "worker-uuid",
+				AdvertisedSkills: []Skill{{Name: "code_for_me"}},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	message := hub.PullResponse{
+		DeliveryID:    "delivery-1",
+		FromAgentUUID: "caller-uuid",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_request",
+			SkillName: dispatchSkillName,
+			RequestID: "parent-req",
+			Payload: map[string]any{
+				"selectedAgentRef":  "worker-a",
+				"selectedSkillName": "code_for_me",
+				"repo":              "/tmp/repo",
+				"logPaths":          []string{"/tmp/repo/logs/failure.log"},
+				"prompt":            "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+			},
+		},
+	}
+
+	if err := service.handleInboundMessage(context.Background(), message); err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one downstream publish call, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
+		t.Fatalf("unexpected target agent UUID: %#v", fake.publishCalls[0])
+	}
+	if got := fake.publishCalls[0].Message.SkillName; got != "code_for_me" {
+		t.Fatalf("expected selected skill alias to resolve downstream skill, got %q", got)
+	}
+	if got := fake.publishCalls[0].Message.PayloadFormat; got != "json" {
+		t.Fatalf("expected inline payload to dispatch as json, got %q", got)
+	}
+
+	payload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected downstream payload map, got %T", fake.publishCalls[0].Message.Payload)
+	}
+	if got := payload["prompt"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
+		t.Fatalf("unexpected downstream prompt payload: %#v", payload)
+	}
+	if got := payload["repo"]; got != "/tmp/repo" {
+		t.Fatalf("unexpected downstream repo payload: %#v", payload)
+	}
+	logPaths, ok := payload["log_paths"].([]string)
+	if !ok || len(logPaths) != 1 || logPaths[0] != "/tmp/repo/logs/failure.log" {
+		t.Fatalf("unexpected downstream log_paths payload: %#v", payload["log_paths"])
+	}
+	if _, exists := payload["selectedAgentRef"]; exists {
+		t.Fatalf("did not expect selectedAgentRef control field in downstream payload: %#v", payload)
+	}
+	if _, exists := payload["selectedSkillName"]; exists {
+		t.Fatalf("did not expect selectedSkillName control field in downstream payload: %#v", payload)
+	}
+}
+
 func TestHandleDownstreamFailureStillQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
 	t.Parallel()
 

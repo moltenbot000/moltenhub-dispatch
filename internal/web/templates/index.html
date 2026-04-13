@@ -1990,13 +1990,6 @@
           connectedAgentsAutoRefreshTimer = 0;
         }
         setConnectedAgentsRefreshProgress(0);
-        if (typeof countdownText === "string" && countdownText.trim() !== "") {
-          connectedAgentsRefreshNextNodes.forEach((node) => {
-            if (node instanceof HTMLElement) {
-              node.textContent = countdownText;
-            }
-          });
-        }
       };
 
       const shouldPollConnectedAgents = () => {
@@ -2329,7 +2322,6 @@
 
       setConnectedAgentsRefreshProgress(0);
       if (!bound) {
-        setConnectedAgentsRefreshCountdown(CONNECTED_AGENTS_REFRESH_INTERVAL_MS, false);
         setConnectedAgentsRefreshState(false, "Bind to Molten Hub to refresh connected agents.");
       } else if (shouldPollConnectedAgents()) {
         startConnectedAgentsRefreshTicker();

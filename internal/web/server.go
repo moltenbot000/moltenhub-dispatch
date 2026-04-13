@@ -496,9 +496,39 @@ func dispatchRequestFromValues(values url.Values) (app.DispatchRequest, error) {
 		timeout = seconds
 	}
 
+	targetAgentRef := support.FirstNonEmptyString(
+		strings.TrimSpace(values.Get("target_agent_ref")),
+		strings.TrimSpace(values.Get("targetAgentRef")),
+		strings.TrimSpace(values.Get("selected_agent_ref")),
+		strings.TrimSpace(values.Get("selectedAgentRef")),
+		strings.TrimSpace(values.Get("agent_ref")),
+		strings.TrimSpace(values.Get("agentRef")),
+		strings.TrimSpace(values.Get("target_agent_uuid")),
+		strings.TrimSpace(values.Get("targetAgentUUID")),
+		strings.TrimSpace(values.Get("selected_agent_uuid")),
+		strings.TrimSpace(values.Get("selectedAgentUUID")),
+		strings.TrimSpace(values.Get("target_agent_uri")),
+		strings.TrimSpace(values.Get("targetAgentURI")),
+		strings.TrimSpace(values.Get("selected_agent_uri")),
+		strings.TrimSpace(values.Get("selectedAgentURI")),
+	)
+	skillName := support.FirstNonEmptyString(
+		strings.TrimSpace(values.Get("skill_name")),
+		strings.TrimSpace(values.Get("skillName")),
+		strings.TrimSpace(values.Get("selected_skill")),
+		strings.TrimSpace(values.Get("selectedSkill")),
+		strings.TrimSpace(values.Get("selected_skill_name")),
+		strings.TrimSpace(values.Get("selectedSkillName")),
+		strings.TrimSpace(values.Get("selected_task")),
+		strings.TrimSpace(values.Get("selectedTask")),
+		strings.TrimSpace(values.Get("task_name")),
+		strings.TrimSpace(values.Get("taskName")),
+		strings.TrimSpace(values.Get("task")),
+	)
+
 	return app.DispatchRequest{
-		TargetAgentRef: strings.TrimSpace(values.Get("target_agent_ref")),
-		SkillName:      strings.TrimSpace(values.Get("skill_name")),
+		TargetAgentRef: targetAgentRef,
+		SkillName:      skillName,
 		Repo:           strings.TrimSpace(values.Get("repo")),
 		LogPaths:       support.SplitLines(values.Get("log_paths")),
 		Payload:        payloadValue,
