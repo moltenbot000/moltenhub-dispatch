@@ -145,27 +145,6 @@
 
       <section class="grid two-up">
         <article class="panel">
-          <h2>Pending Tasks</h2>
-          {{if .State.PendingTasks}}
-          <div class="list">
-            {{range .State.PendingTasks}}
-            <article class="card">
-              <h3>{{.ID}}</h3>
-              <p><strong>Skill:</strong> {{.OriginalSkillName}}</p>
-              <p><strong>Target:</strong> {{if .TargetAgentUUID}}{{.TargetAgentUUID}}{{else}}{{.TargetAgentURI}}{{end}}</p>
-              <p><strong>Expires:</strong> {{formatTime .ExpiresAt}}</p>
-              <p><strong>Log:</strong> {{.LogPath}}</p>
-            </article>
-            {{end}}
-          </div>
-          {{else}}
-          <p class="empty">No tasks are waiting on downstream results.</p>
-          {{end}}
-        </article>
-      </section>
-
-      <section class="grid two-up">
-        <article class="panel">
           <h2>Queued Follow-Ups</h2>
           {{if .State.FollowUpTasks}}
           <div class="list">
