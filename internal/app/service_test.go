@@ -2003,8 +2003,12 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	}()
 
 	deadline := time.After(2 * time.Second)
+	metadataObserved := false
 	for {
 		if len(fake.updateMetadataCalls) > 0 {
+			metadataObserved = true
+		}
+		if metadataObserved && fake.pullCalls > 0 {
 			break
 		}
 		select {
