@@ -172,13 +172,18 @@
           {{if .State.RecentEvents}}
           <div class="list">
             {{range .State.RecentEvents}}
-            <article class="card">
-              <h3>{{.Title}}</h3>
-              <p><strong>When:</strong> {{formatTime .At}}</p>
-              <p><strong>Level:</strong> {{.Level}}</p>
-              <p>{{.Detail}}</p>
-              {{if .TaskID}}<p><strong>Task:</strong> {{.TaskID}}</p>{{end}}
-              {{if .LogPath}}<p><strong>Log:</strong> {{.LogPath}}</p>{{end}}
+            <article class="card runtime-event-card" data-runtime-event-card>
+              <div class="runtime-event-card-header">
+                <h3>{{.Title}}</h3>
+                <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="{{if eq .Level "error"}}true{{else}}false{{end}}">{{if eq .Level "error"}}Close{{else}}Open{{end}}</button>
+              </div>
+              <div class="runtime-event-card-body" data-runtime-event-body {{if ne .Level "error"}}hidden{{end}}>
+                <p><strong>When:</strong> {{formatTime .At}}</p>
+                <p><strong>Level:</strong> {{.Level}}</p>
+                <p>{{.Detail}}</p>
+                {{if .TaskID}}<p><strong>Task:</strong> {{.TaskID}}</p>{{end}}
+                {{if .LogPath}}<p><strong>Log:</strong> {{.LogPath}}</p>{{end}}
+              </div>
             </article>
             {{end}}
           </div>
@@ -439,6 +444,7 @@
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
+      const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
       const connectedAgentsList = document.getElementById("connected-agents-list");
       const connectedAgentsEmpty = document.getElementById("connected-agents-empty");
       const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));
@@ -630,6 +636,26 @@
         }
         themeToggleButton.title = currentLabel;
         themeToggleButton.setAttribute("aria-label", `Switch theme. Currently: ${currentLabel}`);
+      };
+
+      const initRuntimeEventCards = () => {
+        runtimeEventCards.forEach((card) => {
+          if (!(card instanceof HTMLElement)) {
+            return;
+          }
+          const toggle = card.querySelector("[data-runtime-event-toggle]");
+          const body = card.querySelector("[data-runtime-event-body]");
+          if (!(toggle instanceof HTMLButtonElement) || !(body instanceof HTMLElement)) {
+            return;
+          }
+          toggle.addEventListener("click", () => {
+            const expanded = toggle.getAttribute("aria-expanded") === "true";
+            const nextExpanded = !expanded;
+            toggle.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
+            toggle.textContent = nextExpanded ? "Close" : "Open";
+            body.hidden = !nextExpanded;
+          });
+        });
       };
 
       const applyThemeMode = (theme, persist) => {
@@ -2172,6 +2198,7 @@
       if (skillNameSelect instanceof HTMLSelectElement) {
         skillNameSelect.addEventListener("change", updateSkillNameOptions);
       }
+      initRuntimeEventCards();
       renderConnectedAgents(parseInitialConnectedAgents());
 
       setConnectedAgentsRefreshProgress(0);

@@ -1115,6 +1115,70 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	}
 }
 
+func TestHandleIndexMinimizesInfoRecentEventsAndKeepsErrorsOpen(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			RecentEvents: []app.RuntimeEvent{
+				{
+					Title:  "Task dispatched",
+					Level:  "info",
+					Detail: "Queued code_for_me for moltenbot/jef/codex-beast",
+					TaskID: "task-123",
+					LogPath: ".moltenhub/logs/task-123.log",
+					At:     time.Unix(1, 0).UTC(),
+				},
+				{
+					Title:  "Dispatch failed",
+					Level:  "error",
+					Detail: "worker panic: boom",
+					TaskID: "task-456",
+					LogPath: ".moltenhub/logs/task-456.log",
+					At:     time.Unix(2, 0).UTC(),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(body, `class="card runtime-event-card" data-runtime-event-card`) {
+		t.Fatalf("expected recent event cards to use collapsible card class, body=%s", body)
+	}
+	if !strings.Contains(body, `data-runtime-event-toggle aria-expanded="false">Open</button>`) {
+		t.Fatalf("expected info event toggle to render closed by default, body=%s", body)
+	}
+	if !strings.Contains(body, `class="runtime-event-card-body" data-runtime-event-body hidden`) {
+		t.Fatalf("expected info event body to render hidden by default, body=%s", body)
+	}
+	if !strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
+		t.Fatalf("expected error event toggle to render open by default, body=%s", body)
+	}
+	if !strings.Contains(body, `const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));`) {
+		t.Fatalf("expected runtime event JS collection hook, body=%s", body)
+	}
+	if !strings.Contains(body, `const initRuntimeEventCards = () => {`) {
+		t.Fatalf("expected runtime event initialization helper, body=%s", body)
+	}
+	if !strings.Contains(body, `toggle.textContent = nextExpanded ? "Close" : "Open";`) {
+		t.Fatalf("expected runtime event toggle button copy to swap between open and close, body=%s", body)
+	}
+	if !strings.Contains(body, `initRuntimeEventCards();`) {
+		t.Fatalf("expected runtime event toggle initialization on page load, body=%s", body)
+	}
+}
+
 func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	t.Parallel()
 
@@ -1153,6 +1217,15 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.shell button.dispatch-task-button {`) {
 		t.Fatalf("expected dispatch task button style override for action button look, body=%s", body)
+	}
+	if !strings.Contains(body, `.runtime-event-card-header {`) {
+		t.Fatalf("expected runtime event card header layout styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.runtime-event-card-toggle {`) {
+		t.Fatalf("expected runtime event toggle button styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.runtime-event-card-body[hidden] {`) {
+		t.Fatalf("expected runtime event hidden state styles, body=%s", body)
 	}
 	if !strings.Contains(body, `display: none !important;`) {
 		t.Fatalf("expected explicit hidden display override, body=%s", body)

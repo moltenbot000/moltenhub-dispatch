@@ -4244,6 +4244,40 @@ body.settings-modal-open {
   font-size: 0.92rem;
 }
 
+.runtime-event-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.runtime-event-card-header h3 {
+  margin: 0;
+}
+
+.runtime-event-card-toggle {
+  min-width: 68px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--running) 28%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-glass-strong) 88%, rgba(10, 132, 255, 0.08));
+  color: var(--running);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runtime-event-card-toggle:hover,
+.runtime-event-card-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--running) 42%, var(--border));
+  background: color-mix(in srgb, var(--surface-glass-strong) 82%, rgba(10, 132, 255, 0.14));
+}
+
+.runtime-event-card-body[hidden] {
+  display: none;
+}
+
 .card p {
   margin-top: 6px;
 }
