@@ -537,8 +537,26 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
 		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
 	}
+	if !strings.Contains(body, `data-skill-payload-format-toggle`) {
+		t.Fatalf("expected manual dispatch payload format toggle buttons, body=%s", body)
+	}
+	if !strings.Contains(body, `data-payload-format="markdown"`) {
+		t.Fatalf("expected markdown payload format toggle option, body=%s", body)
+	}
+	if !strings.Contains(body, `data-payload-format="json"`) {
+		t.Fatalf("expected json payload format toggle option, body=%s", body)
+	}
+	if !strings.Contains(body, `id="skill-payload-validation"`) {
+		t.Fatalf("expected payload validation output node, body=%s", body)
+	}
 	if !strings.Contains(body, `id="skill-payload-format-input" type="hidden" name="payload_format"`) {
 		t.Fatalf("expected manual dispatch payload format field, body=%s", body)
+	}
+	if !strings.Contains(body, `const DEFAULT_SKILL_PAYLOAD_FORMAT = "markdown";`) {
+		t.Fatalf("expected markdown payload format default in client script, body=%s", body)
+	}
+	if !strings.Contains(body, `JSON payload is invalid:`) {
+		t.Fatalf("expected JSON validation messaging in client script, body=%s", body)
 	}
 	if strings.Contains(body, `name="timeout_seconds"`) {
 		t.Fatalf("did not expect manual dispatch timeout field, body=%s", body)
@@ -766,6 +784,36 @@ func TestHandleDispatchRejectsUnknownPayloadFormat(t *testing.T) {
 	}
 	if got := stub.state.Flash.Message; got != "payload_format must be one of markdown or json" {
 		t.Fatalf("unexpected error flash message: %#v", got)
+	}
+}
+
+func TestHandleDispatchRejectsInvalidJSONPayload(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=json&payload=%7B%22prompt%22%3A"
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := stub.lastDispatchReq; got.TargetAgentRef != "" || got.SkillName != "" || got.Payload != nil || got.PayloadFormat != "" {
+		t.Fatalf("expected dispatch request to be rejected before service call, got %#v", got)
+	}
+	if got := stub.state.Flash.Level; got != "error" {
+		t.Fatalf("expected error flash level, got %#v", stub.state.Flash)
+	}
+	if got := stub.state.Flash.Message; !strings.Contains(got, "payload JSON is invalid:") {
+		t.Fatalf("expected JSON parse error flash message, got %#v", got)
 	}
 }
 
