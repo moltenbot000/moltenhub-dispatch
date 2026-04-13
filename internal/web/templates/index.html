@@ -136,7 +136,7 @@
             <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
             <div class="manual-dispatch-actions">
               <button id="dispatch-task-clear" type="button" class="prompt-action-button prompt-action-clear">Clear</button>
-              <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">Dispatch Task</button>
+              <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">Dispatch</button>
             </div>
             <p id="dispatch-submit-status" class="connected-agents-refresh-status" aria-live="polite"></p>
           </form>
@@ -1530,7 +1530,7 @@
           return;
         }
         dispatchTaskSubmit.disabled = busy;
-        dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch Task";
+        dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch";
       };
 
       const setDispatchSubmitStatus = (status, isError = false) => {

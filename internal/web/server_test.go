@@ -633,11 +633,17 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-task-submit"`) {
 		t.Fatalf("expected dispatch submit button id for async submit handling, body=%s", body)
 	}
+	if !strings.Contains(body, `>Dispatch</button>`) {
+		t.Fatalf("expected dispatch submit button label to be Dispatch, body=%s", body)
+	}
 	if !strings.Contains(body, `const dispatchTaskClear = document.getElementById("dispatch-task-clear");`) {
 		t.Fatalf("expected clear button hook in client script, body=%s", body)
 	}
 	if !strings.Contains(body, `dispatchTaskClear.disabled = busy;`) {
 		t.Fatalf("expected dispatch busy state to disable the clear action, body=%s", body)
+	}
+	if !strings.Contains(body, `dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch";`) {
+		t.Fatalf("expected dispatch submit reset label to stay aligned with the rendered button copy, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-submit-status" class="connected-agents-refresh-status"`) {
 		t.Fatalf("expected inline dispatch status region for async dispatch feedback, body=%s", body)
