@@ -3579,6 +3579,11 @@ p,
   grid-template-columns: minmax(0, 1fr);
 }
 
+#sub-actions {
+  display: grid;
+  gap: 20px;
+}
+
 .panel {
   padding: 20px;
   min-width: 0;
