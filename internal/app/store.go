@@ -16,7 +16,8 @@ import (
 const maxRecentEvents = 40
 
 const (
-	defaultDataDir = ".moltenhub"
+	defaultDataDir                  = ".moltenhub"
+	defaultGoogleAnalyticsMeasureID = "G-BY33RFG2WB"
 )
 
 type Store struct {
@@ -31,13 +32,14 @@ func DefaultSettings() Settings {
 		runtime = DefaultHubRuntime()
 	}
 	return Settings{
-		ListenAddr:   envOrDefault("LISTEN_ADDR", ":8080"),
-		HubRegion:    runtime.ID,
-		HubURL:       runtime.HubURL,
-		SessionKey:   envOrDefault("MOLTENHUB_SESSION_KEY", "main"),
-		PollInterval: 2 * time.Second,
-		TaskTimeout:  5 * time.Minute,
-		DataDir:      envOrDefault("APP_DATA_DIR", defaultDataDir),
+		ListenAddr:                   envOrDefault("LISTEN_ADDR", ":8080"),
+		HubRegion:                    runtime.ID,
+		HubURL:                       runtime.HubURL,
+		SessionKey:                   envOrDefault("MOLTENHUB_SESSION_KEY", "main"),
+		PollInterval:                 2 * time.Second,
+		TaskTimeout:                  5 * time.Minute,
+		DataDir:                      envOrDefault("APP_DATA_DIR", defaultDataDir),
+		GoogleAnalyticsMeasurementID: envOrDefault("MOLTENHUB_GOOGLE_ANALYTICS_ID", defaultGoogleAnalyticsMeasureID),
 	}
 }
 
@@ -262,10 +264,16 @@ func mergeDefaultSettings(settings *Settings, defaults Settings) {
 	if settings.TaskTimeout == 0 {
 		settings.TaskTimeout = defaults.TaskTimeout
 	}
+	if settings.GoogleAnalyticsMeasurementID == "" {
+		settings.GoogleAnalyticsMeasurementID = defaults.GoogleAnalyticsMeasurementID
+	}
 	if dataDirOverride, ok := envValue("APP_DATA_DIR"); ok {
 		settings.DataDir = dataDirOverride
 	} else if settings.DataDir == "" {
 		settings.DataDir = defaults.DataDir
+	}
+	if gaMeasurementID, ok := envValue("MOLTENHUB_GOOGLE_ANALYTICS_ID"); ok {
+		settings.GoogleAnalyticsMeasurementID = gaMeasurementID
 	}
 }
 

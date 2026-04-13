@@ -69,3 +69,4 @@ The UI is served at **http://localhost:8080** by default.
 | `MOLTENHUB_URL` | Runtime root URL (`https://na.hub.molten.bot` or `https://eu.hub.molten.bot`) |
 | `MOLTENHUB_SESSION_KEY` | Session key for state persistence |
 | `APP_DATA_DIR` | Override the runtime state storage location |
+| `MOLTENHUB_GOOGLE_ANALYTICS_ID` | Override the Google Analytics measurement ID used by the web UI |
