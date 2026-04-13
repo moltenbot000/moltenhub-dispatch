@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
+	"github.com/moltenbot000/moltenhub-dispatch/internal/support"
 )
 
 const (
@@ -818,7 +819,7 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
 	s.syncHubClient(state)
 	logPaths := followUpLogPaths(pending)
-	originalRequest := cloneMap(pending.DispatchPayload)
+	originalRequest := support.CloneMap(pending.DispatchPayload)
 	task := FollowUpTask{
 		ID:              NewID("followup"),
 		CreatedAt:       time.Now().UTC(),
@@ -828,12 +829,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 		FailedSkillName: pending.OriginalSkillName,
 		FailedRepo:      fallbackRepo(pending.Repo),
 		LogPaths:        logPaths,
-		RunConfig: FollowUpRunConfig{
-			Repos:        []string{followUpRepo},
-			BaseBranch:   "main",
-			TargetSubdir: ".",
-			Prompt:       followUpPrompt,
-		},
+		RunConfig:        newFollowUpRunConfig(),
 		OriginalError:    formatFailureSummary(report),
 		OriginalRequest:  originalRequest,
 		RequestedByAgent: pending.CallerAgentUUID,
@@ -1222,7 +1218,7 @@ func normalizePayload(payload any, repo string, logPaths []string) map[string]an
 			typed["repo"] = repo
 		}
 		if len(logPaths) > 0 {
-			typed["log_paths"] = compactPaths(logPaths)
+			typed["log_paths"] = support.CompactStrings(logPaths)
 		}
 		return typed
 	default:
@@ -1231,7 +1227,7 @@ func normalizePayload(payload any, repo string, logPaths []string) map[string]an
 			result["repo"] = repo
 		}
 		if len(logPaths) > 0 {
-			result["log_paths"] = compactPaths(logPaths)
+			result["log_paths"] = support.CompactStrings(logPaths)
 		}
 		return result
 	}
@@ -1394,20 +1390,7 @@ func errorDetail(err error) any {
 }
 
 func stringFromMap(values map[string]any, keys ...string) string {
-	if values == nil {
-		return ""
-	}
-	for _, key := range keys {
-		value, ok := values[key].(string)
-		if !ok {
-			continue
-		}
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
+	return support.StringFromMap(values, keys...)
 }
 
 func (s *Service) tryMarkTaskFailureOffline(ctx context.Context, pending PendingTask, report failureReport) {
@@ -1438,69 +1421,10 @@ func fallbackRepo(repo string) string {
 	return repo
 }
 
-func compactPaths(paths []string) []string {
-	seen := make(map[string]struct{}, len(paths))
-	out := make([]string, 0, len(paths))
-	for _, entry := range paths {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		if _, ok := seen[entry]; ok {
-			continue
-		}
-		seen[entry] = struct{}{}
-		out = append(out, entry)
-	}
-	return out
-}
-
 func followUpLogPaths(pending PendingTask) []string {
-	paths := stringSliceFromAny(pending.DispatchPayload["log_paths"])
+	paths := support.StringSliceFromAny(pending.DispatchPayload["log_paths"])
 	paths = append(paths, pending.LogPath)
-	return compactPaths(paths)
-}
-
-func stringSliceFromAny(value any) []string {
-	switch typed := value.(type) {
-	case []string:
-		out := make([]string, len(typed))
-		copy(out, typed)
-		return out
-	case []any:
-		out := make([]string, 0, len(typed))
-		for _, entry := range typed {
-			if str, ok := entry.(string); ok {
-				out = append(out, str)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-func cloneMap(value map[string]any) map[string]any {
-	if len(value) == 0 {
-		return nil
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		result := make(map[string]any, len(value))
-		for key, item := range value {
-			result[key] = item
-		}
-		return result
-	}
-	var cloned map[string]any
-	if err := json.Unmarshal(data, &cloned); err != nil {
-		result := make(map[string]any, len(value))
-		for key, item := range value {
-			result[key] = item
-		}
-		return result
-	}
-	return cloned
+	return support.CompactStrings(paths)
 }
 
 func (a ConnectedAgent) NameOrRef() string {
@@ -1647,7 +1571,7 @@ func flattenPeerSkillCatalog(raw any) []map[string]any {
 				continue
 			}
 			if _, hasID := entry["id"]; !hasID && strings.TrimSpace(key) != "" {
-				cloned := cloneMap(entry)
+				cloned := support.CloneMap(entry)
 				cloned["id"] = key
 				entry = cloned
 			}
@@ -1825,13 +1749,16 @@ func runtimeAPIBaseFromSession(session Session) string {
 }
 
 func coalesceTrimmed(values ...string) string {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
+	return support.FirstNonEmptyString(values...)
+}
+
+func newFollowUpRunConfig() FollowUpRunConfig {
+	return FollowUpRunConfig{
+		Repos:        []string{followUpRepo},
+		BaseBranch:   "main",
+		TargetSubdir: ".",
+		Prompt:       followUpPrompt,
 	}
-	return ""
 }
 
 func defaultAPIBaseForHub(hubURL string) string {

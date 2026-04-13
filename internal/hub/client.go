@@ -12,6 +12,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/moltenbot000/moltenhub-dispatch/internal/support"
 )
 
 type Client struct {
@@ -520,42 +522,42 @@ func applyBindEndpoints(out *BindResponse, endpoints map[string]any) {
 
 	out.Endpoints.Manifest = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.Manifest),
-		stringFromMap(endpoints, "manifest", "manifest_url", "manifestURL"),
+		support.StringFromMap(endpoints, "manifest", "manifest_url", "manifestURL"),
 	)
 	out.Endpoints.Capabilities = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.Capabilities),
-		stringFromMap(endpoints, "capabilities", "capabilities_url", "capabilitiesURL"),
+		support.StringFromMap(endpoints, "capabilities", "capabilities_url", "capabilitiesURL"),
 	)
 	out.Endpoints.Metadata = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.Metadata),
-		stringFromMap(endpoints, "metadata", "metadata_url", "metadataURL", "profile", "profile_url", "profileURL"),
+		support.StringFromMap(endpoints, "metadata", "metadata_url", "metadataURL", "profile", "profile_url", "profileURL"),
 	)
 	out.Endpoints.MessagesPull = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.MessagesPull),
-		stringFromMap(endpoints, "messages_pull", "messagesPull"),
+		support.StringFromMap(endpoints, "messages_pull", "messagesPull"),
 	)
 	out.Endpoints.MessagesPush = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.MessagesPush),
-		stringFromMap(endpoints, "messages_publish", "messagesPush"),
+		support.StringFromMap(endpoints, "messages_publish", "messagesPush"),
 	)
 	out.Endpoints.OpenClawPull = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.OpenClawPull),
-		stringFromMap(endpoints, "openclaw_messages_pull", "openclaw_pull", "openclawPull"),
+		support.StringFromMap(endpoints, "openclaw_messages_pull", "openclaw_pull", "openclawPull"),
 	)
 	out.Endpoints.OpenClawPush = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.OpenClawPush),
-		stringFromMap(endpoints, "openclaw_messages_publish", "openclaw_publish", "openclawPush"),
+		support.StringFromMap(endpoints, "openclaw_messages_publish", "openclaw_publish", "openclawPush"),
 	)
 	out.Endpoints.Offline = firstNonEmptyString(
 		strings.TrimSpace(out.Endpoints.Offline),
-		stringFromMap(endpoints, "openclaw_offline", "offline", "openclawOffline"),
+		support.StringFromMap(endpoints, "openclaw_offline", "offline", "openclawOffline"),
 	)
 }
 
 func extractStringFromAny(value any, keys ...string) string {
 	var out string
 	visitAny(value, func(entry map[string]any) bool {
-		out = stringFromMap(entry, keys...)
+		out = support.StringFromMap(entry, keys...)
 		return out != ""
 	})
 	return out
@@ -602,26 +604,8 @@ func visitAny(value any, visit func(map[string]any) bool) bool {
 	return false
 }
 
-func stringFromMap(values map[string]any, keys ...string) string {
-	for _, key := range keys {
-		raw, ok := values[key]
-		if !ok {
-			continue
-		}
-		if value, ok := raw.(string); ok && strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
 func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return support.FirstNonEmptyString(values...)
 }
 
 func hubPingURL(baseURL string) (string, error) {
