@@ -1594,17 +1594,18 @@ func flattenPeerSkillCatalog(raw any) []map[string]any {
 func connectedAgentFromCapabilityEntry(entry map[string]any, state AppState, existingByRef map[string]ConnectedAgent) (ConnectedAgent, bool) {
 	metadata := nestedMetadata(entry)
 	agentSection := nestedMap(entry, "agent")
+	sources := capabilityStringSources(entry)
 
-	agentUUID := firstCapabilityString(entry, metadata, agentSection, "agent_uuid", "uuid")
-	agentURI := firstCapabilityString(entry, metadata, agentSection, "agent_uri", "uri")
-	handle := firstCapabilityString(entry, metadata, agentSection, "handle", "agent_id", "id")
+	agentUUID := firstCapabilityString(sources, "agent_uuid", "uuid")
+	agentURI := firstCapabilityString(sources, "agent_uri", "uri")
+	handle := firstCapabilityString(sources, "handle", "agent_id", "id")
 	if sameAgentRef(state.Session, agentUUID, agentURI, handle) {
 		return ConnectedAgent{}, false
 	}
 
 	previous := existingConnectedAgent(existingByRef, handle, agentUUID, agentURI)
-	name := firstCapabilityString(entry, metadata, agentSection, "display_name", "name", "handle", "agent_id", "id")
-	emoji := firstCapabilityString(entry, metadata, agentSection, "emoji")
+	name := firstCapabilityString(sources, "display_name", "name", "handle", "agent_id", "id")
+	emoji := firstCapabilityString(sources, "emoji", "avatar_emoji", "display_emoji", "avatar", "icon")
 	skills := capabilitySkills(entry, metadata, agentSection)
 
 	agent := previous
@@ -1636,6 +1637,42 @@ func nestedMetadata(entry map[string]any) map[string]any {
 	return nil
 }
 
+func capabilityStringSources(entry map[string]any) []map[string]any {
+	sources := make([]map[string]any, 0, 10)
+	appendSource := func(source map[string]any) {
+		if len(source) == 0 {
+			return
+		}
+		sources = append(sources, source)
+	}
+
+	metadata := nestedMetadata(entry)
+	agent := nestedMap(entry, "agent")
+	profile := firstNestedMap([]map[string]any{entry, metadata, agent}, "profile", "public_profile", "directory_profile")
+	directory := firstNestedMap([]map[string]any{entry, metadata, agent}, "directory", "public_directory")
+
+	appendSource(entry)
+	appendSource(metadata)
+	appendSource(agent)
+	appendSource(profile)
+	appendSource(directory)
+
+	if nested := nestedMap(metadata, "metadata"); len(nested) > 0 {
+		appendSource(nested)
+	}
+	if nested := nestedMap(agent, "metadata"); len(nested) > 0 {
+		appendSource(nested)
+	}
+	if nested := nestedMap(profile, "metadata"); len(nested) > 0 {
+		appendSource(nested)
+	}
+	if nested := nestedMap(directory, "metadata"); len(nested) > 0 {
+		appendSource(nested)
+	}
+
+	return sources
+}
+
 func nestedMap(entry map[string]any, key string) map[string]any {
 	value, ok := entry[key]
 	if !ok {
@@ -1645,9 +1682,23 @@ func nestedMap(entry map[string]any, key string) map[string]any {
 	return mapped
 }
 
-func firstCapabilityString(primary map[string]any, metadata map[string]any, agent map[string]any, keys ...string) string {
+func firstNestedMap(sources []map[string]any, keys ...string) map[string]any {
+	for _, source := range sources {
+		if len(source) == 0 {
+			continue
+		}
+		for _, key := range keys {
+			if nested := nestedMap(source, key); len(nested) > 0 {
+				return nested
+			}
+		}
+	}
+	return nil
+}
+
+func firstCapabilityString(sources []map[string]any, keys ...string) string {
 	for _, key := range keys {
-		for _, source := range []map[string]any{primary, metadata, agent} {
+		for _, source := range sources {
 			if source == nil {
 				continue
 			}
