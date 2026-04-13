@@ -214,7 +214,9 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload struct {
+		AgentMode       string `json:"agent_mode"`
 		HubRegion       string `json:"hub_region"`
+		AgentToken      string `json:"agent_token"`
 		BindToken       string `json:"bind_token"`
 		Handle          string `json:"handle"`
 		DisplayName     string `json:"display_name"`
@@ -222,7 +224,7 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		ProfileMarkdown string `json:"profile_markdown"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		onboarding := onboardingViewFromError(s.service.Snapshot(), app.WrapOnboardingError(app.OnboardingStepBind, fmt.Errorf("decode onboarding payload: %w", err)))
+		onboarding := onboardingViewFromError(app.OnboardingModeExisting, s.service.Snapshot(), app.WrapOnboardingError(app.OnboardingStepBind, fmt.Errorf("decode onboarding payload: %w", err)))
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":         false,
 			"error":      "invalid onboarding request",
@@ -231,9 +233,10 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	mode := normalizedOnboardingMode(payload.AgentMode, payload.BindToken, payload.AgentToken)
 	if err := s.applyRuntimeSelection(payload.HubRegion); err != nil {
 		state := s.service.Snapshot()
-		onboarding := onboardingViewFromError(state, app.WrapOnboardingError(app.OnboardingStepBind, err))
+		onboarding := onboardingViewFromError(mode, state, app.WrapOnboardingError(app.OnboardingStepBind, err))
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":         false,
 			"error":      err.Error(),
@@ -244,6 +247,8 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := s.service.BindAndRegister(r.Context(), app.BindProfile{
+		AgentMode:       mode,
+		AgentToken:      strings.TrimSpace(payload.AgentToken),
 		BindToken:       strings.TrimSpace(payload.BindToken),
 		Handle:          strings.TrimSpace(payload.Handle),
 		DisplayName:     strings.TrimSpace(payload.DisplayName),
@@ -252,7 +257,7 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 	})
 	state := s.service.Snapshot()
 	if err != nil {
-		onboarding := onboardingViewFromError(state, err)
+		onboarding := onboardingViewFromError(mode, state, err)
 		if strings.TrimSpace(state.Session.AgentToken) != "" {
 			_ = s.service.SetFlash("error", err.Error())
 		}
@@ -265,11 +270,12 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	onboarding := completedOnboardingView(state)
-	_ = s.service.SetFlash("info", "Agent bound and profile registered.")
+	successMessage := onboardingSuccessMessage(mode)
+	onboarding := completedOnboardingView(mode, state)
+	_ = s.service.SetFlash("info", successMessage)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
-		"message":    "Agent bound and profile registered.",
+		"message":    successMessage,
 		"onboarding": onboarding,
 		"bound":      true,
 	})
@@ -737,7 +743,7 @@ func defaultOnboardingView(state app.AppState) onboardingView {
 			Steps:   steps,
 			Stage:   app.OnboardingStepWorkActivate,
 			Active:  false,
-			Message: "Agent bound and profile registered.",
+			Message: onboardingSuccessMessage(mode),
 		}
 	}
 	setOnboardingProgress(steps, app.OnboardingStepBind, "current", "")
@@ -748,8 +754,8 @@ func defaultOnboardingView(state app.AppState) onboardingView {
 	}
 }
 
-func completedOnboardingView(state app.AppState) onboardingView {
-	steps := defaultOnboardingSteps(app.OnboardingModeNew)
+func completedOnboardingView(mode string, _ app.AppState) onboardingView {
+	steps := defaultOnboardingSteps(mode)
 	for i := range steps {
 		steps[i].Status = "completed"
 	}
@@ -757,13 +763,13 @@ func completedOnboardingView(state app.AppState) onboardingView {
 		Steps:   steps,
 		Stage:   app.OnboardingStepWorkActivate,
 		Active:  false,
-		Message: "Agent bound and profile registered.",
+		Message: onboardingSuccessMessage(mode),
 	}
 }
 
-func onboardingViewFromError(_ app.AppState, err error) onboardingView {
+func onboardingViewFromError(mode string, _ app.AppState, err error) onboardingView {
 	stage := app.OnboardingStageFromError(err)
-	steps := defaultOnboardingSteps(app.OnboardingModeNew)
+	steps := defaultOnboardingSteps(mode)
 	setOnboardingProgress(steps, stage, "error", err.Error())
 	return onboardingView{
 		Steps:   steps,
@@ -791,7 +797,28 @@ func onboardingModeForState(state app.AppState) string {
 	if strings.TrimSpace(state.Session.AgentToken) != "" {
 		return app.OnboardingModeExisting
 	}
-	return app.OnboardingModeNew
+	return app.OnboardingModeExisting
+}
+
+func normalizedOnboardingMode(mode, bindToken, agentToken string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case app.OnboardingModeNew:
+		return app.OnboardingModeNew
+	case app.OnboardingModeExisting:
+		return app.OnboardingModeExisting
+	}
+	if strings.TrimSpace(bindToken) != "" && strings.TrimSpace(agentToken) == "" {
+		return app.OnboardingModeNew
+	}
+	return app.OnboardingModeExisting
+}
+
+func onboardingSuccessMessage(mode string) string {
+	if normalizedOnboardingMode(mode, "", "") == app.OnboardingModeExisting {
+		return "Existing agent connected and profile registered."
+	}
+	return "Agent bound and profile registered."
 }
 
 func setOnboardingProgress(steps []onboardingStepView, stage, status, detail string) {

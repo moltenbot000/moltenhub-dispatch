@@ -149,6 +149,8 @@ type AppState struct {
 }
 
 type BindProfile struct {
+	AgentMode       string
+	AgentToken      string
 	BindToken       string
 	Handle          string
 	DisplayName     string

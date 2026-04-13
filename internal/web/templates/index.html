@@ -211,7 +211,7 @@
         title="Open Molten Bot Hub in a new window">
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
         <span class="prompt-mode-link-icon" aria-hidden="true">
-          <img src="https://app.molten.bot/logo.svg" alt="" aria-hidden="true">
+          <img src="/static/logo.svg" alt="" aria-hidden="true">
         </span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
@@ -270,7 +270,7 @@
       <form method="post" action="/profile" class="stack profile-shell">
         <div class="profile-grid profile-grid-top">
           <label>Handle<input id="agent-settings-handle" name="handle" value="{{.ProfileForm.Handle}}" {{if .State.Session.HandleFinalized}}readonly{{end}}></label>
-          <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Jef's Codex"></label>
+          <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
           <fieldset class="emoji-fieldset">
             <legend>Emoji</legend>
             <div class="hub-emoji-picker" data-hub-emoji-picker>
@@ -357,77 +357,101 @@
     aria-describedby="onboarding-modal-summary"
   >
     <section class="onboarding-modal form-surface">
-      <header class="onboarding-modal-header">
-        <p class="eyebrow">Molten Hub Onboarding</p>
-        <h2 id="onboarding-modal-title">Bind Dispatcher Agent</h2>
-        <p id="onboarding-modal-summary">Choose your region and bind information to finish onboarding.</p>
-      </header>
-      <form method="post" action="/bind" class="stack profile-shell" id="bind-form">
-        <fieldset class="runtime-toggle">
-          <legend>Hub Runtime Region</legend>
-          <div class="runtime-toggle-options">
-            {{range .RuntimeOptions}}
-            <label class="runtime-option">
-              <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
-              <span>
-                <strong>{{.Label}} ({{.Description}})</strong>
-              </span>
-            </label>
-            {{end}}
+      <div class="onboarding-modal-shell">
+        <aside class="onboarding-modal-sidebar">
+          <header class="onboarding-modal-header">
+            <p class="eyebrow">Molten Hub Onboarding</p>
+            <h2 id="onboarding-modal-title">Connect Dispatcher Agent</h2>
+            <p id="onboarding-modal-summary">Use an existing agent token by default, or switch to the bind flow to provision a new dispatcher identity.</p>
+          </header>
+          <section class="onboarding-flow" aria-live="polite">
+            <p class="state-summary-label">Onboarding Flow</p>
+            <ul class="onboarding-steps" id="onboarding-steps">
+              {{range .Onboarding.Steps}}
+              <li class="onboarding-step onboarding-step-{{.Status}}" data-step-id="{{.ID}}">
+                <span class="onboarding-step-label">{{.Label}}</span>
+                <small class="onboarding-step-detail">{{.Detail}}</small>
+              </li>
+              {{end}}
+            </ul>
+            <p class="onboarding-message" id="onboarding-message">{{.Onboarding.Message}}</p>
+          </section>
+          <div class="onboarding-modal-note">
+            <p>Molten Hub keeps human and agent credentials separate. Existing-agent mode verifies a bearer token against the selected runtime; bind mode redeems a one-time bind token first.</p>
+            <a class="onboarding-signin-link" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">Open Molten Hub sign-in</a>
           </div>
-        </fieldset>
-        <label>Bind Token<input name="bind_token" value="{{.ProfileForm.BindToken}}" required autocomplete="off"></label>
-        <div class="profile-grid profile-grid-top">
-          <label>Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="codex-beast"></label>
-          <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Jef's Codex"></label>
-          <fieldset class="emoji-fieldset">
-            <legend>Emoji</legend>
-            <div class="hub-emoji-picker" data-hub-emoji-picker>
-              <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
-              <button
-                type="button"
-                class="hub-emoji-picker-toggle"
-                data-hub-emoji-toggle
-                aria-haspopup="dialog"
-                aria-expanded="false"
-              >
-                <span class="hub-emoji-picker-toggle-content">
-                  <span class="hub-emoji-picker-toggle-chip">
-                    <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                  </span>
-                  <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
+        </aside>
+        <form method="post" action="/bind" class="stack profile-shell onboarding-form" id="bind-form">
+          <input type="hidden" name="agent_mode" value="existing" id="onboarding-mode-input">
+          <div class="onboarding-section">
+            <div class="onboarding-section-heading">
+              <span class="prompt-label">Agent</span>
+            </div>
+            <div class="onboarding-toggle-group" id="onboarding-mode-field" role="tablist" aria-label="Agent mode">
+              <button id="onboarding-existing-agent-toggle" class="onboarding-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
+              <button id="onboarding-new-agent-toggle" class="onboarding-toggle" type="button" data-agent-mode="new" aria-pressed="false">Bind New</button>
+            </div>
+          </div>
+          <fieldset class="runtime-toggle onboarding-section">
+            <legend>Hub Runtime Region</legend>
+            <div class="runtime-toggle-options">
+              {{range .RuntimeOptions}}
+              <label class="runtime-option">
+                <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
+                <span>
+                  <strong>{{.Label}} ({{.Description}})</strong>
                 </span>
-                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <path d="m6 9 6 6 6-6"></path>
-                  </svg>
-                </span>
-              </button>
-              <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
-                <div class="hub-emoji-picker-panel-header">
-                  <p class="hub-emoji-picker-label">Pick one emoji</p>
-                  <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
-                </div>
-                <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
-              </div>
+              </label>
+              {{end}}
             </div>
           </fieldset>
-        </div>
-        <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
-        <section class="onboarding-flow" aria-live="polite">
-          <p class="state-summary-label">Onboarding Flow</p>
-          <ul class="onboarding-steps" id="onboarding-steps">
-            {{range .Onboarding.Steps}}
-            <li class="onboarding-step onboarding-step-{{.Status}}" data-step-id="{{.ID}}">
-              <span class="onboarding-step-label">{{.Label}}</span>
-              <small class="onboarding-step-detail">{{.Detail}}</small>
-            </li>
-            {{end}}
-          </ul>
-          <p class="onboarding-message" id="onboarding-message">{{.Onboarding.Message}}</p>
-        </section>
-        <button type="submit" id="bind-submit">Bind</button>
-      </form>
+          <label id="onboarding-token-field" class="onboarding-token-field">
+            <span id="onboarding-token-label">Agent Token</span>
+            <input id="onboarding-token-input" name="bind_token" value="{{.ProfileForm.BindToken}}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
+            <small id="onboarding-token-hint" class="onboarding-token-hint">Paste the existing Molten Hub agent token.</small>
+          </label>
+          <div class="profile-grid profile-grid-top onboarding-profile-grid">
+            <label id="onboarding-handle-field" hidden>Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="codex-beast"></label>
+            <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
+            <fieldset class="emoji-fieldset">
+              <legend>Emoji</legend>
+              <div class="hub-emoji-picker" data-hub-emoji-picker>
+                <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
+                <button
+                  type="button"
+                  class="hub-emoji-picker-toggle"
+                  data-hub-emoji-toggle
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                >
+                  <span class="hub-emoji-picker-toggle-content">
+                    <span class="hub-emoji-picker-toggle-chip">
+                      <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
+                    </span>
+                    <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
+                  </span>
+                  <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <path d="m6 9 6 6 6-6"></path>
+                    </svg>
+                  </span>
+                </button>
+                <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
+                  <div class="hub-emoji-picker-panel-header">
+                    <p class="hub-emoji-picker-label">Pick one emoji</p>
+                    <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
+                  </div>
+                  <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
+          <div class="onboarding-form-actions">
+            <button type="submit" id="bind-submit">Connect</button>
+          </div>
+        </form>
+      </div>
     </section>
   </div>
   {{end}}
@@ -468,6 +492,12 @@
       const agentSettingsHandle = document.getElementById("agent-settings-handle");
       const bindForm = document.getElementById("bind-form");
       const bindSubmit = document.getElementById("bind-submit");
+      const onboardingModeInput = document.getElementById("onboarding-mode-input");
+      const onboardingExistingAgentToggle = document.getElementById("onboarding-existing-agent-toggle");
+      const onboardingNewAgentToggle = document.getElementById("onboarding-new-agent-toggle");
+      const onboardingTokenLabel = document.getElementById("onboarding-token-label");
+      const onboardingTokenHint = document.getElementById("onboarding-token-hint");
+      const onboardingHandleField = document.getElementById("onboarding-handle-field");
       const onboardingSteps = document.getElementById("onboarding-steps");
       const onboardingMessage = document.getElementById("onboarding-message");
       const flash = document.querySelector(".flash[data-auto-dismiss-seconds]");
@@ -1123,7 +1153,9 @@
       });
 
       const bound = shell?.dataset.bound === "true";
-      const onboardingDefaults = (mode = (bound ? "existing" : "new")) => {
+      const normalizedOnboardingMode = (value) => String(value || "").trim() === "new" ? "new" : "existing";
+      const currentOnboardingMode = () => normalizedOnboardingMode(onboardingModeInput?.value || "existing");
+      const onboardingDefaults = (mode = (bound ? "existing" : currentOnboardingMode())) => {
         const isNew = String(mode || "").trim() === "new";
         return [
           {
@@ -1155,6 +1187,42 @@
         ];
       };
 
+      const applyOnboardingMode = (mode) => {
+        const normalizedMode = normalizedOnboardingMode(mode);
+        const isNew = normalizedMode === "new";
+        if (onboardingModeInput) {
+          onboardingModeInput.value = normalizedMode;
+        }
+        if (onboardingExistingAgentToggle) {
+          onboardingExistingAgentToggle.classList.toggle("active", !isNew);
+          onboardingExistingAgentToggle.setAttribute("aria-pressed", isNew ? "false" : "true");
+        }
+        if (onboardingNewAgentToggle) {
+          onboardingNewAgentToggle.classList.toggle("active", isNew);
+          onboardingNewAgentToggle.setAttribute("aria-pressed", isNew ? "true" : "false");
+        }
+        if (onboardingTokenLabel) {
+          onboardingTokenLabel.textContent = isNew ? "Bind Token" : "Agent Token";
+        }
+        if (onboardingTokenHint) {
+          onboardingTokenHint.textContent = isNew
+            ? "Redeem a one-time bind token to provision this dispatcher."
+            : "Paste the existing Molten Hub agent token.";
+        }
+        if (onboardingHandleField instanceof HTMLElement) {
+          onboardingHandleField.hidden = !isNew;
+        }
+        if (bindSubmit) {
+          bindSubmit.textContent = isNew ? "Bind" : "Connect";
+        }
+        renderOnboarding({
+          stage: "bind",
+          active: false,
+          message: "",
+          steps: onboardingDefaults(normalizedMode).map((step, index) => index === 0 ? { ...step, status: "current" } : step),
+        });
+      };
+
       const setBindBusy = (busy) => {
         if (!bindForm) {
           return;
@@ -1178,7 +1246,8 @@
           }
         });
         if (bindSubmit) {
-          bindSubmit.textContent = busy ? "Binding..." : "Bind";
+          const idleLabel = currentOnboardingMode() === "new" ? "Bind" : "Connect";
+          bindSubmit.textContent = busy ? (idleLabel === "Bind" ? "Binding..." : "Connecting...") : idleLabel;
         }
       };
 
@@ -1218,15 +1287,29 @@
         window.location.assign("/");
       };
 
+      onboardingExistingAgentToggle?.addEventListener("click", () => {
+        applyOnboardingMode("existing");
+      });
+
+      onboardingNewAgentToggle?.addEventListener("click", () => {
+        applyOnboardingMode("new");
+      });
+
+      if (!bound) {
+        applyOnboardingMode(currentOnboardingMode());
+      }
+
       if (bindForm && !bound) {
         bindForm.addEventListener("submit", async (event) => {
           event.preventDefault();
+          const mode = currentOnboardingMode();
+          const isNew = mode === "new";
           const formData = new FormData(bindForm);
           renderOnboarding({
             stage: "bind",
             active: true,
-            message: "Exchanging bind token for an agent credential.",
-            steps: onboardingDefaults().map((step) => step.id === "bind" ? { ...step, status: "current" } : step),
+            message: isNew ? "Exchanging bind token for an agent credential." : "Verifying existing Molten Hub agent credential.",
+            steps: onboardingDefaults(mode).map((step) => step.id === "bind" ? { ...step, status: "current" } : step),
           });
           setBindBusy(true);
           let redirected = false;
@@ -1238,9 +1321,11 @@
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
+                agent_mode: mode,
                 hub_region: String(formData.get("hub_region") || "").trim(),
-                bind_token: String(formData.get("bind_token") || "").trim(),
-                handle: String(formData.get("handle") || "").trim(),
+                bind_token: isNew ? String(formData.get("bind_token") || "").trim() : "",
+                agent_token: isNew ? "" : String(formData.get("bind_token") || "").trim(),
+                handle: isNew ? String(formData.get("handle") || "").trim() : "",
                 display_name: String(formData.get("display_name") || "").trim(),
                 emoji: String(formData.get("emoji") || "").trim(),
                 profile_markdown: String(formData.get("profile_markdown") || "").trim(),
@@ -1261,7 +1346,7 @@
                   stage: "bind",
                   active: false,
                   message,
-                  steps: onboardingDefaults().map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
+                  steps: onboardingDefaults(mode).map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
                 });
               }
               if (body && body.bound) {
@@ -1281,7 +1366,7 @@
               stage: "bind",
               active: false,
               message,
-              steps: onboardingDefaults().map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
+              steps: onboardingDefaults(mode).map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
             });
           } finally {
             if (!redirected) {
@@ -1588,6 +1673,44 @@
         });
 
         return ordered;
+      };
+
+      const inferSkillNameForAgent = (agent) => {
+        const skillEntries = connectedAgentSkillEntries(agent);
+        const defaultSkill = skillEntries.find((skill) => skill.isDefault);
+        if (defaultSkill) {
+          return defaultSkill.name;
+        }
+        if (skillEntries.length === 1) {
+          return skillEntries[0].name;
+        }
+        return "";
+      };
+
+      const resolveSelectedDispatchTargetRef = () => {
+        const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
+        if (selectedTargetRef !== "") {
+          return selectedTargetRef;
+        }
+        if (!(manualDispatchTargets instanceof HTMLElement)) {
+          return "";
+        }
+        const selectedCard = manualDispatchTargets.querySelector("[data-connected-agent-target-ref][aria-pressed=\"true\"]");
+        if (selectedCard instanceof HTMLElement) {
+          return trimmedString(selectedCard.dataset.connectedAgentTargetRef);
+        }
+        return "";
+      };
+
+      const resolveSelectedDispatchState = () => {
+        const targetRef = resolveSelectedDispatchTargetRef();
+        const selectedAgent = latestConnectedAgents.find((agent) => agentMatchesTargetRef(agent, targetRef));
+        const selectedSkillName = trimmedString(skillNameSelect && skillNameSelect.value) || inferSkillNameForAgent(selectedAgent);
+        return {
+          targetRef,
+          selectedAgent,
+          skillName: selectedSkillName,
+        };
       };
 
       const hasSelectedSkill = () => {
@@ -2123,8 +2246,8 @@
       if (manualDispatchForm instanceof HTMLFormElement) {
         manualDispatchForm.addEventListener("submit", async (event) => {
           event.preventDefault();
-          const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
-          if (selectedTargetRef === "") {
+          const dispatchState = resolveSelectedDispatchState();
+          if (dispatchState.targetRef === "") {
             setDispatchSubmitStatus("Select a target agent before dispatching.", true);
             const firstSelectableTarget = manualDispatchTargets instanceof HTMLElement
               ? manualDispatchTargets.querySelector("[data-connected-agent-target-ref]")
@@ -2134,7 +2257,10 @@
             }
             return;
           }
-          if (skillNameSelect instanceof HTMLSelectElement && !skillNameSelect.disabled && trimmedString(skillNameSelect.value) === "") {
+          if (targetAgentRefInput instanceof HTMLInputElement) {
+            targetAgentRefInput.value = dispatchState.targetRef;
+          }
+          if (skillNameSelect instanceof HTMLSelectElement && !skillNameSelect.disabled && dispatchState.skillName === "") {
             setDispatchSubmitStatus("Select a skill for the chosen agent before dispatching.", true);
             skillNameSelect.focus({ preventScroll: true });
             return;
@@ -2153,10 +2279,17 @@
           setDispatchSubmitBusy(true);
           setDispatchSubmitStatus("Dispatching task...");
           try {
+            const formData = new FormData(manualDispatchForm);
+            formData.set("target_agent_ref", dispatchState.targetRef);
+            if (dispatchState.skillName !== "") {
+              formData.set("skill_name", dispatchState.skillName);
+            } else {
+              formData.delete("skill_name");
+            }
             const response = await fetch("/api/dispatch", {
               method: "POST",
               headers: { Accept: "application/json" },
-              body: new FormData(manualDispatchForm),
+              body: formData,
             });
             let body = null;
             try {

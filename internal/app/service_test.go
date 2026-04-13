@@ -344,6 +344,81 @@ func TestBindAndRegisterSupportsTemporaryHandleWhenHandleIsOmitted(t *testing.T)
 	}
 }
 
+func TestBindAndRegisterSupportsExistingAgentFlow(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"agent_uuid": "agent-uuid",
+		"agent_uri":  "molten://dispatch/agent",
+		"handle":     "dispatch-agent",
+		"metadata": map[string]any{
+			"display_name": "Remote Agent",
+			"emoji":        "🛰️",
+		},
+		"peer_skill_catalog": []any{},
+	}
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		AgentMode:       OnboardingModeExisting,
+		AgentToken:      "agent-token",
+		DisplayName:     "Dispatch Agent",
+		Emoji:           "🤖",
+		ProfileMarkdown: "Dispatches skill requests to connected agents.",
+	})
+	if err != nil {
+		t.Fatalf("connect existing agent: %v", err)
+	}
+
+	if len(fake.bindRequests) != 0 {
+		t.Fatalf("did not expect bind request for existing agent flow, got %#v", fake.bindRequests)
+	}
+	if fake.capabilitiesCalls != 2 {
+		t.Fatalf("expected credential + activation capability checks, got %d", fake.capabilitiesCalls)
+	}
+	if len(fake.updateMetadataCalls) != 1 {
+		t.Fatalf("expected metadata update, got %d", len(fake.updateMetadataCalls))
+	}
+
+	state := service.store.Snapshot()
+	if state.Session.AgentToken != "agent-token" {
+		t.Fatalf("expected persisted token, got %q", state.Session.AgentToken)
+	}
+	if state.Session.Handle != "dispatch-agent" {
+		t.Fatalf("expected persisted handle, got %q", state.Session.Handle)
+	}
+	if !state.Session.HandleFinalized {
+		t.Fatal("expected existing agent handle to be finalized")
+	}
+	if state.Session.DisplayName != "Dispatch Agent" {
+		t.Fatalf("expected submitted display name to persist, got %q", state.Session.DisplayName)
+	}
+	if state.Settings.HubRegion != HubRegionNA {
+		t.Fatalf("expected hub region %q, got %q", HubRegionNA, state.Settings.HubRegion)
+	}
+}
+
+func TestBindAndRegisterExistingAgentReportsVerificationFailureStage(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesErr = errors.New("unauthorized")
+
+	err := service.BindAndRegister(context.Background(), BindProfile{
+		AgentMode:  OnboardingModeExisting,
+		AgentToken: "agent-token",
+	})
+	if err == nil {
+		t.Fatal("expected onboarding error")
+	}
+	if got, want := OnboardingStageFromError(err), OnboardingStepWorkBind; got != want {
+		t.Fatalf("onboarding stage = %q, want %q", got, want)
+	}
+	if len(fake.bindRequests) != 0 {
+		t.Fatalf("did not expect bind request for existing agent flow, got %#v", fake.bindRequests)
+	}
+}
+
 func TestBindAndRegisterUsesCanonicalAPIBaseForMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -675,7 +750,7 @@ func TestUpdateAgentProfileUpdatesMetadataAndStoredProfile(t *testing.T) {
 	}
 
 	err = service.UpdateAgentProfile(context.Background(), AgentProfile{
-		DisplayName:     "Jef's Codex",
+		DisplayName:     "Dispatch Agent",
 		Emoji:           "💯",
 		ProfileMarkdown: "What this runtime is for",
 	})
@@ -691,7 +766,7 @@ func TestUpdateAgentProfileUpdatesMetadataAndStoredProfile(t *testing.T) {
 	}
 
 	state := service.store.Snapshot()
-	if state.Session.DisplayName != "Jef's Codex" {
+	if state.Session.DisplayName != "Dispatch Agent" {
 		t.Fatalf("unexpected persisted display name: %q", state.Session.DisplayName)
 	}
 	if state.Session.Emoji != "💯" {

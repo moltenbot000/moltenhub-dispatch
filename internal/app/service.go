@@ -180,6 +180,10 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 		ProfileMarkdown: profile.ProfileMarkdown,
 	})
 	agentProfile.Handle = strings.TrimSpace(agentProfile.Handle)
+	mode := normalizeOnboardingMode(profile.AgentMode, profile.BindToken, profile.AgentToken)
+	if mode == OnboardingModeExisting {
+		return s.connectExistingAgent(ctx, runtime, strings.TrimSpace(profile.AgentToken), agentProfile)
+	}
 	handleRequestedDuringBind := agentProfile.Handle != ""
 	s.setHubBaseURL(runtime.HubURL)
 	result, err := s.hub.BindAgent(ctx, hub.BindRequest{
@@ -287,6 +291,81 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	s.noteHubInteraction(nil, ConnectionTransportHTTP)
 
 	if err := s.logEvent("info", "Agent bound", fmt.Sprintf("Bound handle %q against %s", result.Handle, result.APIBase), "", ""); err != nil {
+		return WrapOnboardingError(OnboardingStepWorkActivate, err)
+	}
+	s.presenceSynced = true
+	return nil
+}
+
+func (s *Service) connectExistingAgent(ctx context.Context, runtime HubRuntime, agentToken string, profile AgentProfile) error {
+	agentToken = strings.TrimSpace(agentToken)
+	if agentToken == "" {
+		return WrapOnboardingError(OnboardingStepBind, errors.New("agent token is required"))
+	}
+
+	apiBase := NormalizeHubEndpointURL(defaultAPIBaseForHub(runtime.HubURL))
+	if apiBase == "" {
+		return WrapOnboardingError(OnboardingStepBind, fmt.Errorf("runtime config missing supported api_base for %q", runtime.HubURL))
+	}
+
+	s.setHubBaseURL(apiBase)
+	s.setRuntimeEndpoints(hub.RuntimeEndpoints{})
+
+	capabilities, err := s.hub.GetCapabilities(ctx, agentToken)
+	if err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		return WrapOnboardingError(OnboardingStepWorkBind, fmt.Errorf("existing agent credential verification failed: %w", err))
+	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+
+	identity := existingAgentIdentityFromCapabilities(capabilities)
+	if err := s.store.Update(func(state *AppState) error {
+		state.Settings.HubRegion = runtime.ID
+		state.Settings.HubURL = runtime.HubURL
+		state.Session = Session{
+			BoundAt:         time.Now().UTC(),
+			HubURL:          runtime.HubURL,
+			APIBase:         apiBase,
+			AgentToken:      agentToken,
+			BaseURL:         apiBase,
+			BindToken:       agentToken,
+			AgentUUID:       identity.AgentUUID,
+			AgentURI:        identity.AgentURI,
+			Handle:          identity.Handle,
+			HandleFinalized: identity.Handle != "",
+			DisplayName:     coalesceTrimmed(profile.DisplayName, identity.DisplayName),
+			Emoji:           coalesceTrimmed(profile.Emoji, identity.Emoji),
+			ProfileBio:      coalesceTrimmed(profile.ProfileMarkdown, identity.ProfileMarkdown),
+			OfflineMarked:   false,
+		}
+		connectionBaseURL, connectionDomain := hubConnectionTarget(apiBase, runtime.HubURL)
+		state.Connection = ConnectionState{
+			Status:        ConnectionStatusConnected,
+			Transport:     ConnectionTransportConnected,
+			LastChangedAt: time.Now().UTC(),
+			BaseURL:       connectionBaseURL,
+			Domain:        connectionDomain,
+		}
+		return nil
+	}); err != nil {
+		return WrapOnboardingError(OnboardingStepBind, err)
+	}
+
+	updatedState := s.store.Snapshot()
+	s.settings = updatedState.Settings
+	s.syncHubClient(updatedState)
+
+	if err := s.updateAgentProfile(ctx, agentToken, profile); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		return WrapOnboardingError(OnboardingStepProfileSet, fmt.Errorf("existing agent verified, but profile registration failed: %w", err))
+	}
+	if _, err := s.hub.GetCapabilities(ctx, agentToken); err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		return WrapOnboardingError(OnboardingStepWorkActivate, fmt.Errorf("existing agent connected and profile registered, but activation check failed: %w", err))
+	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+
+	if err := s.logEvent("info", "Existing agent connected", fmt.Sprintf("Connected handle %q against %s", updatedState.Session.Handle, apiBase), "", ""); err != nil {
 		return WrapOnboardingError(OnboardingStepWorkActivate, err)
 	}
 	s.presenceSynced = true
@@ -1773,6 +1852,20 @@ func normalizePresenceTransport(transport string) string {
 	}
 }
 
+func normalizeOnboardingMode(mode, bindToken, agentToken string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case OnboardingModeNew:
+		return OnboardingModeNew
+	case OnboardingModeExisting:
+		return OnboardingModeExisting
+	}
+	if strings.TrimSpace(bindToken) != "" && strings.TrimSpace(agentToken) == "" {
+		return OnboardingModeNew
+	}
+	return OnboardingModeExisting
+}
+
 func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
 	return runtimeEndpointsFromSession(Session{
 		ManifestURL:     result.Endpoints.Manifest,
@@ -1820,6 +1913,46 @@ func connectedAgentsFromCapabilities(capabilities map[string]any, state AppState
 		agents = append(agents, agent)
 	}
 	return agents
+}
+
+type agentIdentity struct {
+	AgentUUID       string
+	AgentURI        string
+	Handle          string
+	DisplayName     string
+	Emoji           string
+	ProfileMarkdown string
+}
+
+func existingAgentIdentityFromCapabilities(capabilities map[string]any) agentIdentity {
+	roots := []map[string]any{
+		capabilities,
+		nestedMap(capabilities, "result"),
+		nestedMap(capabilities, "self"),
+		nestedMap(capabilities, "me"),
+		nestedMap(capabilities, "agent"),
+	}
+	sources := make([]map[string]any, 0, 24)
+	seen := make(map[uintptr]struct{}, len(roots))
+	for _, root := range roots {
+		if len(root) == 0 {
+			continue
+		}
+		ref := reflect.ValueOf(root).Pointer()
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		sources = append(sources, capabilityStringSources(root)...)
+	}
+	return agentIdentity{
+		AgentUUID:       firstCapabilityString(sources, "agent_uuid", "uuid"),
+		AgentURI:        firstCapabilityString(sources, "agent_uri", "uri"),
+		Handle:          firstCapabilityString(sources, "handle", "agent_id", "id"),
+		DisplayName:     firstCapabilityString(sources, "display_name", "name"),
+		Emoji:           capabilityEmoji(sources),
+		ProfileMarkdown: firstCapabilityString(sources, "profile_markdown", "profile", "bio", "description"),
+	}
 }
 
 func connectedAgentCatalog(capabilities map[string]any) any {

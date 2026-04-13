@@ -3,6 +3,7 @@
   --hub-floating-bottom: max(16px, env(safe-area-inset-bottom));
   --hub-floating-stack-height: 64px;
   --hub-studio-dock-gap: 16px;
+  --hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);
   --hub-studio-dock-bottom: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap));
   --hub-studio-dock-height: clamp(280px, 34vh, 388px);
   --hub-studio-collapsed-height: 84px;
@@ -250,7 +251,7 @@ textarea {
 .app {
   width: min(1500px, 100%);
   margin: 0 auto;
-  padding: 28px 20px 124px;
+  padding: 28px 20px var(--hub-content-bottom-padding);
   display: grid;
   gap: 24px;
 }
@@ -534,6 +535,13 @@ textarea {
   margin-left: 3px;
 }
 
+.metric-label-visible {
+  max-width: 56px;
+  opacity: 1;
+  overflow: visible;
+  transform: translateX(0);
+}
+
 .metric-unit-visible {
   max-width: 56px;
   opacity: 1;
@@ -624,6 +632,13 @@ textarea {
   font-size: 0.86rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.task-fullscreen-head-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .counter {
@@ -1731,6 +1746,10 @@ select.prompt-control {
   background: var(--good);
 }
 
+.badge.completed {
+  background: var(--good);
+}
+
 .badge.no_changes,
 .badge.duplicate,
 .badge.paused {
@@ -1950,6 +1969,11 @@ select.prompt-control {
   background: rgba(43, 182, 115, 0.1);
 }
 
+.task-result.completed {
+  color: var(--surface-success);
+  background: rgba(43, 182, 115, 0.1);
+}
+
 .task-result.no_changes,
 .task-result.duplicate {
   color: var(--surface-warning);
@@ -1970,6 +1994,10 @@ select.prompt-control {
 }
 
 .task-result.ok .task-result-detail {
+  color: var(--surface-success);
+}
+
+.task-result.completed .task-result-detail {
   color: var(--surface-success);
 }
 
@@ -3418,11 +3446,11 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   }
 }
 
-/* Dispatch compatibility layer mapped onto moltenhub-code design tokens. */
+/* Dispatch compatibility layer mapped onto moltenhub-dispatch design tokens. */
 .shell {
   width: min(1460px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 28px 20px 120px;
+  padding: 28px 20px var(--hub-content-bottom-padding);
   display: grid;
   gap: 20px;
 }
@@ -3941,15 +3969,40 @@ body.settings-modal-open {
 }
 
 .onboarding-modal {
-  width: min(920px, 100%);
+  width: min(1080px, 100%);
   max-height: min(92vh, 880px);
   overflow: auto;
   border: 1px solid var(--surface-auth-panel-border);
   border-radius: 24px;
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
+  display: block;
+}
+
+.onboarding-modal-shell {
   display: grid;
+  grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.18fr);
+  gap: 22px;
+}
+
+.onboarding-modal-sidebar {
+  display: grid;
+  align-content: start;
   gap: 16px;
+  padding: clamp(18px, 2vw, 26px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(241, 159, 56, 0.18), transparent 46%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.14), transparent 44%),
+    linear-gradient(180deg, rgba(11, 15, 25, 0.9), rgba(16, 22, 35, 0.74));
+  color: rgba(248, 250, 252, 0.96);
+}
+
+.onboarding-modal-sidebar .eyebrow,
+.onboarding-modal-sidebar .state-summary-label,
+.onboarding-modal-sidebar .onboarding-step-label {
+  color: rgba(241, 245, 249, 0.78);
 }
 
 .onboarding-modal-header {
@@ -3963,7 +4016,64 @@ body.settings-modal-open {
 
 .onboarding-modal-header p {
   margin: 0;
+  color: inherit;
+}
+
+.onboarding-form {
+  gap: 18px;
+}
+
+.onboarding-section {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onboarding-toggle-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.onboarding-toggle {
+  min-height: 46px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.86), rgba(226, 232, 240, 0.7));
+  color: var(--surface-label);
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.onboarding-toggle.active,
+.onboarding-toggle[aria-pressed="true"] {
+  border-color: rgba(245, 158, 11, 0.36);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(249, 115, 22, 0.1) 58%, rgba(255, 255, 255, 0.92));
+  box-shadow: 0 14px 30px rgba(249, 115, 22, 0.12);
+}
+
+.onboarding-token-field {
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-token-hint {
   color: var(--muted);
+  line-height: 1.45;
+}
+
+#onboarding-handle-field[hidden] {
+  display: none !important;
+}
+
+.onboarding-profile-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(140px, 0.6fr);
+  align-items: end;
 }
 
 .onboarding-modal .onboarding-flow {
@@ -3971,11 +4081,12 @@ body.settings-modal-open {
 }
 
 .onboarding-flow {
-  margin-bottom: 16px;
-  padding: 13px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface-library-bg);
+  margin-bottom: 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.26);
+  backdrop-filter: blur(12px);
 }
 
 .onboarding-steps {
@@ -3989,10 +4100,10 @@ body.settings-modal-open {
 .onboarding-step {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--surface-control-border);
-  border-radius: 12px;
-  background: var(--surface-control-bg);
+  padding: 12px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.44);
 }
 
 .onboarding-step-label {
@@ -4005,28 +4116,59 @@ body.settings-modal-open {
 }
 
 .onboarding-step-detail {
-  color: var(--muted);
+  color: rgba(226, 232, 240, 0.78);
   line-height: 1.4;
 }
 
 .onboarding-step-current {
-  border-color: rgba(10, 132, 255, 0.3);
-  background: linear-gradient(155deg, rgba(10, 132, 255, 0.12), rgba(255, 255, 255, 0.96));
+  border-color: rgba(96, 165, 250, 0.34);
+  background: linear-gradient(155deg, rgba(59, 130, 246, 0.2), rgba(15, 23, 42, 0.9));
 }
 
 .onboarding-step-completed {
-  border-color: rgba(22, 163, 74, 0.34);
-  background: linear-gradient(155deg, rgba(22, 163, 74, 0.11), rgba(255, 255, 255, 0.96));
+  border-color: rgba(74, 222, 128, 0.32);
+  background: linear-gradient(155deg, rgba(22, 163, 74, 0.16), rgba(15, 23, 42, 0.88));
 }
 
 .onboarding-step-error {
-  border-color: rgba(239, 68, 68, 0.32);
-  background: linear-gradient(155deg, rgba(239, 68, 68, 0.12), rgba(255, 255, 255, 0.96));
+  border-color: rgba(248, 113, 113, 0.34);
+  background: linear-gradient(155deg, rgba(239, 68, 68, 0.18), rgba(15, 23, 42, 0.88));
 }
 
 .onboarding-message {
   margin: 10px 0 0;
   min-height: 1.2em;
+  color: rgba(241, 245, 249, 0.9);
+}
+
+.onboarding-modal-note {
+  display: grid;
+  gap: 12px;
+}
+
+.onboarding-modal-note p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.78);
+  line-height: 1.5;
+}
+
+.onboarding-signin-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(248, 250, 252, 0.95);
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
+.onboarding-form-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .profile-shell {
@@ -4365,6 +4507,7 @@ pre {
 
 @media (max-width: 900px) {
   .shell {
+    padding-bottom: calc(var(--hub-content-bottom-padding) + 8px);
     padding-inline: 12px;
     width: 100%;
   }
@@ -4380,6 +4523,15 @@ pre {
     width: 100%;
     max-height: calc(100vh - 24px);
     border-radius: 18px;
+  }
+
+  .onboarding-modal-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .onboarding-profile-grid,
+  .onboarding-toggle-group {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .form-surface {
