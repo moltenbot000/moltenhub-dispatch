@@ -2042,11 +2042,17 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `const connectedAgentSkillEntries = (agent) => {`) {
 		t.Fatalf("expected connected-agent skill extraction helper, body=%s", body)
 	}
+	if !strings.Contains(body, `const inferSkillNameForAgent = (agent) => {`) {
+		t.Fatalf("expected client-side skill inference helper for target agents, body=%s", body)
+	}
 	if !strings.Contains(body, `const connectedAgentRefs = (agent) => {`) {
 		t.Fatalf("expected connected-agent alias helper, body=%s", body)
 	}
 	if !strings.Contains(body, `const agentMatchesTargetRef = (agent, targetRef) => {`) {
 		t.Fatalf("expected connected-agent target matching helper, body=%s", body)
+	}
+	if !strings.Contains(body, `const resolveSelectedDispatchState = () => {`) {
+		t.Fatalf("expected resolved dispatch state helper, body=%s", body)
 	}
 	if !strings.Contains(body, `const updateSkillNameOptions = () => {`) {
 		t.Fatalf("expected skill dropdown sync helper, body=%s", body)
@@ -2059,6 +2065,12 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if !strings.Contains(body, `const selectConnectedAgentTarget = (targetRef) => {`) {
 		t.Fatalf("expected connected agent selector click handler, body=%s", body)
+	}
+	if !strings.Contains(body, `formData.set("target_agent_ref", dispatchState.targetRef);`) {
+		t.Fatalf("expected dispatch submit flow to explicitly serialize target agent selection, body=%s", body)
+	}
+	if !strings.Contains(body, `formData.set("skill_name", dispatchState.skillName);`) {
+		t.Fatalf("expected dispatch submit flow to explicitly serialize the resolved skill name, body=%s", body)
 	}
 	if !strings.Contains(body, `const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));`) {
 		t.Fatalf("expected shared manual refresh button hooks, body=%s", body)

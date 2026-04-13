@@ -1590,6 +1590,44 @@
         return ordered;
       };
 
+      const inferSkillNameForAgent = (agent) => {
+        const skillEntries = connectedAgentSkillEntries(agent);
+        const defaultSkill = skillEntries.find((skill) => skill.isDefault);
+        if (defaultSkill) {
+          return defaultSkill.name;
+        }
+        if (skillEntries.length === 1) {
+          return skillEntries[0].name;
+        }
+        return "";
+      };
+
+      const resolveSelectedDispatchTargetRef = () => {
+        const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
+        if (selectedTargetRef !== "") {
+          return selectedTargetRef;
+        }
+        if (!(manualDispatchTargets instanceof HTMLElement)) {
+          return "";
+        }
+        const selectedCard = manualDispatchTargets.querySelector("[data-connected-agent-target-ref][aria-pressed=\"true\"]");
+        if (selectedCard instanceof HTMLElement) {
+          return trimmedString(selectedCard.dataset.connectedAgentTargetRef);
+        }
+        return "";
+      };
+
+      const resolveSelectedDispatchState = () => {
+        const targetRef = resolveSelectedDispatchTargetRef();
+        const selectedAgent = latestConnectedAgents.find((agent) => agentMatchesTargetRef(agent, targetRef));
+        const selectedSkillName = trimmedString(skillNameSelect && skillNameSelect.value) || inferSkillNameForAgent(selectedAgent);
+        return {
+          targetRef,
+          selectedAgent,
+          skillName: selectedSkillName,
+        };
+      };
+
       const hasSelectedSkill = () => {
         return skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
       };
@@ -2123,8 +2161,8 @@
       if (manualDispatchForm instanceof HTMLFormElement) {
         manualDispatchForm.addEventListener("submit", async (event) => {
           event.preventDefault();
-          const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
-          if (selectedTargetRef === "") {
+          const dispatchState = resolveSelectedDispatchState();
+          if (dispatchState.targetRef === "") {
             setDispatchSubmitStatus("Select a target agent before dispatching.", true);
             const firstSelectableTarget = manualDispatchTargets instanceof HTMLElement
               ? manualDispatchTargets.querySelector("[data-connected-agent-target-ref]")
@@ -2134,7 +2172,10 @@
             }
             return;
           }
-          if (skillNameSelect instanceof HTMLSelectElement && !skillNameSelect.disabled && trimmedString(skillNameSelect.value) === "") {
+          if (targetAgentRefInput instanceof HTMLInputElement) {
+            targetAgentRefInput.value = dispatchState.targetRef;
+          }
+          if (skillNameSelect instanceof HTMLSelectElement && !skillNameSelect.disabled && dispatchState.skillName === "") {
             setDispatchSubmitStatus("Select a skill for the chosen agent before dispatching.", true);
             skillNameSelect.focus({ preventScroll: true });
             return;
@@ -2153,10 +2194,17 @@
           setDispatchSubmitBusy(true);
           setDispatchSubmitStatus("Dispatching task...");
           try {
+            const formData = new FormData(manualDispatchForm);
+            formData.set("target_agent_ref", dispatchState.targetRef);
+            if (dispatchState.skillName !== "") {
+              formData.set("skill_name", dispatchState.skillName);
+            } else {
+              formData.delete("skill_name");
+            }
             const response = await fetch("/api/dispatch", {
               method: "POST",
               headers: { Accept: "application/json" },
-              body: new FormData(manualDispatchForm),
+              body: formData,
             });
             let body = null;
             try {
