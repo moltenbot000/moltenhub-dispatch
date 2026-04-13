@@ -391,8 +391,8 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	server.renderIndex(rec, req, "", false, agentProfileForm{}, nil)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `<title>Molten Hub Console</title>`) {
-		t.Fatalf("expected document title to be Molten Hub Console, body=%s", body)
+	if !strings.Contains(body, `<title>Molten Hub Dispatch</title>`) {
+		t.Fatalf("expected document title to be Molten Hub Dispatch, body=%s", body)
 	}
 	if !strings.Contains(body, `class="brand-logo rotating-brand-logo brand-logo-visible"`) {
 		t.Fatalf("expected page header logo lockup, body=%s", body)
@@ -400,10 +400,10 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	if !strings.Contains(body, `src="/static/logo.svg"`) {
 		t.Fatalf("expected page header to use the bundled logo asset, body=%s", body)
 	}
-	if !strings.Contains(body, `>Molten Hub Console</div>`) {
+	if !strings.Contains(body, `>Molten Hub Dispatch</div>`) {
 		t.Fatalf("expected page header title copy, body=%s", body)
 	}
-	if !strings.Contains(body, `>Dispatch work to your quiet army.</p>`) {
+	if !strings.Contains(body, `>Your quiet army awaits your orders.</p>`) {
 		t.Fatalf("expected page header subtitle copy, body=%s", body)
 	}
 }
@@ -593,6 +593,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
 		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
+	}
+	if !strings.Contains(body, `placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours."`) {
+		t.Fatalf("expected manual dispatch payload placeholder example, body=%s", body)
 	}
 	if strings.Contains(body, `data-skill-payload-format-toggle`) {
 		t.Fatalf("did not expect manual dispatch payload format toggle buttons, body=%s", body)
@@ -2092,6 +2095,9 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `id="manual-dispatch-targets"`) {
 		t.Fatalf("expected manual dispatch connected agent target list, body=%s", body)
 	}
+	if strings.Contains(body, "Choose one of the connected agents below.") {
+		t.Fatalf("did not expect removed connected-agent hint copy, body=%s", body)
+	}
 	if !strings.Contains(body, `class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid"`) {
 		t.Fatalf("expected manual dispatch target grid class for horizontal fill layout, body=%s", body)
 	}
@@ -2173,6 +2179,9 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if strings.Contains(body, `const connectedAgentsRefreshNextNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-next]"));`) {
 		t.Fatalf("did not expect removed refresh countdown node hooks, body=%s", body)
 	}
+	if strings.Contains(body, `connectedAgentsRefreshNextNodes.forEach((node) => {`) {
+		t.Fatalf("did not expect stale refresh countdown node usage, body=%s", body)
+	}
 	if strings.Contains(body, `const setConnectedAgentsRefreshCountdown = (remainingMs, busy) => {`) {
 		t.Fatalf("did not expect removed refresh countdown helper, body=%s", body)
 	}
@@ -2181,6 +2190,9 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if strings.Contains(body, `connectedAgentsRefreshNextNodes`) {
 		t.Fatalf("did not expect removed refresh countdown node references, body=%s", body)
+	}
+	if strings.Contains(body, `setConnectedAgentsRefreshCountdown(CONNECTED_AGENTS_REFRESH_INTERVAL_MS, false);`) {
+		t.Fatalf("did not expect stale refresh countdown helper usage, body=%s", body)
 	}
 	if !strings.Contains(body, `setConnectedAgentsRefreshState(false, "");`) {
 		t.Fatalf("expected refresh completion to clear the status text, body=%s", body)

@@ -891,6 +891,9 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 				return err
 			}
 		} else if retried {
+			if _, err := s.queueFollowUp(ctx, state, pending, report); err != nil {
+				return err
+			}
 			return nil
 		} else if err := s.handleTaskFailure(ctx, state, pending, report); err != nil {
 			return err
@@ -1022,6 +1025,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 	s.syncHubClient(state)
 	logPaths := followUpLogPaths(pending)
 	originalRequest := support.CloneMap(pending.DispatchPayload)
+	existing, hasExisting := FindFollowUpTaskByFailedTaskID(state.FollowUpTasks, pending.ID)
 	task := FollowUpTask{
 		ID:               NewID("followup"),
 		CreatedAt:        time.Now().UTC(),
@@ -1036,38 +1040,54 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 		OriginalRequest:  originalRequest,
 		RequestedByAgent: pending.CallerAgentUUID,
 	}
+	if hasExisting {
+		task.ID = existing.ID
+		task.CreatedAt = existing.CreatedAt
+	}
 
-	reviewer, ok := SelectFailureReviewer(state)
-	if ok {
-		task.TargetAgentUUID = reviewer.AgentUUID
-		task.TargetAgentURI = reviewer.AgentURI
-		payload := map[string]any{
-			"failed_task_id": pending.ID,
-			"log_paths":      task.LogPaths,
-			"run_config":     task.RunConfig,
-			"failure":        failureFields(report, report.Message, report.Detail),
-			"original_request": map[string]any{
-				"skill_name":     pending.OriginalSkillName,
-				"repo":           fallbackRepo(pending.Repo),
-				"payload_format": normalizePayloadFormat(pending.DispatchPayloadFormat, pending.DispatchPayload),
-				"payload":        originalRequest,
-			},
-		}
-		if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
-			ToAgentUUID: reviewer.AgentUUID,
-			ToAgentURI:  reviewer.AgentURI,
-			ClientMsgID: task.ID,
-			Message:     newSkillRequestMessage(time.Now().UTC(), failureReviewSkillName, payload, "json", task.ID, ""),
-		}); err != nil {
-			s.noteHubInteraction(err, ConnectionTransportHTTP)
-			task.Status = "queued_local_only"
-			task.LastDispatchErr = err.Error()
-		} else {
-			s.noteHubInteraction(nil, ConnectionTransportHTTP)
-		}
+	shouldPublish := true
+	if hasExisting && existing.Status == "queued" && strings.TrimSpace(existing.LastDispatchErr) == "" {
+		task.Status = existing.Status
+		task.TargetAgentUUID = existing.TargetAgentUUID
+		task.TargetAgentURI = existing.TargetAgentURI
+		task.LastDispatchErr = existing.LastDispatchErr
+		shouldPublish = false
 	} else {
-		task.Status = "pending_reviewer"
-		task.LastDispatchErr = "no failure reviewer configured"
+		reviewer, ok := SelectFailureReviewer(state)
+		if ok {
+			task.TargetAgentUUID = reviewer.AgentUUID
+			task.TargetAgentURI = reviewer.AgentURI
+			payload := map[string]any{
+				"failed_task_id": pending.ID,
+				"log_paths":      task.LogPaths,
+				"run_config":     task.RunConfig,
+				"failure":        failureFields(report, report.Message, report.Detail),
+				"original_request": map[string]any{
+					"skill_name":     pending.OriginalSkillName,
+					"repo":           fallbackRepo(pending.Repo),
+					"payload_format": normalizePayloadFormat(pending.DispatchPayloadFormat, pending.DispatchPayload),
+					"payload":        originalRequest,
+				},
+			}
+			if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
+				ToAgentUUID: reviewer.AgentUUID,
+				ToAgentURI:  reviewer.AgentURI,
+				ClientMsgID: task.ID,
+				Message:     newSkillRequestMessage(time.Now().UTC(), failureReviewSkillName, payload, "json", task.ID, ""),
+			}); err != nil {
+				s.noteHubInteraction(err, ConnectionTransportHTTP)
+				task.Status = "queued_local_only"
+				task.LastDispatchErr = err.Error()
+			} else {
+				s.noteHubInteraction(nil, ConnectionTransportHTTP)
+				task.Status = "queued"
+				task.LastDispatchErr = ""
+			}
+		} else {
+			task.Status = "pending_reviewer"
+			task.LastDispatchErr = "no failure reviewer configured"
+			shouldPublish = false
+		}
 	}
 
 	if err := s.store.Update(func(current *AppState) error {
@@ -1077,8 +1097,21 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 		return FollowUpTask{}, err
 	}
 
-	if err := s.logEvent("error", "Follow-up queued", task.OriginalError, pending.ID, pending.LogPath); err != nil {
-		return FollowUpTask{}, err
+	shouldLog := !hasExisting ||
+		shouldPublish ||
+		task.Status != existing.Status ||
+		task.LastDispatchErr != existing.LastDispatchErr ||
+		task.OriginalError != existing.OriginalError ||
+		!reflect.DeepEqual(task.LogPaths, existing.LogPaths) ||
+		!reflect.DeepEqual(task.OriginalRequest, existing.OriginalRequest)
+	if shouldLog {
+		title := "Follow-up queued"
+		if hasExisting {
+			title = "Follow-up updated"
+		}
+		if err := s.logEvent("error", title, task.OriginalError, pending.ID, pending.LogPath); err != nil {
+			return FollowUpTask{}, err
+		}
 	}
 	return task, nil
 }

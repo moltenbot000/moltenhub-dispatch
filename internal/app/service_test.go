@@ -1308,11 +1308,14 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 		t.Fatalf("first inbound failure should trigger retry: %v", err)
 	}
 
-	if len(fake.publishCalls) != 1 {
-		t.Fatalf("expected one retry publish after first failure, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 2 {
+		t.Fatalf("expected retry publish plus follow-up publish after first failure, got %d", len(fake.publishCalls))
 	}
 	if got := fake.publishCalls[0].Message.Type; got != "skill_request" {
 		t.Fatalf("expected retry publish to be a skill_request, got %q", got)
+	}
+	if got := fake.publishCalls[1].Message.SkillName; got != failureReviewSkillName {
+		t.Fatalf("expected first failure to queue a follow-up publish, got %q", got)
 	}
 	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
 		t.Fatalf("unexpected retry target: %#v", fake.publishCalls[0])
@@ -1338,8 +1341,8 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 	if retried.ChildRequestID != fake.publishCalls[0].Message.RequestID {
 		t.Fatalf("expected pending retry request id %q, got %q", fake.publishCalls[0].Message.RequestID, retried.ChildRequestID)
 	}
-	if len(state.FollowUpTasks) != 0 {
-		t.Fatalf("expected no follow-up queued after first failure retry, got %d", len(state.FollowUpTasks))
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected one follow-up queued after first failure retry, got %d", len(state.FollowUpTasks))
 	}
 
 	secondFailure := firstFailure
@@ -1349,13 +1352,10 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 	}
 
 	if len(fake.publishCalls) != 3 {
-		t.Fatalf("expected retry publish + caller failure + follow-up publish, got %d", len(fake.publishCalls))
+		t.Fatalf("expected retry publish + first-failure follow-up + caller failure, got %d", len(fake.publishCalls))
 	}
-	if got := fake.publishCalls[1].Message.Type; got != "skill_result" {
+	if got := fake.publishCalls[2].Message.Type; got != "skill_result" {
 		t.Fatalf("expected caller failure publish on second failure, got %q", got)
-	}
-	if got := fake.publishCalls[2].Message.SkillName; got != failureReviewSkillName {
-		t.Fatalf("expected follow-up publish on second failure, got %q", got)
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call after final failure, got %d", len(fake.offlineCalls))
@@ -1429,11 +1429,14 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 		t.Fatalf("first inbound failure should trigger retry: %v", err)
 	}
 
-	if len(fake.publishCalls) != 1 {
-		t.Fatalf("expected one retry publish after first failure, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 2 {
+		t.Fatalf("expected retry publish plus follow-up publish after first failure, got %d", len(fake.publishCalls))
 	}
 	if got := fake.publishCalls[0].Message.Type; got != "skill_request" {
 		t.Fatalf("expected retry publish to be a skill_request, got %q", got)
+	}
+	if got := fake.publishCalls[1].Message.SkillName; got != failureReviewSkillName {
+		t.Fatalf("expected first failure to queue a follow-up publish, got %q", got)
 	}
 	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
 		t.Fatalf("unexpected retry target: %#v", fake.publishCalls[0])
@@ -1456,6 +1459,9 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 	if retried.ChildRequestID != fake.publishCalls[0].Message.RequestID {
 		t.Fatalf("expected pending retry request id %q, got %q", fake.publishCalls[0].Message.RequestID, retried.ChildRequestID)
 	}
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected one follow-up queued after first failure retry, got %d", len(state.FollowUpTasks))
+	}
 
 	secondFailure := firstFailure
 	secondFailure.OpenClawMessage.RequestID = retried.ChildRequestID
@@ -1464,11 +1470,11 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 	}
 
 	if len(fake.publishCalls) != 3 {
-		t.Fatalf("expected retry publish + caller failure + follow-up publish, got %d", len(fake.publishCalls))
+		t.Fatalf("expected retry publish + first-failure follow-up + caller failure, got %d", len(fake.publishCalls))
 	}
-	failurePayload, ok := fake.publishCalls[1].Message.Payload.(map[string]any)
+	failurePayload, ok := fake.publishCalls[2].Message.Payload.(map[string]any)
 	if !ok {
-		t.Fatalf("unexpected caller failure payload type: %T", fake.publishCalls[1].Message.Payload)
+		t.Fatalf("unexpected caller failure payload type: %T", fake.publishCalls[2].Message.Payload)
 	}
 	if got := failurePayload["status"]; got != "failed" {
 		t.Fatalf("unexpected caller failure status: %#v", got)

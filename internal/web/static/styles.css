@@ -3636,12 +3636,6 @@ p,
   gap: 10px;
 }
 
-.manual-dispatch-target-hint {
-  margin: 0;
-  color: var(--meta);
-  font-size: 0.84rem;
-}
-
 .manual-dispatch-skill-hint {
   margin: -2px 0 0;
   color: var(--meta);

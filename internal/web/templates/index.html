@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Molten Hub Console</title>
+  <title>Molten Hub Dispatch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
@@ -32,8 +32,8 @@
             alt="MoltenHub logo">
         </div>
         <div class="page-title-block">
-          <div class="title">Molten Hub Console</div>
-          <p class="sub page-subtitle">Dispatch work to your quiet army.</p>
+          <div class="title">Molten Hub Dispatch</div>
+          <p class="sub page-subtitle">Your quiet army awaits your orders.</p>
         </div>
       </div>
       <div class="status-row connection-status-row" aria-live="polite">
@@ -96,7 +96,6 @@
             <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
             <fieldset class="manual-dispatch-target-fieldset">
               <legend>Agents</legend>
-              <p class="manual-dispatch-target-hint">Choose one of the connected agents below.</p>
               <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid">
               {{range .State.ConnectedAgents}}
               <button
@@ -130,7 +129,7 @@
               <span class="manual-dispatch-payload-label-row">
                 <span>Payload</span>
               </span>
-              <textarea id="skill-payload-input" name="payload" rows="4" placeholder="Enter markdown text or JSON for the selected skill." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
+              <textarea id="skill-payload-input" name="payload" rows="4" data-default-placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours." placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
               <span id="skill-payload-hint" class="manual-dispatch-payload-hint"></span>
               <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
             </label>
@@ -476,6 +475,9 @@
       const skillPayloadInput = document.getElementById("skill-payload-input");
       const skillPayloadValidation = document.getElementById("skill-payload-validation");
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
+      const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
+        ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours."
+        : "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.";
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
       const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
@@ -1787,7 +1789,7 @@
             skillPayloadInput.value = "";
             skillPayloadInput.setCustomValidity("");
           } else {
-            skillPayloadInput.placeholder = "Enter markdown text or JSON for the selected skill.";
+            skillPayloadInput.placeholder = defaultSkillPayloadPlaceholder;
           }
         }
         if (skillPayloadFormatInput instanceof HTMLInputElement && !selectedSkill) {
@@ -1984,7 +1986,7 @@
         syncConnectedAgentSelection();
       };
 
-      const stopConnectedAgentsAutoRefresh = (countdownText) => {
+      const stopConnectedAgentsAutoRefresh = (_statusText = "") => {
         if (connectedAgentsAutoRefreshTimer) {
           window.clearTimeout(connectedAgentsAutoRefreshTimer);
           connectedAgentsAutoRefreshTimer = 0;
