@@ -1520,7 +1520,7 @@
         }
         const hasSelectedSkill = skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
         skillPayloadField.hidden = !hasSelectedSkill;
-        skillPayloadFormatInput.value = hasSelectedSkill ? "text" : "";
+        skillPayloadFormatInput.value = hasSelectedSkill ? "markdown" : "";
         if (skillPayloadInput instanceof HTMLTextAreaElement) {
           skillPayloadInput.disabled = !hasSelectedSkill;
           if (!hasSelectedSkill) {

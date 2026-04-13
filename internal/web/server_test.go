@@ -588,7 +588,7 @@ func TestHandleDispatchAcceptsMinimalTargetOnlyForm(t *testing.T) {
 	}
 }
 
-func TestHandleDispatchAcceptsTextPayloadFormat(t *testing.T) {
+func TestHandleDispatchMapsTextPayloadFormatAliasToMarkdown(t *testing.T) {
 	t.Parallel()
 
 	stub := &stubService{
@@ -609,11 +609,47 @@ func TestHandleDispatchAcceptsTextPayloadFormat(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("expected redirect response, got %d", rec.Code)
 	}
-	if got := stub.lastDispatchReq.PayloadFormat; got != "text" {
-		t.Fatalf("expected payload format text, got %#v", got)
+	if got := stub.lastDispatchReq.PayloadFormat; got != "markdown" {
+		t.Fatalf("expected payload format markdown, got %#v", got)
 	}
 	if got := stub.lastDispatchReq.Payload; got != "Issue an offline to moltenbot hub" {
 		t.Fatalf("unexpected payload value: %#v", got)
+	}
+}
+
+func TestHandleDispatchAutoPromotesJSONObjectMarkdownPayloadToJSON(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=markdown&payload=%7B%22prompt%22%3A%22Review+logs%22%2C%22retry%22%3Atrue%7D"
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "json" {
+		t.Fatalf("expected payload format json, got %#v", got)
+	}
+	payload, ok := stub.lastDispatchReq.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected JSON payload map, got %T", stub.lastDispatchReq.Payload)
+	}
+	if got := payload["prompt"]; got != "Review logs" {
+		t.Fatalf("unexpected prompt payload value: %#v", payload)
+	}
+	if got := payload["retry"]; got != true {
+		t.Fatalf("unexpected retry payload value: %#v", payload)
 	}
 }
 
@@ -668,7 +704,7 @@ func TestHandleDispatchRejectsUnknownPayloadFormat(t *testing.T) {
 	if got := stub.state.Flash.Level; got != "error" {
 		t.Fatalf("expected error flash level, got %#v", stub.state.Flash)
 	}
-	if got := stub.state.Flash.Message; got != "payload_format must be one of text, markdown, or json" {
+	if got := stub.state.Flash.Message; got != "payload_format must be one of markdown or json" {
 		t.Fatalf("unexpected error flash message: %#v", got)
 	}
 }

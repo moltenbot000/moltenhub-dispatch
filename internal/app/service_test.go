@@ -1705,6 +1705,64 @@ func TestFailureFromMessageUsesDownstreamFailureEnvelope(t *testing.T) {
 	}
 }
 
+func TestNormalizePayloadFormatCanonicalizesToHubEnum(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		format  string
+		payload any
+		want    string
+	}{
+		{
+			name:    "nil payload omits format",
+			format:  "json",
+			payload: nil,
+			want:    "",
+		},
+		{
+			name:    "string payload defaults to markdown",
+			format:  "",
+			payload: "Issue an offline to moltenbot hub",
+			want:    "markdown",
+		},
+		{
+			name:    "text alias maps to markdown",
+			format:  "text",
+			payload: "Issue an offline to moltenbot hub",
+			want:    "markdown",
+		},
+		{
+			name:    "json remains json",
+			format:  "json",
+			payload: map[string]any{"input": "Issue an offline to moltenbot hub"},
+			want:    "json",
+		},
+		{
+			name:    "unknown format for string payload falls back to markdown",
+			format:  "xml",
+			payload: "Issue an offline to moltenbot hub",
+			want:    "markdown",
+		},
+		{
+			name:    "unknown format for object payload falls back to json",
+			format:  "xml",
+			payload: map[string]any{"input": "Issue an offline to moltenbot hub"},
+			want:    "json",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizePayloadFormat(tc.format, tc.payload); got != tc.want {
+				t.Fatalf("normalizePayloadFormat(%q, %#v) = %q, want %q", tc.format, tc.payload, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	t.Parallel()
 

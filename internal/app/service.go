@@ -1237,14 +1237,22 @@ func normalizePayloadFormat(format string, payload any) string {
 	if payload == nil {
 		return ""
 	}
-	format = strings.TrimSpace(format)
-	if format != "" {
-		return format
-	}
-	if _, ok := payload.(string); ok {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "json":
+		return "json"
+	case "markdown", "md", "text", "text/plain", "plaintext":
 		return "markdown"
+	case "":
+		if _, ok := payload.(string); ok {
+			return "markdown"
+		}
+		return "json"
+	default:
+		if _, ok := payload.(string); ok {
+			return "markdown"
+		}
+		return "json"
 	}
-	return "json"
 }
 
 func messageSucceeded(message hub.OpenClawMessage) bool {

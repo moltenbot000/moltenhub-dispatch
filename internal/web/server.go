@@ -343,12 +343,15 @@ func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 		}
 		payloadValue = decoded
 	case payloadFormat == "", payloadFormat == "text", payloadFormat == "markdown":
-		if payloadFormat == "" {
-			payloadFormat = "text"
+		if decoded, ok := decodeJSONObjectPayload(payloadText); ok {
+			payloadFormat = "json"
+			payloadValue = decoded
+		} else {
+			payloadFormat = "markdown"
+			payloadValue = payloadText
 		}
-		payloadValue = payloadText
 	default:
-		s.redirectWithMessage(w, r, "error", "payload_format must be one of text, markdown, or json")
+		s.redirectWithMessage(w, r, "error", "payload_format must be one of markdown or json")
 		return
 	}
 
@@ -427,6 +430,18 @@ func (s *Server) redirectWithMessage(w http.ResponseWriter, r *http.Request, lev
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func decodeJSONObjectPayload(raw string) (map[string]any, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || !strings.HasPrefix(trimmed, "{") || !strings.HasSuffix(trimmed, "}") {
+		return nil, false
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+		return nil, false
+	}
+	return decoded, true
 }
 
 func parseSkills(raw string) []app.Skill {
