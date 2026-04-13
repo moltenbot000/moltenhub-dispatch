@@ -1007,36 +1007,38 @@ func (s *Service) updateAgentProfile(ctx context.Context, token string, profile 
 }
 
 func (s *Service) resolveDispatchTarget(state AppState, req DispatchRequest) (ConnectedAgent, error) {
-	if req.TargetAgentRef != "" {
-		if agent, ok := FindConnectedAgent(state.ConnectedAgents, req.TargetAgentRef); ok {
+	targetRef := strings.TrimSpace(req.TargetAgentRef)
+	if targetRef != "" {
+		if agent, ok := FindConnectedAgent(state.ConnectedAgents, targetRef); ok {
 			return agent, nil
 		}
 		for _, agent := range state.ConnectedAgents {
-			if agent.AgentUUID == req.TargetAgentRef || agent.AgentURI == req.TargetAgentRef {
+			if agent.AgentUUID == targetRef || agent.AgentURI == targetRef {
 				return agent, nil
 			}
 		}
-		if strings.HasPrefix(req.TargetAgentRef, "molten://") {
-			return ConnectedAgent{Name: req.TargetAgentRef, AgentURI: req.TargetAgentRef}, nil
+		if strings.HasPrefix(targetRef, "molten://") {
+			return ConnectedAgent{Name: targetRef, AgentURI: targetRef}, nil
 		}
-		return ConnectedAgent{}, fmt.Errorf("no connected agent matched %q", req.TargetAgentRef)
+		return ConnectedAgent{}, fmt.Errorf("no connected agent matched %q", targetRef)
 	}
 
-	if strings.TrimSpace(req.SkillName) == "" {
+	skillName := strings.TrimSpace(req.SkillName)
+	if skillName == "" {
 		return ConnectedAgent{}, errors.New("skill_name is required when target_agent_ref is empty")
 	}
 
 	for _, agent := range state.ConnectedAgents {
-		if agent.DefaultSkill == req.SkillName {
+		if agent.DefaultSkill == skillName {
 			return agent, nil
 		}
 		for _, skill := range agent.AdvertisedSkills {
-			if skill.Name == req.SkillName {
+			if skill.Name == skillName {
 				return agent, nil
 			}
 		}
 	}
-	return ConnectedAgent{}, fmt.Errorf("no connected agent advertises skill %q", req.SkillName)
+	return ConnectedAgent{}, fmt.Errorf("no connected agent advertises skill %q", skillName)
 }
 
 func (s *Service) prepareDispatchRequest(state AppState, req DispatchRequest) (ConnectedAgent, DispatchRequest, error) {
@@ -1199,13 +1201,7 @@ func (p *dispatchPayload) fromJSONBytes(data []byte) error {
 }
 
 func (p dispatchPayload) TargetAgentRef() string {
-	if p.AgentRef != "" {
-		return p.AgentRef
-	}
-	if p.TargetAgentUUID != "" {
-		return p.TargetAgentUUID
-	}
-	return p.TargetAgentURI
+	return support.FirstNonEmptyString(p.AgentRef, p.TargetAgentUUID, p.TargetAgentURI)
 }
 
 func normalizePayload(payload any, repo string, logPaths []string) map[string]any {

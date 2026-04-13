@@ -1429,6 +1429,30 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	}
 }
 
+func TestDispatchFromUIRequiresSkillNameWhenTargetAgentRefIsBlank(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	_, err = service.DispatchFromUI(context.Background(), DispatchRequest{
+		RequestID:      "ui-req",
+		TargetAgentRef: "   ",
+	})
+	if err == nil {
+		t.Fatal("expected validation error for empty target + skill")
+	}
+	if got := err.Error(); got != "skill_name is required when target_agent_ref is empty" {
+		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
 func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	t.Parallel()
 
@@ -1492,6 +1516,55 @@ func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	}
 	if got := state.PendingTasks[0].OriginalSkillName; got != "run_task" {
 		t.Fatalf("unexpected pending task skill name: %#v", state.PendingTasks[0])
+	}
+}
+
+func TestHandleSkillRequestRequiresSkillNameWhenTargetAgentRefIsBlank(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	message := hub.PullResponse{
+		DeliveryID:    "delivery-1",
+		FromAgentUUID: "caller-uuid",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_request",
+			SkillName: dispatchSkillName,
+			RequestID: "parent-req",
+			Payload: map[string]any{
+				"target_agent_ref": "   ",
+			},
+		},
+	}
+
+	if err := service.handleInboundMessage(context.Background(), message); err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one caller failure publish, got %d", len(fake.publishCalls))
+	}
+	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected failure payload type: %T", fake.publishCalls[0].Message.Payload)
+	}
+	if got := failurePayload["error"]; got != "skill_name is required when target_agent_ref is empty" {
+		t.Fatalf("unexpected failure error payload: %#v", got)
+	}
+	if got := failurePayload["status"]; got != "failed" {
+		t.Fatalf("unexpected failure status payload: %#v", got)
+	}
+
+	state := service.store.Snapshot()
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected follow-up to be queued, got %d", len(state.FollowUpTasks))
 	}
 }
 
