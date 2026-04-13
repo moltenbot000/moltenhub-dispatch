@@ -582,6 +582,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="manual-dispatch-actions"`) {
 		t.Fatalf("expected manual dispatch submit action wrapper, body=%s", body)
 	}
+	if !strings.Contains(body, `id="dispatch-task-clear"`) {
+		t.Fatalf("expected manual dispatch clear button beside submit, body=%s", body)
+	}
 	if strings.Contains(body, `name="repo"`) {
 		t.Fatalf("did not expect manual dispatch repo field, body=%s", body)
 	}
@@ -624,8 +627,17 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="dispatch-task-button prompt-action-button"`) {
 		t.Fatalf("expected dispatch task button to use action button class, body=%s", body)
 	}
+	if !strings.Contains(body, `class="prompt-action-button prompt-action-clear"`) {
+		t.Fatalf("expected clear button to share prompt action button chrome, body=%s", body)
+	}
 	if !strings.Contains(body, `id="dispatch-task-submit"`) {
 		t.Fatalf("expected dispatch submit button id for async submit handling, body=%s", body)
+	}
+	if !strings.Contains(body, `const dispatchTaskClear = document.getElementById("dispatch-task-clear");`) {
+		t.Fatalf("expected clear button hook in client script, body=%s", body)
+	}
+	if !strings.Contains(body, `dispatchTaskClear.disabled = busy;`) {
+		t.Fatalf("expected dispatch busy state to disable the clear action, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-submit-status" class="connected-agents-refresh-status"`) {
 		t.Fatalf("expected inline dispatch status region for async dispatch feedback, body=%s", body)
@@ -639,8 +651,20 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `Select a skill for the chosen agent before dispatching.`) {
 		t.Fatalf("expected client-side empty-skill dispatch guard, body=%s", body)
 	}
+	if !strings.Contains(body, `const resetManualDispatchForm = () => {`) {
+		t.Fatalf("expected manual dispatch reset helper, body=%s", body)
+	}
+	if !strings.Contains(body, `targetAgentRefInput.value = latestConnectedAgents.length > 0`) {
+		t.Fatalf("expected manual dispatch reset to restore the first connected agent, body=%s", body)
+	}
+	if !strings.Contains(body, `syncConnectedAgentSelection({ forceFirstSkill: true });`) {
+		t.Fatalf("expected manual dispatch reset to restore the first skill selection, body=%s", body)
+	}
+	if !strings.Contains(body, `dispatchTaskClear.addEventListener("click", () => {`) {
+		t.Fatalf("expected manual dispatch clear click handler, body=%s", body)
+	}
 	if !strings.Contains(body, `skillPayloadInput.value = "";`) {
-		t.Fatalf("expected async submit success path to clear payload input, body=%s", body)
+		t.Fatalf("expected manual dispatch flows to clear the payload input, body=%s", body)
 	}
 	if !strings.Contains(body, `id="sub-actions-notice" class="panel" hidden`) {
 		t.Fatalf("expected sub-action notice to be hidden when bound and connected, body=%s", body)
@@ -1326,6 +1350,9 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
+	}
+	if !strings.Contains(body, `gap: 10px;`) {
+		t.Fatalf("expected spacing between clear and dispatch actions, body=%s", body)
 	}
 	if !strings.Contains(body, `.shell button.dispatch-task-button {`) {
 		t.Fatalf("expected dispatch task button style override for action button look, body=%s", body)
@@ -2099,7 +2126,7 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `Auto-refresh paused while agents are connected.`) {
 		t.Fatalf("expected paused auto-refresh copy once agents exist, body=%s", body)
 	}
-	if !strings.Contains(body, `const syncConnectedAgentSelection = () => {`) {
+	if !strings.Contains(body, `const syncConnectedAgentSelection = (options = {}) => {`) {
 		t.Fatalf("expected connected agent card selection sync helper, body=%s", body)
 	}
 	if !strings.Contains(body, `const connectedAgentSkillEntries = (agent) => {`) {
@@ -2117,7 +2144,7 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `const resolveSelectedDispatchState = () => {`) {
 		t.Fatalf("expected resolved dispatch state helper, body=%s", body)
 	}
-	if !strings.Contains(body, `const updateSkillNameOptions = () => {`) {
+	if !strings.Contains(body, `const updateSkillNameOptions = (options = {}) => {`) {
 		t.Fatalf("expected skill dropdown sync helper, body=%s", body)
 	}
 	if !strings.Contains(body, `const initialConnectedAgentsData = document.getElementById("initial-connected-agents-data");`) {
@@ -2126,7 +2153,7 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `id="initial-connected-agents-data" type="application/json"`) {
 		t.Fatalf("expected serialized connected-agents bootstrap payload script, body=%s", body)
 	}
-	if !strings.Contains(body, `const selectConnectedAgentTarget = (targetRef) => {`) {
+	if !strings.Contains(body, `const selectConnectedAgentTarget = (targetRef, options = {}) => {`) {
 		t.Fatalf("expected connected agent selector click handler, body=%s", body)
 	}
 	if !strings.Contains(body, `formData.set("target_agent_ref", dispatchState.targetRef);`) {

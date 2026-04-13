@@ -136,6 +136,7 @@
             </label>
             <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
             <div class="manual-dispatch-actions">
+              <button id="dispatch-task-clear" type="button" class="prompt-action-button prompt-action-clear">Clear</button>
               <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">Dispatch Task</button>
             </div>
             <p id="dispatch-submit-status" class="connected-agents-refresh-status" aria-live="polite"></p>
@@ -479,6 +480,7 @@
       const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
         ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours."
         : "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.";
+      const dispatchTaskClear = document.getElementById("dispatch-task-clear");
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
       const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
@@ -1522,6 +1524,9 @@
       let dispatchStatusClearTimer = 0;
 
       const setDispatchSubmitBusy = (busy) => {
+        if (dispatchTaskClear instanceof HTMLButtonElement) {
+          dispatchTaskClear.disabled = busy;
+        }
         if (!(dispatchTaskSubmit instanceof HTMLButtonElement)) {
           return;
         }
@@ -1690,6 +1695,25 @@
         return "";
       };
 
+      const setSelectedSkillHint = (selectedAgent, skillEntries) => {
+        if (!(skillNameHint instanceof HTMLElement)) {
+          return;
+        }
+        if (!selectedAgent) {
+          skillNameHint.textContent = "Select a target agent to load its advertised skills from Molten Hub.";
+          return;
+        }
+        if (skillEntries.length === 0) {
+          skillNameHint.textContent = "This agent did not advertise skills in Hub capabilities. Leave this blank only if the target agent defines its own default skill.";
+          return;
+        }
+        const selectedSkillName = trimmedString(skillNameSelect && skillNameSelect.value);
+        const selectedSkill = skillEntries.find((skill) => skill.name === selectedSkillName) || skillEntries[0];
+        skillNameHint.textContent = selectedSkill && selectedSkill.description
+          ? selectedSkill.description
+          : `Loaded ${skillEntries.length} skill${skillEntries.length === 1 ? "" : "s"} for ${connectedAgentDisplayName(selectedAgent)}.`;
+      };
+
       const resolveSelectedDispatchTargetRef = () => {
         const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
         if (selectedTargetRef !== "") {
@@ -1799,14 +1823,15 @@
         validateSkillPayload();
       };
 
-      const updateSkillNameOptions = () => {
+      const updateSkillNameOptions = (options = {}) => {
         if (!(skillNameSelect instanceof HTMLSelectElement)) {
           syncSkillPayloadField();
           return;
         }
+        const forceFirstSkill = Boolean(options && options.forceFirstSkill);
         const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
         const selectedAgent = latestConnectedAgents.find((agent) => agentMatchesTargetRef(agent, selectedTargetRef));
-        const previousSkill = trimmedString(skillNameSelect.value);
+        const previousSkill = forceFirstSkill ? "" : trimmedString(skillNameSelect.value);
         const skillEntries = connectedAgentSkillEntries(selectedAgent);
 
         skillNameSelect.innerHTML = "";
@@ -1817,9 +1842,7 @@
           option.value = "";
           option.textContent = "Select an agent first";
           skillNameSelect.appendChild(option);
-          if (skillNameHint instanceof HTMLElement) {
-            skillNameHint.textContent = "Select a target agent to load its advertised skills from Molten Hub.";
-          }
+          setSelectedSkillHint(null, skillEntries);
           syncSkillPayloadField();
           return;
         }
@@ -1832,9 +1855,7 @@
           option.textContent = "Use target agent default skill";
           skillNameSelect.appendChild(option);
           skillNameSelect.value = "";
-          if (skillNameHint instanceof HTMLElement) {
-            skillNameHint.textContent = "This agent did not advertise skills in Hub capabilities. Leave this blank only if the target agent defines its own default skill.";
-          }
+          setSelectedSkillHint(selectedAgent, skillEntries);
           syncSkillPayloadField();
           return;
         }
@@ -1857,16 +1878,11 @@
           skillNameSelect.value = defaultSkill ? defaultSkill.name : skillEntries[0].name;
         }
 
-        if (skillNameHint instanceof HTMLElement) {
-          const selectedSkill = skillEntries.find((skill) => skill.name === skillNameSelect.value) || skillEntries[0];
-          skillNameHint.textContent = selectedSkill && selectedSkill.description
-            ? selectedSkill.description
-            : `Loaded ${skillEntries.length} skill${skillEntries.length === 1 ? "" : "s"} for ${connectedAgentDisplayName(selectedAgent)}.`;
-        }
+        setSelectedSkillHint(selectedAgent, skillEntries);
         syncSkillPayloadField();
       };
 
-      const syncConnectedAgentSelection = () => {
+      const syncConnectedAgentSelection = (options = {}) => {
         if (!(manualDispatchTargets instanceof HTMLElement) || !(targetAgentRefInput instanceof HTMLInputElement)) {
           return;
         }
@@ -1879,15 +1895,15 @@
           node.classList.toggle("is-selected", selected);
           node.setAttribute("aria-pressed", selected ? "true" : "false");
         });
-        updateSkillNameOptions();
+        updateSkillNameOptions(options);
       };
 
-      const selectConnectedAgentTarget = (targetRef) => {
+      const selectConnectedAgentTarget = (targetRef, options = {}) => {
         if (!(targetAgentRefInput instanceof HTMLInputElement)) {
           return;
         }
         targetAgentRefInput.value = trimmedString(targetRef);
-        syncConnectedAgentSelection();
+        syncConnectedAgentSelection(options);
       };
 
       const connectedAgentEmoji = (agent) => {
@@ -1964,6 +1980,7 @@
         const previousTargetRef = targetAgentRefInput instanceof HTMLInputElement
           ? trimmedString(targetAgentRefInput.value)
           : "";
+        let forceFirstSkill = false;
 
         manualDispatchTargets.innerHTML = "";
         nextAgents.forEach((agent) => {
@@ -1980,11 +1997,30 @@
             targetAgentRefInput.value = connectedAgentTargetRef(selectedAgent);
           } else if (nextAgents.length > 0) {
             targetAgentRefInput.value = connectedAgentTargetRef(nextAgents[0]);
+            forceFirstSkill = true;
           } else {
             targetAgentRefInput.value = "";
           }
         }
-        syncConnectedAgentSelection();
+        syncConnectedAgentSelection({ forceFirstSkill });
+      };
+
+      const resetManualDispatchForm = () => {
+        if (targetAgentRefInput instanceof HTMLInputElement) {
+          targetAgentRefInput.value = latestConnectedAgents.length > 0
+            ? connectedAgentTargetRef(latestConnectedAgents[0])
+            : "";
+        }
+        if (skillPayloadInput instanceof HTMLTextAreaElement) {
+          skillPayloadInput.value = "";
+          skillPayloadInput.setCustomValidity("");
+        }
+        if (skillPayloadFormatInput instanceof HTMLInputElement) {
+          skillPayloadFormatInput.value = "";
+        }
+        setSkillPayloadValidationMessage("");
+        setDispatchSubmitStatus("");
+        syncConnectedAgentSelection({ forceFirstSkill: true });
       };
 
       const stopConnectedAgentsAutoRefresh = (countdownText) => {
@@ -2244,6 +2280,11 @@
       if (skillPayloadInput instanceof HTMLTextAreaElement) {
         skillPayloadInput.addEventListener("input", () => {
           validateSkillPayload();
+        });
+      }
+      if (dispatchTaskClear instanceof HTMLButtonElement) {
+        dispatchTaskClear.addEventListener("click", () => {
+          resetManualDispatchForm();
         });
       }
       if (manualDispatchForm instanceof HTMLFormElement) {
