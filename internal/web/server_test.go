@@ -1115,7 +1115,7 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	}
 }
 
-func TestHandleIndexMinimizesInfoRecentEventsAndKeepsErrorsOpen(t *testing.T) {
+func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
@@ -1162,8 +1162,8 @@ func TestHandleIndexMinimizesInfoRecentEventsAndKeepsErrorsOpen(t *testing.T) {
 	if !strings.Contains(body, `class="runtime-event-card-body" data-runtime-event-body hidden`) {
 		t.Fatalf("expected info event body to render hidden by default, body=%s", body)
 	}
-	if !strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
-		t.Fatalf("expected error event toggle to render open by default, body=%s", body)
+	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
+		t.Fatalf("expected all runtime event toggles to render closed by default, body=%s", body)
 	}
 	if !strings.Contains(body, `const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));`) {
 		t.Fatalf("expected runtime event JS collection hook, body=%s", body)

@@ -175,9 +175,9 @@
             <article class="card runtime-event-card" data-runtime-event-card>
               <div class="runtime-event-card-header">
                 <h3>{{.Title}}</h3>
-                <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="{{if eq .Level "error"}}true{{else}}false{{end}}">{{if eq .Level "error"}}Close{{else}}Open{{end}}</button>
+                <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
               </div>
-              <div class="runtime-event-card-body" data-runtime-event-body {{if ne .Level "error"}}hidden{{end}}>
+              <div class="runtime-event-card-body" data-runtime-event-body hidden>
                 <p><strong>When:</strong> {{formatTime .At}}</p>
                 <p><strong>Level:</strong> {{.Level}}</p>
                 <p>{{.Detail}}</p>
