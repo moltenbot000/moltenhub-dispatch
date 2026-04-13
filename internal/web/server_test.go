@@ -1027,6 +1027,35 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 }
 
+func TestHandleStaticServesEmbeddedAssets(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/static/styles.css", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/css") {
+		t.Fatalf("expected css content type header, got %q", rec.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(body, ".shell {") {
+		t.Fatalf("expected stylesheet body from embedded static assets, body=%s", body)
+	}
+}
+
 func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	t.Parallel()
 
