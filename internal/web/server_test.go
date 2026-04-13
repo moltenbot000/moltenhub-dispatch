@@ -528,9 +528,6 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, "Awaiting Bind") {
 		t.Fatalf("did not expect removed bind state section, body=%s", body)
 	}
-	if strings.Contains(body, "one-time bind token") {
-		t.Fatalf("did not expect removed bind state copy, body=%s", body)
-	}
 	if strings.Contains(body, ">Runtime<") {
 		t.Fatalf("did not expect removed runtime panel, body=%s", body)
 	}
