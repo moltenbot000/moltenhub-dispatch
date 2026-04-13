@@ -1391,10 +1391,10 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 		state.Session.AgentToken = "agent-token"
 		state.ConnectedAgents = []ConnectedAgent{
 			{
-				ID:              "worker-a",
-				Name:            "Worker A",
-				AgentUUID:       "worker-uuid",
-				DefaultSkill:    "run_task",
+				ID:               "worker-a",
+				Name:             "Worker A",
+				AgentUUID:        "worker-uuid",
+				DefaultSkill:     "run_task",
 				AdvertisedSkills: []Skill{{Name: "run_task"}},
 			},
 		}
@@ -1423,6 +1423,69 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	}
 	if got := fake.publishCalls[0].Message.Payload; got != nil {
 		t.Fatalf("expected nil payload for target-only dispatch, got %#v", got)
+	}
+}
+
+func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{
+			{
+				ID:               "worker-a",
+				Name:             "Worker A",
+				AgentUUID:        "worker-uuid",
+				DefaultSkill:     "run_task",
+				AdvertisedSkills: []Skill{{Name: "run_task"}},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	message := hub.PullResponse{
+		DeliveryID:    "delivery-1",
+		FromAgentUUID: "caller-uuid",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_request",
+			SkillName: dispatchSkillName,
+			RequestID: "parent-req",
+			Input: map[string]any{
+				"target_agent_ref": "worker-a",
+			},
+		},
+	}
+
+	if err := service.handleInboundMessage(context.Background(), message); err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one downstream publish call, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
+		t.Fatalf("unexpected target agent UUID: %#v", fake.publishCalls[0])
+	}
+	if got := fake.publishCalls[0].Message.SkillName; got != "run_task" {
+		t.Fatalf("expected inferred downstream skill, got %q", got)
+	}
+	if got := fake.publishCalls[0].Message.Payload; got != nil {
+		t.Fatalf("expected nil downstream payload for target-only activation, got %#v", got)
+	}
+
+	state := service.store.Snapshot()
+	if len(state.PendingTasks) != 1 {
+		t.Fatalf("expected one pending task, got %d", len(state.PendingTasks))
+	}
+	if got := state.PendingTasks[0].TargetAgentUUID; got != "worker-uuid" {
+		t.Fatalf("unexpected pending task target UUID: %#v", state.PendingTasks[0])
+	}
+	if got := state.PendingTasks[0].OriginalSkillName; got != "run_task" {
+		t.Fatalf("unexpected pending task skill name: %#v", state.PendingTasks[0])
 	}
 }
 

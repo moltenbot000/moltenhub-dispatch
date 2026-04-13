@@ -33,6 +33,8 @@ Key integration points:
 - `POST /v1/openclaw/messages/offline`
   Marks the runtime offline during shutdown and after task failures, matching the hub’s presence contract in the NA/EU OpenAPI spec.
 
+Dispatch activation accepts the generic OpenClaw `input` envelope as well as `payload`. Callers can target a connected agent with a single `target_agent_ref` field and omit `repo`, `log_paths`, `payload`, and timeout fields unless the downstream skill actually needs them.
+
 ## Failure Behavior
 
 When a dispatched task fails, the app does all of the following:

@@ -648,7 +648,11 @@ func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResp
 func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullResponse) error {
 	state := s.store.Snapshot()
 	var payload dispatchPayload
-	if err := payload.FromAny(message.OpenClawMessage.Payload); err != nil {
+	rawDispatchPayload := message.OpenClawMessage.Payload
+	if rawDispatchPayload == nil {
+		rawDispatchPayload = message.OpenClawMessage.Input
+	}
+	if err := payload.FromAny(rawDispatchPayload); err != nil {
 		pending := PendingTask{
 			ID:              NewID("task"),
 			ParentRequestID: message.OpenClawMessage.RequestID,
@@ -910,6 +914,10 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 	logPath := filepath.Join(state.Settings.DataDir, "logs", taskID+".log")
 
 	payload := normalizePayload(req.Payload, req.Repo, req.LogPaths)
+	var outboundPayload any
+	if payload != nil {
+		outboundPayload = payload
+	}
 	task := PendingTask{
 		ID:                taskID,
 		ParentRequestID:   req.RequestID,
@@ -930,7 +938,7 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 	message := newSkillRequestMessage(
 		now,
 		req.SkillName,
-		payload,
+		outboundPayload,
 		normalizePayloadFormat(req.PayloadFormat, req.Payload),
 		childRequestID,
 		req.RequestID,
@@ -1111,6 +1119,7 @@ func (s *Service) logEvent(level, title, detail, taskID, logPath string) error {
 }
 
 type dispatchPayload struct {
+	AgentRef        string   `json:"target_agent_ref"`
 	TargetAgentUUID string   `json:"target_agent_uuid"`
 	TargetAgentURI  string   `json:"target_agent_uri"`
 	SkillName       string   `json:"skill_name"`
@@ -1122,7 +1131,8 @@ type dispatchPayload struct {
 
 func (p *dispatchPayload) FromAny(value any) error {
 	if value == nil {
-		return errors.New("missing payload")
+		*p = dispatchPayload{}
+		return nil
 	}
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -1132,6 +1142,9 @@ func (p *dispatchPayload) FromAny(value any) error {
 }
 
 func (p dispatchPayload) TargetAgentRef() string {
+	if p.AgentRef != "" {
+		return p.AgentRef
+	}
 	if p.TargetAgentUUID != "" {
 		return p.TargetAgentUUID
 	}
@@ -1139,6 +1152,9 @@ func (p dispatchPayload) TargetAgentRef() string {
 }
 
 func normalizePayload(payload any, repo string, logPaths []string) map[string]any {
+	if payload == nil && repo == "" && len(logPaths) == 0 {
+		return nil
+	}
 	switch typed := payload.(type) {
 	case map[string]any:
 		if repo != "" {
