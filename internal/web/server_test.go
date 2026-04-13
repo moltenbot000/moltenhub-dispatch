@@ -2138,8 +2138,14 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if strings.Contains(body, `const connectedAgentsRefreshNextNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-next]"));`) {
 		t.Fatalf("did not expect removed refresh countdown node hooks, body=%s", body)
 	}
+	if strings.Contains(body, `connectedAgentsRefreshNextNodes.forEach((node) => {`) {
+		t.Fatalf("did not expect stale refresh countdown node usage, body=%s", body)
+	}
 	if strings.Contains(body, `const setConnectedAgentsRefreshCountdown = (remainingMs, busy) => {`) {
 		t.Fatalf("did not expect removed refresh countdown helper, body=%s", body)
+	}
+	if strings.Contains(body, `setConnectedAgentsRefreshCountdown(CONNECTED_AGENTS_REFRESH_INTERVAL_MS, false);`) {
+		t.Fatalf("did not expect stale refresh countdown helper usage, body=%s", body)
 	}
 	if !strings.Contains(body, `setConnectedAgentsRefreshState(false, "");`) {
 		t.Fatalf("expected refresh completion to clear the status text, body=%s", body)
