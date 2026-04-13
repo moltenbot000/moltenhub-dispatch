@@ -172,6 +172,62 @@ func TestHandleIndexRendersLocalConnectionAsConnected(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersGoogleAnalyticsSnippet(t *testing.T) {
+	t.Parallel()
+
+	settings := app.DefaultSettings()
+	settings.GoogleAnalyticsMeasurementID = "G-TEST123456"
+
+	server, err := New(&stubService{state: app.AppState{Settings: settings}})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `https://www.googletagmanager.com/gtag/js?id=G-TEST123456`) {
+		t.Fatalf("expected google analytics bootstrap script, body=%s", body)
+	}
+	if !strings.Contains(body, `window.gtag("config", "G-TEST123456", { send_page_view: false });`) {
+		t.Fatalf("expected google analytics config bootstrap, body=%s", body)
+	}
+	if !strings.Contains(body, `window.__hubAnalyticsMeasurementID = "G-TEST123456";`) {
+		t.Fatalf("expected google analytics measurement id to be exposed to app script, body=%s", body)
+	}
+	if !strings.Contains(body, `window.gtag("event", "page_view"`) {
+		t.Fatalf("expected google analytics page_view tracking, body=%s", body)
+	}
+}
+
+func TestHandleIndexOmitsGoogleAnalyticsSnippetWhenDisabled(t *testing.T) {
+	t.Parallel()
+
+	settings := app.DefaultSettings()
+	settings.GoogleAnalyticsMeasurementID = ""
+
+	server, err := New(&stubService{state: app.AppState{Settings: settings}})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "googletagmanager.com/gtag/js") {
+		t.Fatalf("did not expect google analytics script when disabled, body=%s", body)
+	}
+	if strings.Contains(body, `window.__hubAnalyticsMeasurementID = "`) {
+		t.Fatalf("did not expect google analytics measurement id when disabled, body=%s", body)
+	}
+}
+
 func TestHandleBindPassesSubmittedProfileToService(t *testing.T) {
 	t.Parallel()
 

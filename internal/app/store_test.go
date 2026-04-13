@@ -48,6 +48,42 @@ func TestDefaultSettingsUsesMoltenhubHiddenDataDir(t *testing.T) {
 	}
 }
 
+func TestDefaultSettingsUsesGoogleAnalyticsMeasurementID(t *testing.T) {
+	t.Parallel()
+
+	settings := DefaultSettings()
+	if got, want := settings.GoogleAnalyticsMeasurementID, defaultGoogleAnalyticsMeasureID; got != want {
+		t.Fatalf("google analytics measurement id = %q, want %q", got, want)
+	}
+}
+
+func TestNewStorePrefersGoogleAnalyticsEnvOverrideOverPersistedSetting(t *testing.T) {
+	t.Setenv("MOLTENHUB_GOOGLE_ANALYTICS_ID", "G-OVERRIDE123")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "settings": {
+    "hub_region": "na",
+    "hub_url": "https://na.hub.molten.bot",
+    "google_analytics_measurement_id": "G-PERSISTED999"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	state := store.Snapshot()
+	if got, want := state.Settings.GoogleAnalyticsMeasurementID, "G-OVERRIDE123"; got != want {
+		t.Fatalf("google analytics measurement id = %q, want %q", got, want)
+	}
+}
+
 func TestResolveStorePathMigratesLegacyStateJSON(t *testing.T) {
 	t.Parallel()
 

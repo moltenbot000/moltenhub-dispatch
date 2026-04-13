@@ -131,15 +131,16 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		currentOnboarding = *onboarding
 	}
 	view := pageData{
-		State:           state,
-		Flash:           flash,
-		IsError:         isError,
-		RuntimeOptions:  app.SupportedHubRuntimes(),
-		SelectedRuntime: selectedRuntime,
-		ProfileForm:     defaultProfileForm(state, form),
-		Connection:      connectionStatusView(state),
-		SubActions:      subActionState(state),
-		Onboarding:      currentOnboarding,
+		State:                        state,
+		Flash:                        flash,
+		IsError:                      isError,
+		RuntimeOptions:               app.SupportedHubRuntimes(),
+		SelectedRuntime:              selectedRuntime,
+		ProfileForm:                  defaultProfileForm(state, form),
+		Connection:                   connectionStatusView(state),
+		SubActions:                   subActionState(state),
+		Onboarding:                   currentOnboarding,
+		GoogleAnalyticsMeasurementID: strings.TrimSpace(state.Settings.GoogleAnalyticsMeasurementID),
 	}
 	var rendered bytes.Buffer
 	if err := s.templates.ExecuteTemplate(&rendered, "index.html", view); err != nil {
@@ -559,15 +560,16 @@ func parseSkills(raw string) []app.Skill {
 }
 
 type pageData struct {
-	State           app.AppState
-	Flash           string
-	IsError         bool
-	RuntimeOptions  []app.HubRuntime
-	SelectedRuntime app.HubRuntime
-	ProfileForm     agentProfileForm
-	Connection      connectionView
-	SubActions      subActionView
-	Onboarding      onboardingView
+	State                        app.AppState
+	Flash                        string
+	IsError                      bool
+	RuntimeOptions               []app.HubRuntime
+	SelectedRuntime              app.HubRuntime
+	ProfileForm                  agentProfileForm
+	Connection                   connectionView
+	SubActions                   subActionView
+	Onboarding                   onboardingView
+	GoogleAnalyticsMeasurementID string
 }
 
 type connectionView struct {

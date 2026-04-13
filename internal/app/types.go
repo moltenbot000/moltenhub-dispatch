@@ -16,13 +16,14 @@ const (
 )
 
 type Settings struct {
-	ListenAddr   string        `json:"listen_addr"`
-	HubRegion    string        `json:"hub_region"`
-	HubURL       string        `json:"hub_url"`
-	SessionKey   string        `json:"session_key"`
-	PollInterval time.Duration `json:"poll_interval"`
-	TaskTimeout  time.Duration `json:"task_timeout"`
-	DataDir      string        `json:"data_dir"`
+	ListenAddr                   string        `json:"listen_addr"`
+	HubRegion                    string        `json:"hub_region"`
+	HubURL                       string        `json:"hub_url"`
+	SessionKey                   string        `json:"session_key"`
+	PollInterval                 time.Duration `json:"poll_interval"`
+	TaskTimeout                  time.Duration `json:"task_timeout"`
+	DataDir                      string        `json:"data_dir"`
+	GoogleAnalyticsMeasurementID string        `json:"google_analytics_measurement_id,omitempty"`
 }
 
 type ConnectionState struct {
