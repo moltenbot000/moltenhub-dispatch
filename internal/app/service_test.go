@@ -1383,6 +1383,49 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	}
 }
 
+func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{
+			{
+				ID:              "worker-a",
+				Name:            "Worker A",
+				AgentUUID:       "worker-uuid",
+				DefaultSkill:    "run_task",
+				AdvertisedSkills: []Skill{{Name: "run_task"}},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	task, err := service.DispatchFromUI(context.Background(), DispatchRequest{
+		RequestID:      "ui-req",
+		TargetAgentRef: "worker-a",
+	})
+	if err != nil {
+		t.Fatalf("dispatch from ui: %v", err)
+	}
+
+	if task.OriginalSkillName != "run_task" {
+		t.Fatalf("expected inferred skill name, got %#v", task)
+	}
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one publish call, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[0].Message.SkillName; got != "run_task" {
+		t.Fatalf("unexpected published skill name: %q", got)
+	}
+	if got := fake.publishCalls[0].Message.Payload; got != nil {
+		t.Fatalf("expected nil payload for target-only dispatch, got %#v", got)
+	}
+}
+
 func TestHandleDownstreamFailureStillQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
 	t.Parallel()
 

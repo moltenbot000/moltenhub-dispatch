@@ -392,7 +392,7 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 	}
 	s.syncHubClient(state)
 
-	target, err := s.resolveDispatchTarget(state, req)
+	target, req, err := s.prepareDispatchRequest(state, req)
 	if err != nil {
 		return PendingTask{}, err
 	}
@@ -669,7 +669,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 		Payload:        payload.Payload,
 		PayloadFormat:  payload.PayloadFormat,
 	}
-	target, err := s.resolveDispatchTarget(state, req)
+	target, req, err := s.prepareDispatchRequest(state, req)
 	if err != nil {
 		pending := PendingTask{
 			ID:                NewID("task"),
@@ -981,6 +981,10 @@ func (s *Service) resolveDispatchTarget(state AppState, req DispatchRequest) (Co
 		return ConnectedAgent{}, fmt.Errorf("no connected agent matched %q", req.TargetAgentRef)
 	}
 
+	if strings.TrimSpace(req.SkillName) == "" {
+		return ConnectedAgent{}, errors.New("skill_name is required when target_agent_ref is empty")
+	}
+
 	for _, agent := range state.ConnectedAgents {
 		if agent.DefaultSkill == req.SkillName {
 			return agent, nil
@@ -992,6 +996,51 @@ func (s *Service) resolveDispatchTarget(state AppState, req DispatchRequest) (Co
 		}
 	}
 	return ConnectedAgent{}, fmt.Errorf("no connected agent advertises skill %q", req.SkillName)
+}
+
+func (s *Service) prepareDispatchRequest(state AppState, req DispatchRequest) (ConnectedAgent, DispatchRequest, error) {
+	target, err := s.resolveDispatchTarget(state, req)
+	if err != nil {
+		return ConnectedAgent{}, req, err
+	}
+
+	skillName, err := resolveDispatchSkillName(target, req.SkillName)
+	if err != nil {
+		return ConnectedAgent{}, req, err
+	}
+	req.SkillName = skillName
+	return target, req, nil
+}
+
+func resolveDispatchSkillName(target ConnectedAgent, skillName string) (string, error) {
+	skillName = strings.TrimSpace(skillName)
+	if skillName != "" {
+		return skillName, nil
+	}
+
+	if target.DefaultSkill != "" {
+		return target.DefaultSkill, nil
+	}
+
+	var inferred string
+	for _, skill := range target.AdvertisedSkills {
+		name := strings.TrimSpace(skill.Name)
+		if name == "" {
+			continue
+		}
+		if inferred == "" {
+			inferred = name
+			continue
+		}
+		if inferred != name {
+			return "", fmt.Errorf("skill_name is required for %q because no default skill is configured", target.NameOrRef())
+		}
+	}
+	if inferred != "" {
+		return inferred, nil
+	}
+
+	return "", fmt.Errorf("skill_name is required for %q because no default skill is configured", target.NameOrRef())
 }
 
 func (s *Service) failUIRequest(ctx context.Context, state AppState, task PendingTask, cause error) error {

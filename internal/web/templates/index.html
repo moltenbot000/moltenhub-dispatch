@@ -102,17 +102,7 @@
           <h2>Manual Dispatch</h2>
           <form method="post" action="/dispatch" class="stack">
             <label>Target Agent Ref<input name="target_agent_ref" placeholder="worker-a or molten://agent/worker-a"></label>
-            <label>Skill Name<input name="skill_name" placeholder="run_task" required></label>
-            <label>Repo<input name="repo" placeholder="/tmp/repo"></label>
-            <label>Log Paths<textarea name="log_paths" rows="2" placeholder="/tmp/repo/logs/build.log"></textarea></label>
-            <label>Payload Format
-              <select name="payload_format">
-                <option value="json">json</option>
-                <option value="markdown">markdown</option>
-              </select>
-            </label>
-            <label>Payload<textarea name="payload" rows="7" placeholder='{"task":"Run the fix", "repos":["/tmp/repo"]}' required></textarea></label>
-            <label>Timeout Seconds<input name="timeout_seconds" value="300"></label>
+            <label>Skill Name<input name="skill_name" placeholder="Optional when the target agent has a default skill"></label>
             <div class="manual-dispatch-actions">
               <button type="submit" class="dispatch-task-button prompt-action-button">Dispatch Task</button>
             </div>

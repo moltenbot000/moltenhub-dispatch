@@ -22,6 +22,9 @@ type stubService struct {
 	updateSettingsErr error
 	setFlashErr       error
 	refreshAgentsErr  error
+	dispatchErr       error
+	dispatchTask      app.PendingTask
+	lastDispatchReq   app.DispatchRequest
 	bindStateOnError  bool
 	lastBindProfile   app.BindProfile
 }
@@ -75,8 +78,9 @@ func (s *stubService) RefreshConnectedAgents(_ context.Context) ([]app.Connected
 	return s.state.ConnectedAgents, nil
 }
 
-func (s *stubService) DispatchFromUI(context.Context, app.DispatchRequest) (app.PendingTask, error) {
-	return app.PendingTask{}, nil
+func (s *stubService) DispatchFromUI(_ context.Context, req app.DispatchRequest) (app.PendingTask, error) {
+	s.lastDispatchReq = req
+	return s.dispatchTask, s.dispatchErr
 }
 
 func (s *stubService) UpdateSettings(mutator func(*app.Settings) error) error {
@@ -518,11 +522,63 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="manual-dispatch-actions"`) {
 		t.Fatalf("expected manual dispatch submit action wrapper, body=%s", body)
 	}
+	if strings.Contains(body, `name="repo"`) {
+		t.Fatalf("did not expect manual dispatch repo field, body=%s", body)
+	}
+	if strings.Contains(body, `name="log_paths"`) {
+		t.Fatalf("did not expect manual dispatch log paths field, body=%s", body)
+	}
+	if strings.Contains(body, `name="payload_format"`) {
+		t.Fatalf("did not expect manual dispatch payload format field, body=%s", body)
+	}
+	if strings.Contains(body, `name="payload"`) {
+		t.Fatalf("did not expect manual dispatch payload field, body=%s", body)
+	}
+	if strings.Contains(body, `name="timeout_seconds"`) {
+		t.Fatalf("did not expect manual dispatch timeout field, body=%s", body)
+	}
 	if !strings.Contains(body, `class="dispatch-task-button prompt-action-button"`) {
 		t.Fatalf("expected dispatch task button to use action button class, body=%s", body)
 	}
 	if !strings.Contains(body, `id="sub-actions-notice" class="panel" hidden`) {
 		t.Fatalf("expected sub-action notice to be hidden when bound and connected, body=%s", body)
+	}
+}
+
+func TestHandleDispatchAcceptsMinimalTargetOnlyForm(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader("target_agent_ref=worker-a"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("expected root redirect location, got %q", got)
+	}
+	if got := stub.lastDispatchReq.TargetAgentRef; got != "worker-a" {
+		t.Fatalf("unexpected target agent ref: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.SkillName; got != "" {
+		t.Fatalf("expected empty skill name for target-only dispatch, got %#v", got)
+	}
+	if stub.lastDispatchReq.Payload != nil {
+		t.Fatalf("expected nil payload for minimal dispatch, got %#v", stub.lastDispatchReq.Payload)
+	}
+	if got := stub.state.Flash; got.Level != "info" || got.Message != "Dispatched task task-1" {
+		t.Fatalf("unexpected flash after dispatch: %#v", got)
 	}
 }
 

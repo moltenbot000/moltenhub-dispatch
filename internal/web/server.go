@@ -328,16 +328,21 @@ func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payloadText := strings.TrimSpace(r.FormValue("payload"))
-	payloadValue := any(payloadText)
+	var payloadValue any
+	if payloadText != "" {
+		payloadValue = payloadText
+	}
 	payloadFormat := "markdown"
 	if strings.EqualFold(strings.TrimSpace(r.FormValue("payload_format")), "json") {
-		var decoded map[string]any
-		if err := json.Unmarshal([]byte(payloadText), &decoded); err != nil {
-			s.redirectWithMessage(w, r, "error", "payload JSON is invalid: "+err.Error())
-			return
-		}
-		payloadValue = decoded
 		payloadFormat = "json"
+		if payloadText != "" {
+			var decoded map[string]any
+			if err := json.Unmarshal([]byte(payloadText), &decoded); err != nil {
+				s.redirectWithMessage(w, r, "error", "payload JSON is invalid: "+err.Error())
+				return
+			}
+			payloadValue = decoded
+		}
 	}
 
 	timeout := 0 * time.Second
