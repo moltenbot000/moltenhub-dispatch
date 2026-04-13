@@ -522,8 +522,26 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, `id="open-agent-settings"`) {
 		t.Fatalf("did not expect removed agent settings section button, body=%s", body)
 	}
-	if !strings.Contains(body, ">Manual Dispatch<") {
+	if !strings.Contains(body, ">Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
+	}
+	if strings.Contains(body, ">Manual Dispatch<") {
+		t.Fatalf("did not expect previous manual dispatch heading, body=%s", body)
+	}
+	if !strings.Contains(body, "<legend>Agents</legend>") {
+		t.Fatalf("expected connected agent legend copy, body=%s", body)
+	}
+	if !strings.Contains(body, "Skills") {
+		t.Fatalf("expected skills field label, body=%s", body)
+	}
+	if !strings.Contains(body, "<span>Payload</span>") {
+		t.Fatalf("expected payload field label, body=%s", body)
+	}
+	if !strings.Contains(body, "Auto-select the first skill of that agent.") {
+		t.Fatalf("expected skill auto-select hint, body=%s", body)
+	}
+	if strings.Contains(body, "Format is detected automatically.") {
+		t.Fatalf("did not expect removed payload format hint copy, body=%s", body)
 	}
 	if !strings.Contains(body, `class="grid manual-dispatch-grid"`) {
 		t.Fatalf("expected manual dispatch section to render full-width grid class, body=%s", body)
@@ -563,6 +581,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `Detected markdown payload.`) {
 		t.Fatalf("expected markdown detection status messaging in client script, body=%s", body)
+	}
+	if !strings.Contains(body, `targetAgentRefInput.value = connectedAgentTargetRef(nextAgents[0]);`) {
+		t.Fatalf("expected first connected agent auto-selection logic, body=%s", body)
 	}
 	if strings.Contains(body, `name="timeout_seconds"`) {
 		t.Fatalf("did not expect manual dispatch timeout field, body=%s", body)
@@ -1183,7 +1204,7 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	if strings.Contains(body, ">3. Connected Agents<") {
 		t.Fatalf("did not expect removed connected agents section, body=%s", body)
 	}
-	if !strings.Contains(body, ">Manual Dispatch<") {
+	if !strings.Contains(body, ">Dispatch<") {
 		t.Fatalf("expected manual dispatch markup to remain available for client-side reveal, body=%s", body)
 	}
 	if !strings.Contains(body, "until this runtime is bound to Molten Hub and connectivity is working") {

@@ -91,11 +91,11 @@
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
       <section class="grid manual-dispatch-grid">
         <article class="panel">
-          <h2>Manual Dispatch</h2>
+          <h2>Dispatch</h2>
           <form id="manual-dispatch-form" method="post" action="/dispatch" class="stack">
             <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
             <fieldset class="manual-dispatch-target-fieldset">
-              <legend>Target Agent Ref</legend>
+              <legend>Agents</legend>
               <p class="manual-dispatch-target-hint">Choose one of the connected agents below.</p>
               <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable">
               {{range .State.ConnectedAgents}}
@@ -120,18 +120,18 @@
               </div>
             </fieldset>
             <label>
-              Skill Name
+              Skills
               <select id="skill-name-select" name="skill_name" aria-describedby="skill-name-hint" disabled>
                 <option value="">Select an agent first</option>
               </select>
             </label>
-            <p id="skill-name-hint" class="manual-dispatch-skill-hint">Select a target agent to load its advertised skills from Molten Hub.</p>
+            <p id="skill-name-hint" class="manual-dispatch-skill-hint">Auto-select the first skill of that agent.</p>
             <label id="skill-payload-field" hidden>
               <span class="manual-dispatch-payload-label-row">
-                <span>Skill Payload</span>
+                <span>Payload</span>
               </span>
               <textarea id="skill-payload-input" name="payload" rows="4" placeholder="Enter markdown text or JSON for the selected skill." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
-              <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Format is detected automatically. Valid JSON objects/arrays are sent as JSON; everything else is sent as markdown.</span>
+              <span id="skill-payload-hint" class="manual-dispatch-payload-hint"></span>
               <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
             </label>
             <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
@@ -1836,7 +1836,13 @@
 
         if (targetAgentRefInput instanceof HTMLInputElement) {
           const selectedAgent = nextAgents.find((agent) => agentMatchesTargetRef(agent, previousTargetRef));
-          targetAgentRefInput.value = selectedAgent ? connectedAgentTargetRef(selectedAgent) : "";
+          if (selectedAgent) {
+            targetAgentRefInput.value = connectedAgentTargetRef(selectedAgent);
+          } else if (nextAgents.length > 0) {
+            targetAgentRefInput.value = connectedAgentTargetRef(nextAgents[0]);
+          } else {
+            targetAgentRefInput.value = "";
+          }
         }
         syncConnectedAgentSelection();
       };
