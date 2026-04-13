@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/moltenbot000/moltenhub-dispatch/internal/app"
+	"github.com/moltenbot000/moltenhub-dispatch/internal/support"
 )
 
 //go:embed templates/index.html static/styles.css
@@ -360,7 +361,7 @@ func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 		TargetAgentRef: strings.TrimSpace(r.FormValue("target_agent_ref")),
 		SkillName:      strings.TrimSpace(r.FormValue("skill_name")),
 		Repo:           strings.TrimSpace(r.FormValue("repo")),
-		LogPaths:       splitLines(r.FormValue("log_paths")),
+		LogPaths:       support.SplitLines(r.FormValue("log_paths")),
 		Payload:        payloadValue,
 		PayloadFormat:  payloadFormat,
 		Timeout:        timeout,
@@ -441,18 +442,6 @@ func parseSkills(raw string) []app.Skill {
 		})
 	}
 	return skills
-}
-
-func splitLines(raw string) []string {
-	lines := strings.Split(raw, "\n")
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			out = append(out, line)
-		}
-	}
-	return out
 }
 
 type pageData struct {
