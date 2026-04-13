@@ -2555,6 +2555,96 @@ func TestRefreshConnectedAgentsUsesProfileAvatarEmojiAlias(t *testing.T) {
 	}
 }
 
+func TestRefreshConnectedAgentsUsesIdentityProfileEmojiAliases(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent_uuid": "peer-uuid",
+				"agent_uri":  "molten://agent/peer",
+				"handle":     "peer-agent",
+				"identity": map[string]any{
+					"profile": map[string]any{
+						"display_name": "Peer Agent",
+						"icon_emoji":   "🧪",
+					},
+				},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://agent/self"
+		state.Session.Handle = "self-agent"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one connected agent, got %#v", agents)
+	}
+	if got, want := agents[0].Name, "Peer Agent"; got != want {
+		t.Fatalf("agent name = %q, want %q", got, want)
+	}
+	if got, want := agents[0].Emoji, "🧪"; got != want {
+		t.Fatalf("agent emoji = %q, want %q", got, want)
+	}
+}
+
+func TestRefreshConnectedAgentsUsesNestedAgentProfileCamelCaseEmojiAlias(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent": map[string]any{
+					"agent_uuid": "peer-uuid",
+					"agent_uri":  "molten://agent/peer",
+					"handle":     "peer-agent",
+					"agent_profile": map[string]any{
+						"display_name": "Peer Agent",
+						"avatarEmoji":  "🛰",
+					},
+				},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://agent/self"
+		state.Session.Handle = "self-agent"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one connected agent, got %#v", agents)
+	}
+	if got, want := agents[0].Name, "Peer Agent"; got != want {
+		t.Fatalf("agent name = %q, want %q", got, want)
+	}
+	if got, want := agents[0].Emoji, "🛰"; got != want {
+		t.Fatalf("agent emoji = %q, want %q", got, want)
+	}
+}
+
 func TestRefreshConnectedAgentsReturnsCapabilityEndpointError(t *testing.T) {
 	t.Parallel()
 
