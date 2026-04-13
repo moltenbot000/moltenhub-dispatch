@@ -1053,6 +1053,9 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	if !strings.Contains(body, `id="moltenbot-hub-link"`) {
 		t.Fatalf("expected molten hub dock link, body=%s", body)
 	}
+	if !strings.Contains(body, `id="moltenbot-hub-link"`) || !strings.Contains(body, `<img src="/static/logo.svg" alt="" aria-hidden="true">`) {
+		t.Fatalf("expected molten hub dock link to use bundled logo asset, body=%s", body)
+	}
 	if !strings.Contains(body, `id="agent-settings-dock-button"`) {
 		t.Fatalf("expected settings dock button, body=%s", body)
 	}
@@ -1357,6 +1360,15 @@ func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	}
 	if !strings.Contains(body, ".hub-profile-button {\n  opacity: 1;\n  pointer-events: auto;\n  min-height: 40px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  box-shadow: none;") {
 		t.Fatalf("expected settings dock button to clear shared pill button chrome, body=%s", body)
+	}
+	if !strings.Contains(body, "--hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);") {
+		t.Fatalf("expected shared dock spacing token from moltenhub-code stylesheet, body=%s", body)
+	}
+	if !strings.Contains(body, ".badge.completed {\n  background: var(--good);\n}") {
+		t.Fatalf("expected shared completed badge compatibility selector, body=%s", body)
+	}
+	if !strings.Contains(body, ".task-result.completed {\n  color: var(--surface-success);\n  background: rgba(43, 182, 115, 0.1);\n}") {
+		t.Fatalf("expected shared completed task result compatibility selector, body=%s", body)
 	}
 }
 

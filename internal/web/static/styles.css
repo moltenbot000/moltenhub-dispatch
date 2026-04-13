@@ -3,6 +3,7 @@
   --hub-floating-bottom: max(16px, env(safe-area-inset-bottom));
   --hub-floating-stack-height: 64px;
   --hub-studio-dock-gap: 16px;
+  --hub-content-bottom-padding: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap) + 28px);
   --hub-studio-dock-bottom: calc(var(--hub-floating-bottom) + var(--hub-floating-stack-height) + var(--hub-studio-dock-gap));
   --hub-studio-dock-height: clamp(280px, 34vh, 388px);
   --hub-studio-collapsed-height: 84px;
@@ -250,7 +251,7 @@ textarea {
 .app {
   width: min(1500px, 100%);
   margin: 0 auto;
-  padding: 28px 20px 124px;
+  padding: 28px 20px var(--hub-content-bottom-padding);
   display: grid;
   gap: 24px;
 }
@@ -534,6 +535,13 @@ textarea {
   margin-left: 3px;
 }
 
+.metric-label-visible {
+  max-width: 56px;
+  opacity: 1;
+  overflow: visible;
+  transform: translateX(0);
+}
+
 .metric-unit-visible {
   max-width: 56px;
   opacity: 1;
@@ -624,6 +632,13 @@ textarea {
   font-size: 0.86rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.task-fullscreen-head-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .counter {
@@ -1731,6 +1746,10 @@ select.prompt-control {
   background: var(--good);
 }
 
+.badge.completed {
+  background: var(--good);
+}
+
 .badge.no_changes,
 .badge.duplicate,
 .badge.paused {
@@ -1950,6 +1969,11 @@ select.prompt-control {
   background: rgba(43, 182, 115, 0.1);
 }
 
+.task-result.completed {
+  color: var(--surface-success);
+  background: rgba(43, 182, 115, 0.1);
+}
+
 .task-result.no_changes,
 .task-result.duplicate {
   color: var(--surface-warning);
@@ -1970,6 +1994,10 @@ select.prompt-control {
 }
 
 .task-result.ok .task-result-detail {
+  color: var(--surface-success);
+}
+
+.task-result.completed .task-result-detail {
   color: var(--surface-success);
 }
 
@@ -3422,7 +3450,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
 .shell {
   width: min(1460px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 28px 20px 120px;
+  padding: 28px 20px var(--hub-content-bottom-padding);
   display: grid;
   gap: 20px;
 }
@@ -4365,6 +4393,7 @@ pre {
 
 @media (max-width: 900px) {
   .shell {
+    padding-bottom: calc(var(--hub-content-bottom-padding) + 8px);
     padding-inline: 12px;
     width: 100%;
   }
