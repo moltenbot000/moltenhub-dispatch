@@ -66,7 +66,7 @@ The bundled UI provides:
 - Connected-agent management
 - Manual dispatch of skill requests
 - Automatic failure-reviewer selection from flagged connected agents
-- Live visibility into pending tasks, queued remediation work, and recent runtime events
+- Live visibility into queued remediation work and recent runtime events
 
 Onboarding is available through:
 

@@ -953,6 +953,53 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	}
 }
 
+func TestHandleIndexOmitsPendingTasksPanelFromMainUI(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			PendingTasks: []app.PendingTask{
+				{
+					ID:                "task-1",
+					OriginalSkillName: "run_task",
+					TargetAgentUUID:   "worker-uuid",
+					LogPath:           "/tmp/logs/task-1.log",
+					ExpiresAt:         time.Now().Add(time.Minute),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if strings.Contains(body, ">Pending Tasks<") {
+		t.Fatalf("did not expect pending tasks panel in main UI, body=%s", body)
+	}
+	if strings.Contains(body, "No tasks are waiting on downstream results.") {
+		t.Fatalf("did not expect pending tasks empty state in main UI, body=%s", body)
+	}
+	if !strings.Contains(body, ">Queued Follow-Ups<") {
+		t.Fatalf("expected follow-up panel to remain visible, body=%s", body)
+	}
+}
+
 func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing.T) {
 	t.Parallel()
 
