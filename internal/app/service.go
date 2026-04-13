@@ -821,14 +821,14 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 	logPaths := followUpLogPaths(pending)
 	originalRequest := support.CloneMap(pending.DispatchPayload)
 	task := FollowUpTask{
-		ID:              NewID("followup"),
-		CreatedAt:       time.Now().UTC(),
-		Status:          "queued",
-		Reason:          "task_failed",
-		FailedTaskID:    pending.ID,
-		FailedSkillName: pending.OriginalSkillName,
-		FailedRepo:      fallbackRepo(pending.Repo),
-		LogPaths:        logPaths,
+		ID:               NewID("followup"),
+		CreatedAt:        time.Now().UTC(),
+		Status:           "queued",
+		Reason:           "task_failed",
+		FailedTaskID:     pending.ID,
+		FailedSkillName:  pending.OriginalSkillName,
+		FailedRepo:       fallbackRepo(pending.Repo),
+		LogPaths:         logPaths,
 		RunConfig:        newFollowUpRunConfig(),
 		OriginalError:    formatFailureSummary(report),
 		OriginalRequest:  originalRequest,
@@ -972,7 +972,7 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 		now,
 		req.SkillName,
 		outboundPayload,
-		normalizePayloadFormat(req.PayloadFormat, req.Payload),
+		normalizePayloadFormat(req.PayloadFormat, outboundPayload),
 		childRequestID,
 		req.RequestID,
 	)
@@ -1234,6 +1234,10 @@ func normalizePayload(payload any, repo string, logPaths []string) map[string]an
 }
 
 func normalizePayloadFormat(format string, payload any) string {
+	if payload == nil {
+		return ""
+	}
+	format = strings.TrimSpace(format)
 	if format != "" {
 		return format
 	}

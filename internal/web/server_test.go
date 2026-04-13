@@ -528,11 +528,14 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, `name="log_paths"`) {
 		t.Fatalf("did not expect manual dispatch log paths field, body=%s", body)
 	}
-	if strings.Contains(body, `name="payload_format"`) {
-		t.Fatalf("did not expect manual dispatch payload format field, body=%s", body)
+	if !strings.Contains(body, `id="skill-payload-field" hidden`) {
+		t.Fatalf("expected hidden manual dispatch payload field, body=%s", body)
 	}
-	if strings.Contains(body, `name="payload"`) {
-		t.Fatalf("did not expect manual dispatch payload field, body=%s", body)
+	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
+		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
+	}
+	if !strings.Contains(body, `id="skill-payload-format-input" type="hidden" name="payload_format"`) {
+		t.Fatalf("expected manual dispatch payload format field, body=%s", body)
 	}
 	if strings.Contains(body, `name="timeout_seconds"`) {
 		t.Fatalf("did not expect manual dispatch timeout field, body=%s", body)
@@ -577,8 +580,96 @@ func TestHandleDispatchAcceptsMinimalTargetOnlyForm(t *testing.T) {
 	if stub.lastDispatchReq.Payload != nil {
 		t.Fatalf("expected nil payload for minimal dispatch, got %#v", stub.lastDispatchReq.Payload)
 	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "" {
+		t.Fatalf("expected empty payload format for minimal dispatch, got %#v", got)
+	}
 	if got := stub.state.Flash; got.Level != "info" || got.Message != "Dispatched task task-1" {
 		t.Fatalf("unexpected flash after dispatch: %#v", got)
+	}
+}
+
+func TestHandleDispatchAcceptsTextPayloadFormat(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=text&payload=Issue+an+offline+to+moltenbot+hub"
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "text" {
+		t.Fatalf("expected payload format text, got %#v", got)
+	}
+	if got := stub.lastDispatchReq.Payload; got != "Issue an offline to moltenbot hub" {
+		t.Fatalf("unexpected payload value: %#v", got)
+	}
+}
+
+func TestHandleDispatchDropsPayloadFormatWhenPayloadMissing(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=text"
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if stub.lastDispatchReq.Payload != nil {
+		t.Fatalf("expected nil payload when payload field is missing, got %#v", stub.lastDispatchReq.Payload)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "" {
+		t.Fatalf("expected empty payload format when payload field is missing, got %#v", got)
+	}
+}
+
+func TestHandleDispatchRejectsUnknownPayloadFormat(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=xml&payload=%3Ctask%2F%3E"
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := stub.state.Flash.Level; got != "error" {
+		t.Fatalf("expected error flash level, got %#v", stub.state.Flash)
+	}
+	if got := stub.state.Flash.Message; got != "payload_format must be one of text, markdown, or json" {
+		t.Fatalf("unexpected error flash message: %#v", got)
 	}
 }
 

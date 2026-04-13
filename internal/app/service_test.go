@@ -1424,6 +1424,9 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	if got := fake.publishCalls[0].Message.Payload; got != nil {
 		t.Fatalf("expected nil payload for target-only dispatch, got %#v", got)
 	}
+	if got := fake.publishCalls[0].Message.PayloadFormat; got != "" {
+		t.Fatalf("expected empty payload format for target-only dispatch, got %q", got)
+	}
 }
 
 func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
@@ -1475,6 +1478,9 @@ func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	}
 	if got := fake.publishCalls[0].Message.Payload; got != nil {
 		t.Fatalf("expected nil downstream payload for target-only activation, got %#v", got)
+	}
+	if got := fake.publishCalls[0].Message.PayloadFormat; got != "" {
+		t.Fatalf("expected empty payload format for target-only activation, got %q", got)
 	}
 
 	state := service.store.Snapshot()

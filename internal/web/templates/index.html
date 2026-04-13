@@ -133,6 +133,11 @@
               </select>
             </label>
             <p id="skill-name-hint" class="manual-dispatch-skill-hint">Select a target agent to load its advertised skills from Molten Hub.</p>
+            <label id="skill-payload-field" hidden>
+              Skill Payload
+              <textarea id="skill-payload-input" name="payload" rows="4" placeholder="Enter the text payload for the selected skill." disabled></textarea>
+            </label>
+            <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
             <div class="manual-dispatch-actions">
               <button type="submit" class="dispatch-task-button prompt-action-button">Dispatch Task</button>
             </div>
@@ -465,6 +470,9 @@
       const targetAgentRefInput = document.getElementById("target-agent-ref-input");
       const skillNameSelect = document.getElementById("skill-name-select");
       const skillNameHint = document.getElementById("skill-name-hint");
+      const skillPayloadField = document.getElementById("skill-payload-field");
+      const skillPayloadInput = document.getElementById("skill-payload-input");
+      const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
       const connectedAgentsList = document.getElementById("connected-agents-list");
       const connectedAgentsEmpty = document.getElementById("connected-agents-empty");
       const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));
@@ -1506,8 +1514,24 @@
         return ordered;
       };
 
+      const syncSkillPayloadField = () => {
+        if (!(skillPayloadField instanceof HTMLElement) || !(skillPayloadFormatInput instanceof HTMLInputElement)) {
+          return;
+        }
+        const hasSelectedSkill = skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
+        skillPayloadField.hidden = !hasSelectedSkill;
+        skillPayloadFormatInput.value = hasSelectedSkill ? "text" : "";
+        if (skillPayloadInput instanceof HTMLTextAreaElement) {
+          skillPayloadInput.disabled = !hasSelectedSkill;
+          if (!hasSelectedSkill) {
+            skillPayloadInput.value = "";
+          }
+        }
+      };
+
       const updateSkillNameOptions = () => {
         if (!(skillNameSelect instanceof HTMLSelectElement)) {
+          syncSkillPayloadField();
           return;
         }
         const selectedTargetRef = trimmedString(targetAgentRefInput && targetAgentRefInput.value);
@@ -1526,6 +1550,7 @@
           if (skillNameHint instanceof HTMLElement) {
             skillNameHint.textContent = "Select a target agent to load its advertised skills from Molten Hub.";
           }
+          syncSkillPayloadField();
           return;
         }
 
@@ -1540,6 +1565,7 @@
           if (skillNameHint instanceof HTMLElement) {
             skillNameHint.textContent = "This agent did not advertise skills in Hub capabilities. Leave this blank only if the target agent defines its own default skill.";
           }
+          syncSkillPayloadField();
           return;
         }
 
@@ -1567,6 +1593,7 @@
             ? selectedSkill.description
             : `Loaded ${skillEntries.length} skill${skillEntries.length === 1 ? "" : "s"} for ${connectedAgentDisplayName(selectedAgent)}.`;
         }
+        syncSkillPayloadField();
       };
 
       const syncConnectedAgentSelection = () => {

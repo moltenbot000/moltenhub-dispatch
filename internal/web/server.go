@@ -329,21 +329,27 @@ func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payloadText := strings.TrimSpace(r.FormValue("payload"))
+	payloadFormat := strings.ToLower(strings.TrimSpace(r.FormValue("payload_format")))
 	var payloadValue any
-	if payloadText != "" {
-		payloadValue = payloadText
-	}
-	payloadFormat := "markdown"
-	if strings.EqualFold(strings.TrimSpace(r.FormValue("payload_format")), "json") {
-		payloadFormat = "json"
-		if payloadText != "" {
-			var decoded map[string]any
-			if err := json.Unmarshal([]byte(payloadText), &decoded); err != nil {
-				s.redirectWithMessage(w, r, "error", "payload JSON is invalid: "+err.Error())
-				return
-			}
-			payloadValue = decoded
+	switch {
+	case payloadText == "":
+		// Hub rejects payload_format when payload is omitted.
+		payloadFormat = ""
+	case payloadFormat == "json":
+		var decoded any
+		if err := json.Unmarshal([]byte(payloadText), &decoded); err != nil {
+			s.redirectWithMessage(w, r, "error", "payload JSON is invalid: "+err.Error())
+			return
 		}
+		payloadValue = decoded
+	case payloadFormat == "", payloadFormat == "text", payloadFormat == "markdown":
+		if payloadFormat == "" {
+			payloadFormat = "text"
+		}
+		payloadValue = payloadText
+	default:
+		s.redirectWithMessage(w, r, "error", "payload_format must be one of text, markdown, or json")
+		return
 	}
 
 	timeout := 0 * time.Second
