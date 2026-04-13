@@ -117,6 +117,33 @@ func TestNewStoreNormalizesLegacySessionAliases(t *testing.T) {
 	}
 }
 
+func TestNewStorePrefersAPPDataDirOverrideOverPersistedSetting(t *testing.T) {
+	t.Setenv("APP_DATA_DIR", "/workspace/config")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "settings": {
+    "hub_region": "na",
+    "hub_url": "https://na.hub.molten.bot",
+    "data_dir": "/data"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	state := store.Snapshot()
+	if got, want := state.Settings.DataDir, "/workspace/config"; got != want {
+		t.Fatalf("data_dir = %q, want %q", got, want)
+	}
+}
+
 func TestNewStoreRejectsNonHubSessionEndpoints(t *testing.T) {
 	t.Parallel()
 

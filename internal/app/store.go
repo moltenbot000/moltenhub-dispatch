@@ -249,7 +249,9 @@ func mergeDefaultSettings(settings *Settings, defaults Settings) {
 	if settings.TaskTimeout == 0 {
 		settings.TaskTimeout = defaults.TaskTimeout
 	}
-	if settings.DataDir == "" {
+	if dataDirOverride, ok := envValue("APP_DATA_DIR"); ok {
+		settings.DataDir = dataDirOverride
+	} else if settings.DataDir == "" {
 		settings.DataDir = defaults.DataDir
 	}
 }
@@ -352,9 +354,17 @@ func cloneState(state AppState) AppState {
 }
 
 func envOrDefault(key, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
+	value, ok := envValue(key)
+	if !ok {
 		return fallback
 	}
 	return value
+}
+
+func envValue(key string) (string, bool) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return "", false
+	}
+	return value, true
 }

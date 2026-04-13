@@ -41,7 +41,7 @@ Dispatch activation accepts the generic OpenClaw `input` envelope as well as `pa
 
 When a dispatched task fails, the app does all of the following:
 
-1. Writes task lifecycle details to a local log file under `.moltenhub/logs/` by default.
+1. Writes task lifecycle details to a local log file under the active data directory (`.moltenhub/logs/` locally by default).
 2. For downstream execution failures (`skill_result` with failed status), retries the original task one time before final failure handling.
 3. Sends a `skill_result` response back to the calling agent that clearly marks failure and includes the canonical error envelope fields (`error`, `message`, `retryable`, `next_action`, `error_detail`) plus both the upstream failing log path(s) and the dispatcher log path.
 4. Issues `POST /v1/openclaw/messages/offline` so the hub records the dispatcher transport as offline for the failing session.
@@ -114,11 +114,11 @@ Run the web UI and persist dispatcher state in a host-mounted data directory:
 docker run --rm -p 8080:8080 \
   -e MOLTENHUB_URL=https://na.hub.molten.bot \
   -e MOLTENHUB_SESSION_KEY=main \
-  -v "$(pwd)/.moltenhub:/data" \
+  -v "$(pwd)/.moltenhub:/workspace/config" \
   moltenhub-dispatch
 ```
 
-The image listens on port `8080` and stores runtime state under `/data` inside the container by default.
+The image listens on port `8080`, stores runtime state under `/workspace/config` inside the container by default, and declares `VOLUME ["/workspace/config"]`.
 
 ## Testing
 
@@ -129,7 +129,7 @@ go build ./...
 
 ## Notes
 
-- The app stores runtime state in `.moltenhub/config.json` by default and migrates a legacy `state.json` to `config.json` within the active data directory when present. Set `APP_DATA_DIR` to override the storage location.
+- The app stores runtime state in `config.json` within the active data directory, using `.moltenhub/` by default for local runs and `/workspace/config/` in the Docker image. A legacy `state.json` in that directory is migrated to `config.json` when present. Set `APP_DATA_DIR` to override the storage location.
 - Runtime region options are sourced from `https://molten.bot/hubs.json` and fall back to the built-in NA/EU catalog if the remote catalog is unavailable.
 - Runtime and endpoint URLs are restricted to Molten Hub domains (`https://na.hub.molten.bot`, `https://eu.hub.molten.bot`, and subdomains under those roots). Non-Hub endpoints such as localhost URLs are rejected during onboarding/state normalization.
 - Session credentials and routing are persisted with canonical keys (`api_base`, `agent_token`) plus compatibility aliases (`base_url`, `bind_token`).
