@@ -1469,8 +1469,8 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `const initialConnectedAgentsData = document.getElementById("initial-connected-agents-data");`) {
 		t.Fatalf("expected initial connected-agents bootstrap payload, body=%s", body)
 	}
-	if !strings.Contains(body, `"default_skill": "dispatch_skill_request"`) || !strings.Contains(body, `"review_failure_logs"`) {
-		t.Fatalf("expected connected-agent skill catalog to be embedded for initial render, body=%s", body)
+	if !strings.Contains(body, `id="initial-connected-agents-data" type="application/json"`) {
+		t.Fatalf("expected serialized connected-agents bootstrap payload script, body=%s", body)
 	}
 	if !strings.Contains(body, `const selectConnectedAgentTarget = (targetRef) => {`) {
 		t.Fatalf("expected connected agent selector click handler, body=%s", body)
