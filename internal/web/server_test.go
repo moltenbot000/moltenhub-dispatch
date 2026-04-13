@@ -522,10 +522,13 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	if !strings.Contains(body, `src="/static/logo.svg"`) {
 		t.Fatalf("expected page header to use the bundled logo asset, body=%s", body)
 	}
-	if !strings.Contains(body, `>Molten Hub Dispatch</div>`) {
+	if !strings.Contains(body, `>Dispatch Console</p>`) {
+		t.Fatalf("expected page header eyebrow copy, body=%s", body)
+	}
+	if !strings.Contains(body, `>Molten Hub Dispatch</h1>`) {
 		t.Fatalf("expected page header title copy, body=%s", body)
 	}
-	if !strings.Contains(body, `>Your quiet army awaits your orders.</p>`) {
+	if !strings.Contains(body, `>Choose a connected agent, review its advertised skill, and dispatch the payload it expects.</p>`) {
 		t.Fatalf("expected page header subtitle copy, body=%s", body)
 	}
 }
@@ -626,6 +629,15 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	body := rec.Body.String()
 	if !strings.Contains(body, "Edit Agent Profile") {
 		t.Fatalf("expected bound profile panel, body=%s", body)
+	}
+	if !strings.Contains(body, `class="panel dispatch-overview brand-login-card-shell"`) {
+		t.Fatalf("expected bound dispatch overview panel, body=%s", body)
+	}
+	if !strings.Contains(body, "Queue the right task with fewer clicks.") {
+		t.Fatalf("expected practical dispatch overview heading, body=%s", body)
+	}
+	if !strings.Contains(body, ">Connected Agents<") || !strings.Contains(body, ">Queued Follow-Ups<") || !strings.Contains(body, ">Recent Events<") {
+		t.Fatalf("expected overview stat labels for dispatch state, body=%s", body)
 	}
 	if strings.Contains(body, `name="bind_token"`) {
 		t.Fatalf("did not expect bind token field after bind, body=%s", body)
@@ -789,7 +801,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `skillPayloadInput.value = "";`) {
 		t.Fatalf("expected manual dispatch flows to clear the payload input, body=%s", body)
 	}
-	if !strings.Contains(body, `id="sub-actions-notice" class="panel" hidden`) {
+	if !strings.Contains(body, `id="sub-actions-notice" class="panel dispatch-gate-panel" hidden`) {
 		t.Fatalf("expected sub-action notice to be hidden when bound and connected, body=%s", body)
 	}
 }
@@ -1645,6 +1657,15 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.runtime-event-card-body[hidden] {`) {
 		t.Fatalf("expected runtime event hidden state styles, body=%s", body)
 	}
+	if !strings.Contains(body, `.brand-login-card-shell {`) {
+		t.Fatalf("expected user-portal glass card shell styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.brand-btn-primary-main {`) {
+		t.Fatalf("expected user-portal primary button styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.dispatch-overview {`) {
+		t.Fatalf("expected dispatch overview layout styles, body=%s", body)
+	}
 	if !strings.Contains(body, `display: none !important;`) {
 		t.Fatalf("expected explicit hidden display override, body=%s", body)
 	}
@@ -2336,8 +2357,8 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if strings.Contains(body, ">Connected Agents<") {
-		t.Fatalf("did not expect connected agents panel on the main page, body=%s", body)
+	if strings.Contains(body, `id="connected-agents-list"`) {
+		t.Fatalf("did not expect the removed connected agents directory panel on the main page, body=%s", body)
 	}
 	if strings.Contains(body, "Connected Agent Directory") {
 		t.Fatalf("did not expect deprecated connected agent directory heading, body=%s", body)
