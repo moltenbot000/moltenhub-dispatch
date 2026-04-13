@@ -389,6 +389,62 @@ func TestGetCapabilitiesTrimsAuthorizationBearerToken(t *testing.T) {
 	}
 }
 
+func TestListAgentsUsesMeAgentsEndpointAndParsesEnvelope(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/me/agents" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if got, want := r.Header.Get("Authorization"), "Bearer human-token"; got != want {
+			t.Fatalf("authorization header = %q, want %q", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"agents": []map[string]any{
+					{
+						"agent_uuid": "agent-uuid",
+						"agent_id":   "dispatch-agent",
+						"uri":        "molten://agent/dispatch-agent",
+						"status":     "online",
+						"metadata": map[string]any{
+							"display_name": "Dispatch Agent",
+							"emoji":        "🤖",
+							"presence": map[string]any{
+								"status": "online",
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	agents, err := client.ListAgents(context.Background(), " human-token ")
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one agent, got %#v", agents)
+	}
+	if got, want := agents[0].AgentID, "dispatch-agent"; got != want {
+		t.Fatalf("agent id = %q, want %q", got, want)
+	}
+	if agents[0].Metadata == nil || agents[0].Metadata.DisplayName != "Dispatch Agent" {
+		t.Fatalf("unexpected metadata payload: %#v", agents[0])
+	}
+	if agents[0].Metadata.Presence == nil || agents[0].Metadata.Presence.Status != "online" {
+		t.Fatalf("unexpected presence payload: %#v", agents[0].Metadata)
+	}
+}
+
 func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testing.T) {
 	t.Parallel()
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/moltenbot000/moltenhub-dispatch/internal/app"
+	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
 	"github.com/moltenbot000/moltenhub-dispatch/internal/support"
 )
 
@@ -316,17 +317,14 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agent := app.ConnectedAgent{
-		ID:              strings.TrimSpace(r.FormValue("id")),
-		Name:            strings.TrimSpace(r.FormValue("name")),
-		AgentUUID:       strings.TrimSpace(r.FormValue("agent_uuid")),
-		AgentURI:        strings.TrimSpace(r.FormValue("agent_uri")),
-		DefaultSkill:    strings.TrimSpace(r.FormValue("default_skill")),
-		FailureReviewer: r.FormValue("failure_reviewer") == "on",
-		Repo:            strings.TrimSpace(r.FormValue("repo")),
-		Notes:           strings.TrimSpace(r.FormValue("notes")),
-		AdvertisedSkills: parseSkills(strings.TrimSpace(
-			r.FormValue("skills"),
-		)),
+		AgentUUID: strings.TrimSpace(r.FormValue("agent_uuid")),
+		AgentID:   strings.TrimSpace(r.FormValue("id")),
+		URI:       strings.TrimSpace(r.FormValue("agent_uri")),
+		Handle:    strings.TrimSpace(r.FormValue("id")),
+		Metadata: &hub.AgentMetadata{
+			DisplayName: strings.TrimSpace(r.FormValue("name")),
+			Skills:      skillsToMetadata(parseSkills(strings.TrimSpace(r.FormValue("skills")))),
+		},
 	}
 	if err := s.service.AddConnectedAgent(agent); err != nil {
 		s.redirectWithMessage(w, r, "error", err.Error())
@@ -576,6 +574,25 @@ func parseSkills(raw string) []app.Skill {
 		})
 	}
 	return skills
+}
+
+func skillsToMetadata(skills []app.Skill) []map[string]any {
+	if len(skills) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(skills))
+	for _, skill := range skills {
+		name := strings.TrimSpace(skill.Name)
+		if name == "" {
+			continue
+		}
+		entry := map[string]any{"name": name}
+		if description := strings.TrimSpace(skill.Description); description != "" {
+			entry["description"] = description
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 type pageData struct {

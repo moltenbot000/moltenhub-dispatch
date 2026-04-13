@@ -21,6 +21,9 @@ type fakeHubClient struct {
 	capabilitiesResponse  map[string]any
 	capabilitiesErr       error
 	capabilitiesErrOnCall int
+	listAgentsCalls       int
+	listAgentsResponse    []hub.HubAgent
+	listAgentsErr         error
 	publishCalls          []hub.PublishRequest
 	offlineCalls          []hub.OfflineRequest
 	baseURLCalls          []string
@@ -78,6 +81,17 @@ func (f *fakeHubClient) GetCapabilities(_ context.Context, _ string) (map[string
 		return f.capabilitiesResponse, nil
 	}
 	return map[string]any{"advertised_skills": []any{}}, nil
+}
+
+func (f *fakeHubClient) ListAgents(_ context.Context, _ string) ([]hub.HubAgent, error) {
+	f.listAgentsCalls++
+	if f.listAgentsErr != nil {
+		return nil, f.listAgentsErr
+	}
+	if f.listAgentsResponse != nil {
+		return f.listAgentsResponse, nil
+	}
+	return nil, nil
 }
 
 func (f *fakeHubClient) PublishOpenClaw(_ context.Context, _ string, req hub.PublishRequest) (hub.PublishResponse, error) {
@@ -182,6 +196,61 @@ func (f *fakeRealtimeSession) Close() error {
 
 func (f *fakeHubClient) SetRuntimeEndpoints(endpoints hub.RuntimeEndpoints) {
 	f.runtimeEndpoints = append(f.runtimeEndpoints, endpoints)
+}
+
+func testConnectedAgent(agentID, displayName, agentUUID string, skills ...Skill) ConnectedAgent {
+	agent := ConnectedAgent{
+		AgentID:   agentID,
+		Handle:    agentID,
+		AgentUUID: agentUUID,
+		Metadata: &hub.AgentMetadata{
+			DisplayName: displayName,
+			Skills:      testSkillMetadata(skills...),
+		},
+	}
+	if displayName == "" {
+		agent.Metadata = &hub.AgentMetadata{
+			Skills: testSkillMetadata(skills...),
+		}
+	}
+	return agent
+}
+
+func reviewerConnectedAgent() ConnectedAgent {
+	return ConnectedAgent{
+		AgentID:   "reviewer",
+		Handle:    "reviewer",
+		AgentUUID: "reviewer-uuid",
+		Status:    "online",
+		Metadata: &hub.AgentMetadata{
+			DisplayName: "reviewer",
+			Skills: testSkillMetadata(Skill{
+				Name:        failureReviewSkillName,
+				Description: "Review logs",
+			}),
+			Presence: &hub.AgentPresence{
+				Status: "online",
+			},
+		},
+	}
+}
+
+func testSkillMetadata(skills ...Skill) []map[string]any {
+	if len(skills) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(skills))
+	for _, skill := range skills {
+		if strings.TrimSpace(skill.Name) == "" {
+			continue
+		}
+		entry := map[string]any{"name": skill.Name}
+		if strings.TrimSpace(skill.Description) != "" {
+			entry["description"] = skill.Description
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
@@ -995,14 +1064,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "reviewer",
-				Name:            "reviewer",
-				AgentUUID:       "reviewer-uuid",
-				FailureReviewer: true,
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		return nil
 	})
 	if err != nil {
@@ -1095,14 +1157,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "reviewer",
-				Name:            "reviewer",
-				AgentUUID:       "reviewer-uuid",
-				FailureReviewer: true,
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                  "task-1",
@@ -1255,14 +1310,7 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "reviewer",
-				Name:            "reviewer",
-				AgentUUID:       "reviewer-uuid",
-				FailureReviewer: true,
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
@@ -1378,14 +1426,7 @@ func TestExpirePendingTasksRetriesOnceBeforeFinalTimeoutFailureHandling(t *testi
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "reviewer",
-				Name:            "reviewer",
-				AgentUUID:       "reviewer-uuid",
-				FailureReviewer: true,
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
@@ -1490,14 +1531,7 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "reviewer",
-				Name:            "reviewer",
-				AgentUUID:       "reviewer-uuid",
-				FailureReviewer: true,
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
@@ -1758,17 +1792,8 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
 		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "reviewer",
-				AgentUUID:       "reviewer-uuid",
-				FailureReviewer: true,
-			},
-			{
-				ID:           "worker-a",
-				Name:         "Worker A",
-				AgentUUID:    "worker-uuid",
-				DefaultSkill: "run_task",
-			},
+			reviewerConnectedAgent(),
+			testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"}),
 		}
 		return nil
 	})
@@ -1831,15 +1856,7 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	service, fake := newTestService(t)
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:               "worker-a",
-				Name:             "Worker A",
-				AgentUUID:        "worker-uuid",
-				DefaultSkill:     "run_task",
-				AdvertisedSkills: []Skill{{Name: "run_task"}},
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"})}
 		return nil
 	})
 	if err != nil {
@@ -1901,15 +1918,7 @@ func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	service, fake := newTestService(t)
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:               "worker-a",
-				Name:             "Worker A",
-				AgentUUID:        "worker-uuid",
-				DefaultSkill:     "run_task",
-				AdvertisedSkills: []Skill{{Name: "run_task"}},
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"})}
 		return nil
 	})
 	if err != nil {
@@ -2049,15 +2058,7 @@ func TestHandleSkillRequestAcceptsJSONStringActivationPayload(t *testing.T) {
 			service, fake := newTestService(t)
 			err := service.store.Update(func(state *AppState) error {
 				state.Session.AgentToken = "agent-token"
-				state.ConnectedAgents = []ConnectedAgent{
-					{
-						ID:               "worker-a",
-						Name:             "Worker A",
-						AgentUUID:        "worker-uuid",
-						DefaultSkill:     "run_task",
-						AdvertisedSkills: []Skill{{Name: "run_task"}},
-					},
-				}
+				state.ConnectedAgents = []ConnectedAgent{testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"})}
 				return nil
 			})
 			if err != nil {
@@ -2096,14 +2097,7 @@ func TestHandleSkillRequestAcceptsSelectedTaskAliasAndInlinePayload(t *testing.T
 	service, fake := newTestService(t)
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:               "worker-a",
-				Name:             "Worker A",
-				AgentUUID:        "worker-uuid",
-				AdvertisedSkills: []Skill{{Name: "code_for_me"}},
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "code_for_me"})}
 		return nil
 	})
 	if err != nil {
@@ -2179,14 +2173,7 @@ func TestHandleSkillRequestAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
 	service, fake := newTestService(t)
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:               "worker-a",
-				Name:             "Worker A",
-				AgentUUID:        "worker-uuid",
-				AdvertisedSkills: []Skill{{Name: "code_for_me"}},
-			},
-		}
+		state.ConnectedAgents = []ConnectedAgent{testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "code_for_me"})}
 		return nil
 	})
 	if err != nil {
@@ -3091,41 +3078,42 @@ func TestSetFlashNormalizesInfoLevel(t *testing.T) {
 	}
 }
 
-func TestRefreshConnectedAgentsUsesPeerSkillCatalog(t *testing.T) {
+func TestRefreshConnectedAgentsUsesHubListResponse(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
-	fake.capabilitiesResponse = map[string]any{
-		"peer_skill_catalog": []any{
-			map[string]any{
-				"agent_uuid": "peer-uuid",
-				"agent_uri":  "molten://agent/peer",
-				"handle":     "peer-agent",
-				"metadata": map[string]any{
-					"display_name": "Peer Agent",
-					"emoji":        "🛠",
-					"skills": []any{
-						map[string]any{"name": "review_failure_logs", "description": "Review logs"},
-					},
+	ready := true
+	fake.listAgentsResponse = []hub.HubAgent{
+		{
+			AgentUUID: "self-uuid",
+			AgentID:   "self-agent",
+			URI:       "molten://agent/self",
+		},
+		{
+			AgentUUID: "peer-uuid",
+			AgentID:   "peer-agent",
+			Handle:    "peer-agent",
+			URI:       "molten://agent/peer",
+			Status:    "online",
+			Metadata: &hub.AgentMetadata{
+				DisplayName: "Peer Agent",
+				Emoji:       "🛠",
+				Skills: []map[string]any{
+					{"name": "review_failure_logs", "description": "Review logs"},
+				},
+				Presence: &hub.AgentPresence{
+					Status: "online",
+					Ready:  &ready,
 				},
 			},
 		},
 	}
 	if err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://agent/self"
 		state.Session.Handle = "self-agent"
-		state.Session.APIBase = "https://na.hub.molten.bot/v1"
-		state.ConnectedAgents = []ConnectedAgent{
-			{
-				ID:              "peer-agent",
-				AgentUUID:       "peer-uuid",
-				AgentURI:        "molten://agent/peer",
-				FailureReviewer: true,
-				Notes:           "keep reviewer flag",
-			},
-		}
 		return nil
 	}); err != nil {
 		t.Fatalf("seed store: %v", err)
@@ -3135,269 +3123,41 @@ func TestRefreshConnectedAgentsUsesPeerSkillCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh connected agents: %v", err)
 	}
-	if fake.capabilitiesCalls != 1 {
-		t.Fatalf("expected one capabilities call, got %d", fake.capabilitiesCalls)
+	if fake.listAgentsCalls != 1 {
+		t.Fatalf("expected one list-agents call, got %d", fake.listAgentsCalls)
 	}
 	if len(agents) != 1 {
 		t.Fatalf("expected one connected agent, got %#v", agents)
 	}
 	agent := agents[0]
-	if agent.ID != "peer-agent" || agent.Name != "Peer Agent" {
-		t.Fatalf("unexpected connected agent identity: %#v", agent)
+	if got, want := agent.AgentID, "peer-agent"; got != want {
+		t.Fatalf("agent id = %q, want %q", got, want)
 	}
-	if agent.Emoji != "🛠" {
-		t.Fatalf("expected refreshed emoji, got %#v", agent)
+	if got, want := connectedAgentDisplayName(agent), "Peer Agent"; got != want {
+		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if !agent.FailureReviewer || agent.Notes != "keep reviewer flag" {
-		t.Fatalf("expected local reviewer settings to persist, got %#v", agent)
+	if got, want := connectedAgentEmoji(agent), "🛠"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
 	}
-	if len(agent.AdvertisedSkills) != 1 || agent.AdvertisedSkills[0].Name != "review_failure_logs" {
-		t.Fatalf("expected advertised skills from peer catalog, got %#v", agent.AdvertisedSkills)
+	if got, want := connectedAgentPresenceStatus(agent), "online"; got != want {
+		t.Fatalf("presence = %q, want %q", got, want)
+	}
+	skills := connectedAgentSkills(agent)
+	if len(skills) != 1 || skills[0].Name != "review_failure_logs" {
+		t.Fatalf("expected skills from hub metadata, got %#v", skills)
 	}
 
 	state := service.store.Snapshot()
-	if len(state.ConnectedAgents) != 1 || state.ConnectedAgents[0].ID != "peer-agent" {
+	if len(state.ConnectedAgents) != 1 || state.ConnectedAgents[0].AgentID != "peer-agent" {
 		t.Fatalf("expected connected agents snapshot to be refreshed, got %#v", state.ConnectedAgents)
 	}
 }
 
-func TestRefreshConnectedAgentsAcceptsTopLevelAgentsCatalog(t *testing.T) {
+func TestRefreshConnectedAgentsReturnsListEndpointError(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
-	fake.capabilitiesResponse = map[string]any{
-		"agents": []any{
-			map[string]any{
-				"agent": map[string]any{
-					"agent_uuid": "peer-uuid",
-					"agent_uri":  "molten://agent/peer",
-					"handle":     "peer-agent",
-					"metadata": map[string]any{
-						"display_name": "Peer Agent",
-						"emoji":        "🛠",
-						"skills": []any{
-							map[string]any{"name": "review_failure_logs", "description": "Review logs"},
-						},
-					},
-				},
-			},
-		},
-	}
-	if err := service.store.Update(func(state *AppState) error {
-		state.Session.AgentToken = "agent-token"
-		state.Session.AgentUUID = "self-uuid"
-		state.Session.AgentURI = "molten://agent/self"
-		state.Session.Handle = "self-agent"
-		state.Session.APIBase = "https://na.hub.molten.bot/v1"
-		return nil
-	}); err != nil {
-		t.Fatalf("seed store: %v", err)
-	}
-
-	agents, err := service.RefreshConnectedAgents(context.Background())
-	if err != nil {
-		t.Fatalf("refresh connected agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one connected agent, got %#v", agents)
-	}
-	if got, want := agents[0].ID, "peer-agent"; got != want {
-		t.Fatalf("agent id = %q, want %q", got, want)
-	}
-	if got, want := agents[0].Name, "Peer Agent"; got != want {
-		t.Fatalf("agent name = %q, want %q", got, want)
-	}
-	if got, want := agents[0].Emoji, "🛠"; got != want {
-		t.Fatalf("agent emoji = %q, want %q", got, want)
-	}
-	if len(agents[0].AdvertisedSkills) != 1 || agents[0].AdvertisedSkills[0].Name != "review_failure_logs" {
-		t.Fatalf("expected advertised skills from nested agent metadata, got %#v", agents[0].AdvertisedSkills)
-	}
-}
-
-func TestRefreshConnectedAgentsUsesProfileAvatarEmojiAlias(t *testing.T) {
-	t.Parallel()
-
-	service, fake := newTestService(t)
-	fake.capabilitiesResponse = map[string]any{
-		"peer_skill_catalog": []any{
-			map[string]any{
-				"agent_uuid": "peer-uuid",
-				"agent_uri":  "molten://agent/peer",
-				"handle":     "peer-agent",
-				"profile": map[string]any{
-					"display_name": "Peer Agent",
-					"avatar_emoji": "🚀",
-				},
-			},
-		},
-	}
-	if err := service.store.Update(func(state *AppState) error {
-		state.Session.AgentToken = "agent-token"
-		state.Session.AgentUUID = "self-uuid"
-		state.Session.AgentURI = "molten://agent/self"
-		state.Session.Handle = "self-agent"
-		state.Session.APIBase = "https://na.hub.molten.bot/v1"
-		return nil
-	}); err != nil {
-		t.Fatalf("seed store: %v", err)
-	}
-
-	agents, err := service.RefreshConnectedAgents(context.Background())
-	if err != nil {
-		t.Fatalf("refresh connected agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one connected agent, got %#v", agents)
-	}
-	if got, want := agents[0].Name, "Peer Agent"; got != want {
-		t.Fatalf("agent name = %q, want %q", got, want)
-	}
-	if got, want := agents[0].Emoji, "🚀"; got != want {
-		t.Fatalf("agent emoji = %q, want %q", got, want)
-	}
-}
-
-func TestRefreshConnectedAgentsUsesIdentityProfileEmojiAliases(t *testing.T) {
-	t.Parallel()
-
-	service, fake := newTestService(t)
-	fake.capabilitiesResponse = map[string]any{
-		"peer_skill_catalog": []any{
-			map[string]any{
-				"agent_uuid": "peer-uuid",
-				"agent_uri":  "molten://agent/peer",
-				"handle":     "peer-agent",
-				"identity": map[string]any{
-					"profile": map[string]any{
-						"display_name": "Peer Agent",
-						"icon_emoji":   "🧪",
-					},
-				},
-			},
-		},
-	}
-	if err := service.store.Update(func(state *AppState) error {
-		state.Session.AgentToken = "agent-token"
-		state.Session.AgentUUID = "self-uuid"
-		state.Session.AgentURI = "molten://agent/self"
-		state.Session.Handle = "self-agent"
-		state.Session.APIBase = "https://na.hub.molten.bot/v1"
-		return nil
-	}); err != nil {
-		t.Fatalf("seed store: %v", err)
-	}
-
-	agents, err := service.RefreshConnectedAgents(context.Background())
-	if err != nil {
-		t.Fatalf("refresh connected agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one connected agent, got %#v", agents)
-	}
-	if got, want := agents[0].Name, "Peer Agent"; got != want {
-		t.Fatalf("agent name = %q, want %q", got, want)
-	}
-	if got, want := agents[0].Emoji, "🧪"; got != want {
-		t.Fatalf("agent emoji = %q, want %q", got, want)
-	}
-}
-
-func TestRefreshConnectedAgentsUsesNestedAgentProfileCamelCaseEmojiAlias(t *testing.T) {
-	t.Parallel()
-
-	service, fake := newTestService(t)
-	fake.capabilitiesResponse = map[string]any{
-		"peer_skill_catalog": []any{
-			map[string]any{
-				"agent": map[string]any{
-					"agent_uuid": "peer-uuid",
-					"agent_uri":  "molten://agent/peer",
-					"handle":     "peer-agent",
-					"agent_profile": map[string]any{
-						"display_name": "Peer Agent",
-						"avatarEmoji":  "🛰",
-					},
-				},
-			},
-		},
-	}
-	if err := service.store.Update(func(state *AppState) error {
-		state.Session.AgentToken = "agent-token"
-		state.Session.AgentUUID = "self-uuid"
-		state.Session.AgentURI = "molten://agent/self"
-		state.Session.Handle = "self-agent"
-		state.Session.APIBase = "https://na.hub.molten.bot/v1"
-		return nil
-	}); err != nil {
-		t.Fatalf("seed store: %v", err)
-	}
-
-	agents, err := service.RefreshConnectedAgents(context.Background())
-	if err != nil {
-		t.Fatalf("refresh connected agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one connected agent, got %#v", agents)
-	}
-	if got, want := agents[0].Name, "Peer Agent"; got != want {
-		t.Fatalf("agent name = %q, want %q", got, want)
-	}
-	if got, want := agents[0].Emoji, "🛰"; got != want {
-		t.Fatalf("agent emoji = %q, want %q", got, want)
-	}
-}
-
-func TestRefreshConnectedAgentsUsesNestedAvatarEmojiObject(t *testing.T) {
-	t.Parallel()
-
-	service, fake := newTestService(t)
-	fake.capabilitiesResponse = map[string]any{
-		"peer_skill_catalog": []any{
-			map[string]any{
-				"agent_uuid": "peer-uuid",
-				"agent_uri":  "molten://agent/peer",
-				"handle":     "peer-agent",
-				"profile": map[string]any{
-					"display_name": "Peer Agent",
-					"avatar": map[string]any{
-						"emoji": "🔥",
-					},
-				},
-			},
-		},
-	}
-	if err := service.store.Update(func(state *AppState) error {
-		state.Session.AgentToken = "agent-token"
-		state.Session.AgentUUID = "self-uuid"
-		state.Session.AgentURI = "molten://agent/self"
-		state.Session.Handle = "self-agent"
-		state.Session.APIBase = "https://na.hub.molten.bot/v1"
-		return nil
-	}); err != nil {
-		t.Fatalf("seed store: %v", err)
-	}
-
-	agents, err := service.RefreshConnectedAgents(context.Background())
-	if err != nil {
-		t.Fatalf("refresh connected agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one connected agent, got %#v", agents)
-	}
-	if got, want := agents[0].Name, "Peer Agent"; got != want {
-		t.Fatalf("agent name = %q, want %q", got, want)
-	}
-	if got, want := agents[0].Emoji, "🔥"; got != want {
-		t.Fatalf("agent emoji = %q, want %q", got, want)
-	}
-}
-
-func TestRefreshConnectedAgentsReturnsCapabilityEndpointError(t *testing.T) {
-	t.Parallel()
-
-	service, fake := newTestService(t)
-	fake.capabilitiesErr = &hub.APIError{
+	fake.listAgentsErr = &hub.APIError{
 		StatusCode: 401,
 		Code:       "unauthorized",
 		Message:    "missing or invalid bearer token",
@@ -3414,8 +3174,8 @@ func TestRefreshConnectedAgentsReturnsCapabilityEndpointError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected refresh error")
 	}
-	if !strings.Contains(err.Error(), "/v1/agents/me/capabilities") {
-		t.Fatalf("expected capabilities route in error, got %v", err)
+	if !strings.Contains(err.Error(), "/v1/me/agents") {
+		t.Fatalf("expected list-agents route in error, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "missing or invalid bearer token") {
 		t.Fatalf("expected bearer-token detail in error, got %v", err)

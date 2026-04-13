@@ -1,6 +1,10 @@
 package app
 
-import "time"
+import (
+	"time"
+
+	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
+)
 
 const (
 	ConnectionTransportHTTP      = "http"
@@ -66,21 +70,7 @@ type Skill struct {
 	Description string `json:"description"`
 }
 
-type ConnectedAgent struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	Emoji             string    `json:"emoji,omitempty"`
-	AgentUUID         string    `json:"agent_uuid"`
-	AgentURI          string    `json:"agent_uri"`
-	DefaultSkill      string    `json:"default_skill"`
-	FailureReviewer   bool      `json:"failure_reviewer"`
-	Repo              string    `json:"repo"`
-	Notes             string    `json:"notes"`
-	AdvertisedSkills  []Skill   `json:"advertised_skills"`
-	CreatedAt         time.Time `json:"created_at"`
-	LastDispatchAt    time.Time `json:"last_dispatch_at"`
-	LastDispatchError string    `json:"last_dispatch_error"`
-}
+type ConnectedAgent = hub.HubAgent
 
 type RuntimeEvent struct {
 	At      time.Time `json:"at"`

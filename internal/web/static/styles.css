@@ -4362,19 +4362,6 @@ body.settings-modal-open {
   min-width: 0;
 }
 
-.connected-agent-avatar {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, rgba(17, 34, 68, 0.2));
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 244, 255, 0.92));
-  font-size: 1rem;
-}
-
 .connected-agent-card-copy {
   flex: 1 1 auto;
   min-width: 0;
@@ -4384,6 +4371,9 @@ body.settings-modal-open {
 
 .connected-agent-card-copy h3 {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1rem;
   line-height: 1.2;
   white-space: nowrap;
@@ -4391,20 +4381,65 @@ body.settings-modal-open {
   text-overflow: ellipsis;
 }
 
-.connected-agent-handle {
+.connected-agent-title-emoji {
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.connected-agent-secondary {
   margin: 0;
   color: var(--surface-label);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: "SFMono-Regular", "SFMono", "Menlo", monospace;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.connected-agent-selection-badge {
+.connected-agent-card-meta {
   margin-left: auto;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.connected-agent-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.connected-agent-presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.connected-agent-presence.is-online {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+  border-color: color-mix(in srgb, var(--good) 28%, transparent);
+}
+
+.connected-agent-presence.is-offline {
+  color: var(--surface-label);
+  background: color-mix(in srgb, var(--surface-label) 10%, transparent);
+  border-color: color-mix(in srgb, var(--surface-label) 28%, transparent);
+}
+
+.connected-agent-selection-badge {
   display: none;
   align-items: center;
   justify-content: center;

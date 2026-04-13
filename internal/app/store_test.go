@@ -4,16 +4,38 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
 )
 
-func TestSelectFailureReviewerUsesFirstFlaggedAgent(t *testing.T) {
+func TestSelectFailureReviewerUsesFirstOnlineReviewerSkill(t *testing.T) {
 	t.Parallel()
 
 	state := AppState{
 		ConnectedAgents: []ConnectedAgent{
-			{ID: "worker-a"},
-			{ID: "reviewer-a", FailureReviewer: true},
-			{ID: "reviewer-b", FailureReviewer: true},
+			testConnectedAgent("worker-a", "Worker A", "worker-a-uuid", Skill{Name: "run_task"}),
+			{
+				AgentID:   "reviewer-a",
+				Handle:    "reviewer-a",
+				AgentUUID: "reviewer-a-uuid",
+				Status:    "online",
+				Metadata: &hub.AgentMetadata{
+					DisplayName: "Reviewer A",
+					Skills:      testSkillMetadata(Skill{Name: failureReviewSkillName}),
+					Presence:    &hub.AgentPresence{Status: "online"},
+				},
+			},
+			{
+				AgentID:   "reviewer-b",
+				Handle:    "reviewer-b",
+				AgentUUID: "reviewer-b-uuid",
+				Status:    "offline",
+				Metadata: &hub.AgentMetadata{
+					DisplayName: "Reviewer B",
+					Skills:      testSkillMetadata(Skill{Name: failureReviewSkillName}),
+					Presence:    &hub.AgentPresence{Status: "offline"},
+				},
+			},
 		},
 	}
 
@@ -21,8 +43,8 @@ func TestSelectFailureReviewerUsesFirstFlaggedAgent(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a failure reviewer")
 	}
-	if reviewer.ID != "reviewer-a" {
-		t.Fatalf("expected first flagged reviewer, got %q", reviewer.ID)
+	if reviewer.AgentID != "reviewer-a" {
+		t.Fatalf("expected first online reviewer, got %q", reviewer.AgentID)
 	}
 }
 

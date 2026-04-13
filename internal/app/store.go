@@ -157,14 +157,16 @@ func (s *Store) AppendEvent(event RuntimeEvent) error {
 }
 
 func FindConnectedAgent(agents []ConnectedAgent, ref string) (ConnectedAgent, bool) {
+	ref = strings.TrimSpace(ref)
 	for _, agent := range agents {
 		if ref == "" {
 			continue
 		}
-		if strings.EqualFold(agent.ID, ref) ||
-			strings.EqualFold(agent.Name, ref) ||
-			strings.EqualFold(agent.AgentUUID, ref) ||
-			strings.EqualFold(agent.AgentURI, ref) {
+		if strings.EqualFold(agent.AgentUUID, ref) ||
+			strings.EqualFold(agent.AgentID, ref) ||
+			strings.EqualFold(agent.Handle, ref) ||
+			strings.EqualFold(agent.URI, ref) ||
+			strings.EqualFold(connectedAgentDisplayName(agent), ref) {
 			return agent, true
 		}
 	}
@@ -173,7 +175,12 @@ func FindConnectedAgent(agents []ConnectedAgent, ref string) (ConnectedAgent, bo
 
 func SelectFailureReviewer(state AppState) (ConnectedAgent, bool) {
 	for _, agent := range state.ConnectedAgents {
-		if agent.FailureReviewer {
+		if connectedAgentPresenceStatus(agent) == "online" && connectedAgentSupportsSkill(agent, failureReviewSkillName) {
+			return agent, true
+		}
+	}
+	for _, agent := range state.ConnectedAgents {
+		if connectedAgentSupportsSkill(agent, failureReviewSkillName) {
 			return agent, true
 		}
 	}
@@ -181,8 +188,12 @@ func SelectFailureReviewer(state AppState) (ConnectedAgent, bool) {
 }
 
 func AddOrReplaceConnectedAgent(agents []ConnectedAgent, next ConnectedAgent) []ConnectedAgent {
+	nextKey := connectedAgentIdentityKey(next)
+	if nextKey == "" {
+		return agents
+	}
 	for i, existing := range agents {
-		if existing.ID == next.ID {
+		if connectedAgentIdentityKey(existing) == nextKey {
 			agents[i] = next
 			return agents
 		}

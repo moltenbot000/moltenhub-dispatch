@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/moltenbot000/moltenhub-dispatch/internal/app"
+	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
 )
 
 type stubService struct {
@@ -115,6 +116,38 @@ func (s *stubService) ConsumeFlash() (app.FlashMessage, error) {
 	flash := s.state.Flash
 	s.state.Flash = app.FlashMessage{}
 	return flash, nil
+}
+
+func testConnectedAgent(agentID, displayName, agentUUID, uri string, skills ...app.Skill) app.ConnectedAgent {
+	agent := app.ConnectedAgent{
+		AgentID:   agentID,
+		Handle:    agentID,
+		AgentUUID: agentUUID,
+		URI:       uri,
+		Metadata: &hub.AgentMetadata{
+			DisplayName: displayName,
+			Skills:      skillMetadata(skills...),
+		},
+	}
+	if displayName == "" && len(skills) == 0 {
+		agent.Metadata = nil
+	}
+	return agent
+}
+
+func skillMetadata(skills ...app.Skill) []map[string]any {
+	if len(skills) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(skills))
+	for _, skill := range skills {
+		entry := map[string]any{"name": skill.Name}
+		if strings.TrimSpace(skill.Description) != "" {
+			entry["description"] = skill.Description
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func TestHandleBindRedirectsOnFailure(t *testing.T) {
@@ -577,12 +610,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 				ProfileBio:      "What this runtime is for",
 			},
 			ConnectedAgents: []app.ConnectedAgent{
-				{
-					ID:        "worker-a",
-					Name:      "Worker A",
-					AgentUUID: "worker-uuid",
-					AgentURI:  "molten://agent/worker-a",
-				},
+				testConnectedAgent("worker-a", "Worker A", "worker-uuid", "molten://agent/worker-a"),
 			},
 		},
 	})
@@ -2196,12 +2224,7 @@ func TestHandleConnectedAgentsReturnsSnapshot(t *testing.T) {
 	server, err := New(&stubService{
 		state: app.AppState{
 			ConnectedAgents: []app.ConnectedAgent{
-				{
-					ID:        "dispatcher",
-					Name:      "Dispatcher",
-					AgentUUID: "agent-1",
-					AgentURI:  "molten://agent/dispatcher",
-				},
+				testConnectedAgent("dispatcher", "Dispatcher", "agent-1", "molten://agent/dispatcher"),
 			},
 		},
 	})
@@ -2230,7 +2253,7 @@ func TestHandleConnectedAgentsReturnsSnapshot(t *testing.T) {
 	if len(body.ConnectedAgents) != 1 {
 		t.Fatalf("expected one connected agent, got %#v", body.ConnectedAgents)
 	}
-	if body.ConnectedAgents[0].Name != "Dispatcher" {
+	if body.ConnectedAgents[0].Metadata == nil || body.ConnectedAgents[0].Metadata.DisplayName != "Dispatcher" {
 		t.Fatalf("unexpected connected agent payload: %#v", body.ConnectedAgents[0])
 	}
 }
@@ -2240,9 +2263,9 @@ func TestHandleConnectedAgentsReturnsStructuredRefreshError(t *testing.T) {
 
 	server, err := New(&stubService{
 		state: app.AppState{
-			ConnectedAgents: []app.ConnectedAgent{{ID: "stale-agent"}},
+			ConnectedAgents: []app.ConnectedAgent{{AgentID: "stale-agent", Handle: "stale-agent"}},
 		},
-		refreshAgentsErr: errors.New("refresh connected agents from /v1/agents/me/capabilities: hub API 401 unauthorized: missing or invalid bearer token"),
+		refreshAgentsErr: errors.New("refresh connected agents from /v1/me/agents: hub API 401 unauthorized: missing or invalid bearer token"),
 	})
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -2274,7 +2297,7 @@ func TestHandleConnectedAgentsReturnsStructuredRefreshError(t *testing.T) {
 	if !strings.Contains(body.Detail, "missing or invalid bearer token") {
 		t.Fatalf("expected detailed refresh error, got %#v", body)
 	}
-	if len(body.ConnectedAgents) != 1 || body.ConnectedAgents[0].ID != "stale-agent" {
+	if len(body.ConnectedAgents) != 1 || body.ConnectedAgents[0].AgentID != "stale-agent" {
 		t.Fatalf("expected stale connected agents to be returned for context, got %#v", body.ConnectedAgents)
 	}
 }
@@ -2293,15 +2316,14 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 				Transport: app.ConnectionTransportHTTP,
 			},
 			ConnectedAgents: []app.ConnectedAgent{
-				{
-					ID:           "dispatcher",
-					Name:         "Dispatcher",
-					DefaultSkill: "dispatch_skill_request",
-					AdvertisedSkills: []app.Skill{
-						{Name: "dispatch_skill_request", Description: "Dispatch a task."},
-						{Name: "review_failure_logs", Description: "Review logs."},
-					},
-				},
+				testConnectedAgent(
+					"dispatcher",
+					"Dispatcher",
+					"dispatcher-uuid",
+					"molten://agent/dispatcher",
+					app.Skill{Name: "dispatch_skill_request", Description: "Dispatch a task."},
+					app.Skill{Name: "review_failure_logs", Description: "Review logs."},
+				),
 			},
 		},
 	})
@@ -2329,8 +2351,11 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `class="connected-agent-card connected-agent-card-button"`) {
 		t.Fatalf("expected connected agent card layout, body=%s", body)
 	}
-	if !strings.Contains(body, "@dispatcher") {
-		t.Fatalf("expected handle fallback on connected agent cards, body=%s", body)
+	if !strings.Contains(body, ">dispatcher<") {
+		t.Fatalf("expected agent id secondary label on connected agent cards, body=%s", body)
+	}
+	if !strings.Contains(body, "Offline") {
+		t.Fatalf("expected presence badge on connected agent cards, body=%s", body)
 	}
 	if !strings.Contains(body, `id="target-agent-ref-input"`) {
 		t.Fatalf("expected hidden target agent ref input for card selection UI, body=%s", body)
@@ -2462,11 +2487,7 @@ func TestHandleIndexDefinesTrimmedStringBeforeDispatchPlaceholderSetup(t *testin
 				Transport: app.ConnectionTransportHTTP,
 			},
 			ConnectedAgents: []app.ConnectedAgent{
-				{
-					ID:           "dispatcher",
-					Name:         "Dispatcher",
-					DefaultSkill: "dispatch_skill_request",
-				},
+				testConnectedAgent("dispatcher", "Dispatcher", "dispatcher-uuid", "molten://agent/dispatcher", app.Skill{Name: "dispatch_skill_request"}),
 			},
 		},
 	})

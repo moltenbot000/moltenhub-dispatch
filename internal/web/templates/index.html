@@ -113,18 +113,26 @@
               <button
                 type="button"
                 class="connected-agent-card connected-agent-card-button"
-                data-connected-agent-target-ref="{{if .ID}}{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else if .Name}}{{.Name}}{{end}}"
-                data-connected-agent-refs="{{if .ID}}{{.ID}}{{end}}{{if .AgentUUID}}{{if .ID}}&#10;{{end}}{{.AgentUUID}}{{end}}{{if .AgentURI}}{{if or .ID .AgentUUID}}&#10;{{end}}{{.AgentURI}}{{end}}"
-                data-connected-agent-display="{{if .Name}}{{.Name}}{{else if .ID}}{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else}}Unknown agent{{end}}"
+                data-connected-agent-target-ref="{{if .AgentID}}{{.AgentID}}{{else if .Handle}}{{.Handle}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .URI}}{{.URI}}{{end}}"
+                data-connected-agent-refs="{{if .AgentID}}{{.AgentID}}{{end}}{{if .Handle}}{{if .AgentID}}&#10;{{end}}{{.Handle}}{{end}}{{if .AgentUUID}}{{if or .AgentID .Handle}}&#10;{{end}}{{.AgentUUID}}{{end}}{{if .URI}}{{if or .AgentID .Handle .AgentUUID}}&#10;{{end}}{{.URI}}{{end}}"
+                data-connected-agent-display="{{if and .Metadata .Metadata.DisplayName}}{{.Metadata.DisplayName}}{{else if .Handle}}{{.Handle}}{{else if .AgentID}}{{.AgentID}}{{else if .URI}}{{.URI}}{{else if .AgentUUID}}{{.AgentUUID}}{{else}}Unknown agent{{end}}"
                 aria-pressed="false"
               >
                 <div class="connected-agent-card-main">
-                  <span class="connected-agent-avatar" aria-hidden="true">{{if .Emoji}}{{.Emoji}}{{else}}🤖{{end}}</span>
                   <div class="connected-agent-card-copy">
-                    <h3>{{if .Name}}{{.Name}}{{else if .ID}}{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else}}Unknown agent{{end}}</h3>
-                    <p class="connected-agent-handle">{{if .ID}}@{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else}}unknown{{end}}</p>
+                    <h3>
+                      <span class="connected-agent-title-emoji">{{if and .Metadata .Metadata.Emoji}}{{.Metadata.Emoji}}{{else}}🤖{{end}}</span>
+                      <span>{{if and .Metadata .Metadata.DisplayName}}{{.Metadata.DisplayName}}{{else if .Handle}}{{.Handle}}{{else if .AgentID}}{{.AgentID}}{{else if .URI}}{{.URI}}{{else if .AgentUUID}}{{.AgentUUID}}{{else}}Unknown agent{{end}}</span>
+                    </h3>
+                    <p class="connected-agent-secondary">{{if .AgentID}}{{.AgentID}}{{else if .URI}}{{.URI}}{{else if .Handle}}{{.Handle}}{{else if .AgentUUID}}{{.AgentUUID}}{{else}}unknown{{end}}</p>
                   </div>
-                  <span class="connected-agent-selection-badge" aria-hidden="true">Selected</span>
+                  <div class="connected-agent-card-meta">
+                    <span class="connected-agent-presence {{if and .Metadata .Metadata.Presence (eq .Metadata.Presence.Status "online")}}is-online{{else if eq .Status "online"}}is-online{{else}}is-offline{{end}}">
+                      <span class="connected-agent-presence-dot" aria-hidden="true"></span>
+                      <span>{{if and .Metadata .Metadata.Presence (eq .Metadata.Presence.Status "online")}}Online{{else if eq .Status "online"}}Online{{else}}Offline{{end}}</span>
+                    </span>
+                    <span class="connected-agent-selection-badge" aria-hidden="true">Selected</span>
+                  </div>
                 </div>
               </button>
               {{end}}
@@ -1580,43 +1588,39 @@
       };
 
       const connectedAgentDisplayName = (agent) => {
-        const displayName = trimmedString(agent && agent.name);
+        const displayName = trimmedString(agent && agent.metadata && agent.metadata.display_name);
         if (displayName) {
           return displayName;
         }
-        const handle = trimmedString(agent && agent.id);
+        const handle = trimmedString(agent && agent.handle);
         if (handle) {
           return handle;
+        }
+        const agentID = trimmedString(agent && agent.agent_id);
+        if (agentID) {
+          return agentID;
+        }
+        const uri = trimmedString(agent && agent.uri);
+        if (uri) {
+          return uri;
         }
         const uuid = trimmedString(agent && agent.agent_uuid);
         if (uuid) {
           return uuid;
-        }
-        const uri = trimmedString(agent && agent.agent_uri);
-        if (uri) {
-          return uri;
         }
         return "Unknown agent";
       };
 
-      const connectedAgentHandle = (agent) => {
-        const handle = trimmedString(agent && agent.id);
-        if (handle) {
-          return `@${handle}`;
+      const connectedAgentSecondaryLabel = (agent) => {
+        const agentID = trimmedString(agent && agent.agent_id);
+        if (agentID) {
+          return agentID;
         }
-        const uuid = trimmedString(agent && agent.agent_uuid);
-        if (uuid) {
-          return uuid;
-        }
-        const uri = trimmedString(agent && agent.agent_uri);
+        const uri = trimmedString(agent && agent.uri);
         if (uri) {
           return uri;
         }
-        return "unknown";
-      };
-
-      const connectedAgentTargetRef = (agent) => {
-        const handle = trimmedString(agent && agent.id);
+        const handle = trimmedString(agent && agent.handle);
         if (handle) {
           return handle;
         }
@@ -1624,7 +1628,27 @@
         if (uuid) {
           return uuid;
         }
-        const uri = trimmedString(agent && agent.agent_uri);
+        return "unknown";
+      };
+
+      const connectedAgentPrimaryLabel = (agent) => {
+        return `${connectedAgentEmoji(agent)} ${connectedAgentDisplayName(agent)}`.trim();
+      };
+
+      const connectedAgentTargetRef = (agent) => {
+        const agentID = trimmedString(agent && agent.agent_id);
+        if (agentID) {
+          return agentID;
+        }
+        const handle = trimmedString(agent && agent.handle);
+        if (handle) {
+          return handle;
+        }
+        const uuid = trimmedString(agent && agent.agent_uuid);
+        if (uuid) {
+          return uuid;
+        }
+        const uri = trimmedString(agent && agent.uri);
         if (uri) {
           return uri;
         }
@@ -1634,7 +1658,7 @@
       const connectedAgentRefs = (agent) => {
         const ordered = [];
         const seen = new Set();
-        [agent && agent.id, agent && agent.agent_uuid, agent && agent.agent_uri].forEach((value) => {
+        [agent && agent.agent_id, agent && agent.handle, agent && agent.agent_uuid, agent && agent.uri].forEach((value) => {
           const ref = trimmedString(value);
           if (!ref) {
             return;
@@ -1691,10 +1715,8 @@
           });
         };
 
-        pushSkill(agent && agent.default_skill, "Default skill for this agent.", true);
-
-        const advertisedSkills = Array.isArray(agent && agent.advertised_skills)
-          ? agent.advertised_skills
+        const advertisedSkills = Array.isArray(agent && agent.metadata && agent.metadata.skills)
+          ? agent.metadata.skills
           : [];
         advertisedSkills.forEach((skill) => {
           if (skill && typeof skill === "object") {
@@ -1705,6 +1727,18 @@
         });
 
         return ordered;
+      };
+
+      const connectedAgentPresenceStatus = (agent) => {
+        const presenceStatus = trimmedString(agent && agent.metadata && agent.metadata.presence && agent.metadata.presence.status).toLowerCase();
+        if (presenceStatus === "online") {
+          return "online";
+        }
+        const status = trimmedString(agent && agent.status).toLowerCase();
+        if (status === "online") {
+          return "online";
+        }
+        return "offline";
       };
 
       const inferSkillNameForAgent = (agent) => {
@@ -1728,7 +1762,7 @@
           return;
         }
         if (skillEntries.length === 0) {
-          skillNameHint.textContent = "This agent did not advertise skills in Hub capabilities. Leave this blank only if the target agent defines its own default skill.";
+          skillNameHint.textContent = "This agent does not advertise any skills in Molten Hub.";
           return;
         }
         const selectedSkillName = trimmedString(skillNameSelect && skillNameSelect.value);
@@ -1931,7 +1965,7 @@
       };
 
       const connectedAgentEmoji = (agent) => {
-        const emoji = firstEmojiGrapheme(trimmedString(agent && agent.emoji));
+        const emoji = firstEmojiGrapheme(trimmedString(agent && agent.metadata && agent.metadata.emoji));
         if (emoji) {
           return emoji;
         }
@@ -1964,34 +1998,56 @@
         const cardMain = document.createElement("div");
         cardMain.className = "connected-agent-card-main";
 
-        const avatar = document.createElement("span");
-        avatar.className = "connected-agent-avatar";
-        avatar.setAttribute("aria-hidden", "true");
-        avatar.textContent = connectedAgentEmoji(agent);
-
         const copy = document.createElement("div");
         copy.className = "connected-agent-card-copy";
 
         const title = document.createElement("h3");
-        title.textContent = connectedAgentDisplayName(agent);
+        const titleEmoji = document.createElement("span");
+        titleEmoji.className = "connected-agent-title-emoji";
+        titleEmoji.setAttribute("aria-hidden", "true");
+        titleEmoji.textContent = connectedAgentEmoji(agent);
 
-        const handle = document.createElement("p");
-        handle.className = "connected-agent-handle";
-        handle.textContent = connectedAgentHandle(agent);
+        const titleText = document.createElement("span");
+        titleText.textContent = connectedAgentDisplayName(agent);
+
+        title.appendChild(titleEmoji);
+        title.appendChild(titleText);
+
+        const secondary = document.createElement("p");
+        secondary.className = "connected-agent-secondary";
+        secondary.textContent = connectedAgentSecondaryLabel(agent);
 
         copy.appendChild(title);
-        copy.appendChild(handle);
-        cardMain.appendChild(avatar);
+        copy.appendChild(secondary);
         cardMain.appendChild(copy);
+
+        const meta = document.createElement("div");
+        meta.className = "connected-agent-card-meta";
+
+        const presence = document.createElement("span");
+        const presenceStatus = connectedAgentPresenceStatus(agent);
+        presence.className = `connected-agent-presence ${presenceStatus === "online" ? "is-online" : "is-offline"}`;
+
+        const presenceDot = document.createElement("span");
+        presenceDot.className = "connected-agent-presence-dot";
+        presenceDot.setAttribute("aria-hidden", "true");
+
+        const presenceText = document.createElement("span");
+        presenceText.textContent = presenceStatus === "online" ? "Online" : "Offline";
+
+        presence.appendChild(presenceDot);
+        presence.appendChild(presenceText);
+        meta.appendChild(presence);
 
         if (selectable) {
           const badge = document.createElement("span");
           badge.className = "connected-agent-selection-badge";
           badge.setAttribute("aria-hidden", "true");
           badge.textContent = "Selected";
-          cardMain.appendChild(badge);
+          meta.appendChild(badge);
         }
 
+        cardMain.appendChild(meta);
         card.appendChild(cardMain);
         return card;
       };
