@@ -4318,6 +4318,12 @@ body.settings-modal-open {
   margin-top: 0;
 }
 
+.manual-dispatch-targets-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+}
+
 .connected-agent-card {
   border: 1px solid color-mix(in srgb, var(--border) 85%, rgba(17, 34, 68, 0.16));
   border-radius: 14px;
@@ -4327,6 +4333,8 @@ body.settings-modal-open {
 }
 
 .connected-agent-card-button {
+  display: flex;
+  align-items: stretch;
   width: 100%;
   justify-content: stretch;
   padding: 12px 14px;
@@ -4354,6 +4362,7 @@ body.settings-modal-open {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-width: 0;
 }
 
@@ -4371,6 +4380,7 @@ body.settings-modal-open {
 }
 
 .connected-agent-card-copy {
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
   gap: 4px;

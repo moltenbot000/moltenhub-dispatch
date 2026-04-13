@@ -1312,6 +1312,15 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `grid-template-columns: minmax(0, 1fr);`) {
 		t.Fatalf("expected manual dispatch section to force a single full-width column, body=%s", body)
 	}
+	if !strings.Contains(body, `.manual-dispatch-targets-grid {`) {
+		t.Fatalf("expected horizontal manual dispatch target grid rule, body=%s", body)
+	}
+	if !strings.Contains(body, `grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));`) {
+		t.Fatalf("expected selectable agent cards to auto-fill the available width, body=%s", body)
+	}
+	if !strings.Contains(body, `grid-auto-rows: 1fr;`) {
+		t.Fatalf("expected selectable agent grid rows to stretch evenly, body=%s", body)
+	}
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
 	}
@@ -2047,6 +2056,9 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="manual-dispatch-targets"`) {
 		t.Fatalf("expected manual dispatch connected agent target list, body=%s", body)
+	}
+	if !strings.Contains(body, `class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid"`) {
+		t.Fatalf("expected manual dispatch target grid class for horizontal fill layout, body=%s", body)
 	}
 	if !strings.Contains(body, `id="skill-name-select" name="skill_name"`) {
 		t.Fatalf("expected skill-name dropdown in manual dispatch form, body=%s", body)

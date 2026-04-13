@@ -2103,6 +2103,36 @@ func TestFailureFromMessageUsesDownstreamFailureEnvelope(t *testing.T) {
 	}
 }
 
+func TestCallerFailurePayloadIncludesExplicitFailureDetails(t *testing.T) {
+	t.Parallel()
+
+	payload := callerFailurePayload(failureReport{
+		Message: "downstream worker returned a non-zero exit code",
+		Error:   "panic: boom",
+		Detail:  map[string]any{"stderr": "stacktrace", "exit_code": 1},
+	}, []string{"/tmp/task.log"})
+
+	if payload["status"] != "failed" {
+		t.Fatalf("expected failed status, got %#v", payload["status"])
+	}
+	if payload["message"] != "Task failed: downstream worker returned a non-zero exit code" {
+		t.Fatalf("unexpected failure message: %#v", payload["message"])
+	}
+	if payload["ok"] != false {
+		t.Fatalf("expected ok=false, got %#v", payload["ok"])
+	}
+	if payload["failure"] != true {
+		t.Fatalf("expected failure marker, got %#v", payload["failure"])
+	}
+	detail, ok := payload["error_details"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected error_details type: %T", payload["error_details"])
+	}
+	if detail["stderr"] != "stacktrace" || detail["exit_code"] != 1 {
+		t.Fatalf("unexpected error_details payload: %#v", detail)
+	}
+}
+
 func TestMessageSucceededTreatsPlaintextRunnerErrorAsFailure(t *testing.T) {
 	t.Parallel()
 
