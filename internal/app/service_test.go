@@ -1171,6 +1171,92 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 	}
 }
 
+func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDetails(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://dispatch/self"
+		state.ConnectedAgents = []ConnectedAgent{
+			{
+				ID:              "reviewer",
+				Name:            "reviewer",
+				AgentUUID:       "reviewer-uuid",
+				FailureReviewer: true,
+			},
+		}
+		state.PendingTasks = []PendingTask{
+			{
+				ID:                "task-1",
+				ParentRequestID:   "parent-req",
+				ChildRequestID:    "child-req",
+				OriginalSkillName: "run_task",
+				CallerAgentUUID:   "caller-uuid",
+				CallerRequestID:   "parent-req",
+				Repo:              "/tmp/repo",
+				LogPath:           filepath.Join(service.settings.DataDir, "logs", "task-1.log"),
+				CreatedAt:         time.Now().Add(-time.Minute),
+				ExpiresAt:         time.Now().Add(time.Minute),
+				DispatchPayload: map[string]any{
+					"repo":      "/tmp/repo",
+					"log_paths": []string{"/tmp/original.log"},
+					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+				},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-1",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_result",
+			SkillName: "run_task",
+			RequestID: "child-req",
+			ReplyTo:   "parent-req",
+			Payload: "error connecting to api.github.com\n" +
+				"check your internet connection or https://githubstatus.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 2 {
+		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
+	}
+	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected caller failure payload type: %T", fake.publishCalls[0].Message.Payload)
+	}
+	if got := failurePayload["status"]; got != "failed" {
+		t.Fatalf("unexpected caller failure status: %#v", got)
+	}
+	if got := failurePayload["error"]; got != "error connecting to api.github.com" {
+		t.Fatalf("unexpected caller failure error: %#v", got)
+	}
+	if got := failurePayload["error_detail"]; !strings.Contains(got.(string), "githubstatus.com") {
+		t.Fatalf("expected caller failure detail to include network diagnostic, got %#v", got)
+	}
+
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
+	}
+
+	state := service.store.Snapshot()
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected one follow-up task, got %d", len(state.FollowUpTasks))
+	}
+	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" {
+		t.Fatalf("unexpected follow-up log paths: %#v", got)
+	}
+}
+
 func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
 	t.Parallel()
 
@@ -1702,6 +1788,44 @@ func TestFailureFromMessageUsesDownstreamFailureEnvelope(t *testing.T) {
 	detail, ok := report.Detail.(map[string]any)
 	if !ok || detail["stderr"] != "stacktrace" {
 		t.Fatalf("unexpected failure detail: %#v", report.Detail)
+	}
+}
+
+func TestMessageSucceededTreatsPlaintextRunnerErrorAsFailure(t *testing.T) {
+	t.Parallel()
+
+	message := hub.OpenClawMessage{
+		Type: "skill_result",
+		Payload: "error connecting to api.github.com\n" +
+			"check your internet connection or https://githubstatus.com",
+	}
+
+	if messageSucceeded(message) {
+		t.Fatalf("expected plaintext runner error payload to be treated as failure: %#v", message)
+	}
+
+	report := failureFromMessage(message)
+	if report.Error != "error connecting to api.github.com" {
+		t.Fatalf("unexpected failure error: %q", report.Error)
+	}
+	if detail, ok := report.Detail.(string); !ok || !strings.Contains(detail, "githubstatus.com") {
+		t.Fatalf("expected plaintext failure detail to be preserved, got %#v", report.Detail)
+	}
+}
+
+func TestMessageSucceededTreatsNonZeroExitCodePayloadAsFailure(t *testing.T) {
+	t.Parallel()
+
+	message := hub.OpenClawMessage{
+		Type: "skill_result",
+		Payload: map[string]any{
+			"exit_code": 1,
+			"stderr":    "error connecting to api.github.com",
+		},
+	}
+
+	if messageSucceeded(message) {
+		t.Fatalf("expected non-zero exit code payload to be treated as failure: %#v", message)
 	}
 }
 

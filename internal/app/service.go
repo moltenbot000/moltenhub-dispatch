@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1259,19 +1260,26 @@ func messageSucceeded(message hub.OpenClawMessage) bool {
 	if message.OK != nil {
 		return *message.OK
 	}
-	if strings.EqualFold(message.Status, "failed") || message.Error != "" {
+
+	if failed, known := statusIndicatesFailure(message.Status); known {
+		return !failed
+	}
+	if strings.TrimSpace(message.Error) != "" {
 		return false
 	}
+
 	payloadMap, ok := message.Payload.(map[string]any)
-	if !ok {
-		return true
-	}
-	if status, ok := payloadMap["status"].(string); ok && strings.EqualFold(status, "failed") {
+	if ok {
+		if payloadMapIndicatesFailure(payloadMap) {
+			return false
+		}
+		if payloadMapIndicatesSuccess(payloadMap) {
+			return true
+		}
+	} else if payloadText, ok := message.Payload.(string); ok && payloadStringIndicatesFailure(payloadText) {
 		return false
 	}
-	if okValue, ok := payloadMap["ok"].(bool); ok {
-		return okValue
-	}
+
 	return true
 }
 
@@ -1306,7 +1314,7 @@ func failureFromMessage(message hub.OpenClawMessage) failureReport {
 		report.Message = payloadMessage
 	}
 	if report.Error == "" {
-		report.Error = stringFromMap(payloadMap, "error")
+		report.Error = payloadFailureError(payloadMap, message.Payload)
 	}
 	if detail, ok := payloadMap["error_detail"]; ok && detail != nil {
 		report.Detail = detail
@@ -1372,6 +1380,21 @@ func explicitFailureMessage(message string) string {
 	return "Task failed: " + message
 }
 
+func payloadFailureError(payloadMap map[string]any, payload any) string {
+	if value := stringFromMap(payloadMap, "error", "error_message", "stderr", "detail", "output"); value != "" {
+		return value
+	}
+	if value, ok := payload.(string); ok {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return ""
+		}
+		firstLine, _, _ := strings.Cut(trimmed, "\n")
+		return strings.TrimSpace(firstLine)
+	}
+	return ""
+}
+
 func failureDetailIsEmpty(detail any) bool {
 	if detail == nil {
 		return true
@@ -1399,6 +1422,129 @@ func errorDetail(err error) any {
 		return detail
 	}
 	return err.Error()
+}
+
+func statusIndicatesFailure(status string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "":
+		return false, false
+	case "ok", "success", "succeeded", "completed", "complete", "done", "passed":
+		return false, true
+	case "failed", "failure", "error", "errored", "cancelled", "canceled", "timeout", "timed_out", "aborted", "crashed":
+		return true, true
+	default:
+		return false, false
+	}
+}
+
+func payloadMapIndicatesFailure(payload map[string]any) bool {
+	if failed, known := statusIndicatesFailure(stringFromMap(payload, "status", "state", "result")); known {
+		return failed
+	}
+
+	for _, key := range []string{"ok", "success", "succeeded", "completed"} {
+		if value, ok := boolFromAny(payload[key]); ok && !value {
+			return true
+		}
+	}
+	for _, key := range []string{"failed", "failure", "error"} {
+		if value, ok := boolFromAny(payload[key]); ok && value {
+			return true
+		}
+	}
+	for _, key := range []string{"error", "error_message", "stderr"} {
+		if strings.TrimSpace(stringFromMap(payload, key)) != "" {
+			return true
+		}
+	}
+	for _, key := range []string{"exit_code", "exit_status"} {
+		if code, ok := intFromAny(payload[key]); ok && code != 0 {
+			return true
+		}
+	}
+	if detail, ok := payload["error_detail"]; ok && !failureDetailIsEmpty(detail) {
+		return true
+	}
+	if nested, ok := payload["failure"].(map[string]any); ok {
+		if payloadMapIndicatesFailure(nested) {
+			return true
+		}
+	}
+	if output, ok := payload["output"].(string); ok && payloadStringIndicatesFailure(output) {
+		return true
+	}
+	return false
+}
+
+func payloadMapIndicatesSuccess(payload map[string]any) bool {
+	if failed, known := statusIndicatesFailure(stringFromMap(payload, "status", "state", "result")); known {
+		return !failed
+	}
+	for _, key := range []string{"ok", "success", "succeeded", "completed"} {
+		if value, ok := boolFromAny(payload[key]); ok {
+			return value
+		}
+	}
+	return false
+}
+
+func payloadStringIndicatesFailure(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return false
+	}
+	if strings.HasPrefix(normalized, "error") || strings.HasPrefix(normalized, "fatal") || strings.HasPrefix(normalized, "panic:") {
+		return true
+	}
+	if strings.Contains(normalized, "check your internet connection") && strings.Contains(normalized, "githubstatus.com") {
+		return true
+	}
+	return false
+}
+
+func boolFromAny(value any) (bool, bool) {
+	switch typed := value.(type) {
+	case bool:
+		return typed, true
+	case string:
+		switch strings.ToLower(strings.TrimSpace(typed)) {
+		case "true", "1", "yes", "y":
+			return true, true
+		case "false", "0", "no", "n":
+			return false, true
+		default:
+			return false, false
+		}
+	default:
+		return false, false
+	}
+}
+
+func intFromAny(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return int64(typed), true
+	case int8:
+		return int64(typed), true
+	case int16:
+		return int64(typed), true
+	case int32:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case float32:
+		return int64(typed), true
+	case float64:
+		return int64(typed), true
+	case json.Number:
+		parsed, err := typed.Int64()
+		return parsed, err == nil
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(typed), 10, 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func stringFromMap(values map[string]any, keys ...string) string {
