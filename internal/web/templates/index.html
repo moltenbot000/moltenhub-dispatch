@@ -4,9 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Molten Hub Dispatch</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="/styles.css">
   {{if .GoogleAnalyticsMeasurementID}}
   <script async src="https://www.googletagmanager.com/gtag/js?id={{.GoogleAnalyticsMeasurementID}}"></script>
@@ -24,10 +21,10 @@
 <body>
   <div class="site-bg" aria-hidden="true">
     <canvas id="snowfall-canvas" class="snowfall-canvas"></canvas>
-    <div class="glow glow-a"></div>
-    <div class="glow glow-b"></div>
-    <div class="glow glow-c"></div>
-    <div class="grain"></div>
+    <div class="glow glow-a brand-glow-orb-primary"></div>
+    <div class="glow glow-b brand-glow-orb-primary-soft"></div>
+    <div class="glow glow-c brand-glow-ellipse-primary-soft"></div>
+    <div class="grain brand-noise-overlay"></div>
   </div>
   <main
     class="shell"
@@ -44,8 +41,9 @@
             alt="MoltenHub logo">
         </div>
         <div class="page-title-block">
-          <div class="title">Molten Hub Dispatch</div>
-          <p class="sub page-subtitle">Your quiet army awaits your orders.</p>
+          <p class="eyebrow dispatch-header-eyebrow">Dispatch Console</p>
+          <h1 class="title brand-heading-h1">Molten Hub Dispatch</h1>
+          <p class="sub page-subtitle brand-copy-h4-muted-tight">Choose a connected agent, review its advertised skill, and dispatch the payload it expects.</p>
         </div>
       </div>
       <div class="status-row connection-status-row" aria-live="polite">
@@ -83,16 +81,52 @@
     </section>
     {{end}}
 
+    {{if .State.Session.AgentToken}}
+    <section class="panel dispatch-overview brand-login-card-shell">
+      <div class="dispatch-overview-hero">
+        <div class="dispatch-overview-copy">
+          <p class="eyebrow dispatch-overview-eyebrow">Dispatch Workflow</p>
+          <h2 class="dispatch-overview-title brand-heading-h2-bold">Queue the right task with fewer clicks.</h2>
+          <p class="dispatch-overview-body brand-body-base-muted">Select a worker, let Dispatch load the first advertised skill from Molten Hub, then send markdown or JSON with automatic payload detection.</p>
+        </div>
+        <dl class="dispatch-overview-stats" aria-label="Dispatch state summary">
+          <div class="dispatch-overview-stat">
+            <dt>Connected Agents</dt>
+            <dd>{{len .State.ConnectedAgents}}</dd>
+          </div>
+          <div class="dispatch-overview-stat">
+            <dt>Queued Follow-Ups</dt>
+            <dd>{{len .State.FollowUpTasks}}</dd>
+          </div>
+          <div class="dispatch-overview-stat">
+            <dt>Recent Events</dt>
+            <dd>{{len .State.RecentEvents}}</dd>
+          </div>
+        </dl>
+      </div>
+      <ol class="dispatch-overview-steps" aria-label="Dispatch steps">
+        <li>Pick one connected agent.</li>
+        <li>Confirm or change the skill Dispatch loads from that agent.</li>
+        <li>Paste markdown or JSON and submit the task.</li>
+      </ol>
+    </section>
+    {{end}}
+
     {{if not .State.Session.AgentToken}}
     <section class="grid two-up">
-      <article class="panel">
-        <h2>1. Onboarding</h2>
-        <p class="empty">Complete the onboarding dialog to select your runtime region and bind this dispatcher agent.</p>
+      <article class="panel dispatch-gate-panel brand-login-card-shell">
+        <div class="dispatch-panel-header">
+          <div class="dispatch-panel-header-copy">
+            <p class="eyebrow dispatch-panel-eyebrow">1. Onboarding</p>
+            <h2>Connect this dispatcher to Molten Hub</h2>
+          </div>
+        </div>
+        <p class="empty">Choose a runtime region, reuse an existing agent token or bind a new dispatcher identity, then save the agent profile once to finish setup.</p>
       </article>
     </section>
     {{end}}
 
-    <section id="sub-actions-notice" class="panel" {{if .SubActions.Visible}}hidden{{end}}>
+    <section id="sub-actions-notice" class="panel dispatch-gate-panel" {{if .SubActions.Visible}}hidden{{end}}>
       <h2 data-sub-actions-title>{{if .SubActions.RequiresAgentConnection}}Connect agents in Molten Bot Hub{{else}}Sub-Actions Hidden{{end}}</h2>
       <p class="empty" data-sub-actions-reason>{{.SubActions.Reason}}</p>
       <p class="sub-actions-hub-link-row" data-sub-actions-connect-panel {{if not .SubActions.RequiresAgentConnection}}hidden{{end}}>
@@ -102,12 +136,19 @@
 
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
       <section class="grid manual-dispatch-grid">
-        <article class="panel form-surface">
-          <h2>Dispatch</h2>
+        <article class="panel form-surface dispatch-workbench-panel">
+          <div class="dispatch-panel-header">
+            <div class="dispatch-panel-header-copy">
+              <p class="eyebrow dispatch-panel-eyebrow">Dispatch</p>
+              <h2>Send work to a connected agent</h2>
+            </div>
+            <p class="dispatch-panel-copy">Select a target first. Skills load from the chosen agent's Hub capabilities.</p>
+          </div>
           <form id="manual-dispatch-form" method="post" action="/dispatch" class="stack">
             <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
             <fieldset class="manual-dispatch-target-fieldset">
               <legend>Agents</legend>
+              <p class="manual-dispatch-field-copy">Pick the worker that should receive this task. Dispatch keeps the selection synced when the connected-agent list refreshes.</p>
               <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid">
               {{range .State.ConnectedAgents}}
               <button
@@ -142,7 +183,7 @@
                 <span>Payload</span>
               </span>
               <textarea id="skill-payload-input" name="payload" rows="4" data-default-placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours." placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
-              <span id="skill-payload-hint" class="manual-dispatch-payload-hint"></span>
+              <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Markdown and JSON are both supported. Dispatch sets the payload format automatically.</span>
               <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
             </label>
             <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
@@ -157,7 +198,13 @@
 
       <section class="grid two-up">
         <article class="panel">
-          <h2>Queued Follow-Ups</h2>
+          <div class="dispatch-panel-header">
+            <div class="dispatch-panel-header-copy">
+              <p class="eyebrow dispatch-panel-eyebrow">Recovery</p>
+              <h2>Queued Follow-Ups</h2>
+            </div>
+            <p class="dispatch-panel-copy">Automatic remediation runs scheduled after a failed dispatch.</p>
+          </div>
           {{if .State.FollowUpTasks}}
           <div class="list">
             {{range .State.FollowUpTasks}}
@@ -185,7 +232,13 @@
         </article>
 
         <article class="panel">
-          <h2>Recent Events</h2>
+          <div class="dispatch-panel-header">
+            <div class="dispatch-panel-header-copy">
+              <p class="eyebrow dispatch-panel-eyebrow">Activity</p>
+              <h2>Recent Events</h2>
+            </div>
+            <p class="dispatch-panel-copy">Connection changes, dispatch lifecycle events, and local runtime feedback.</p>
+          </div>
           {{if .State.RecentEvents}}
           <div class="list">
             {{range .State.RecentEvents}}
