@@ -1134,11 +1134,35 @@ func (p *dispatchPayload) FromAny(value any) error {
 		*p = dispatchPayload{}
 		return nil
 	}
+	switch typed := value.(type) {
+	case string:
+		return p.fromJSONString(typed)
+	case []byte:
+		return p.fromJSONString(string(typed))
+	case json.RawMessage:
+		return p.fromJSONBytes(typed)
+	}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, p)
+	return p.fromJSONBytes(data)
+}
+
+func (p *dispatchPayload) fromJSONString(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		*p = dispatchPayload{}
+		return nil
+	}
+	return p.fromJSONBytes([]byte(raw))
+}
+
+func (p *dispatchPayload) fromJSONBytes(data []byte) error {
+	if err := json.Unmarshal(data, p); err != nil {
+		return fmt.Errorf("dispatch payload must be a JSON object: %w", err)
+	}
+	return nil
 }
 
 func (p dispatchPayload) TargetAgentRef() string {

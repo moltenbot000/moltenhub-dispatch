@@ -1,35 +1,33 @@
-name: CI
+name: moltenhub-ci
 
 on:
   pull_request:
   push:
     branches:
       - main
+      - 'moltenhub-*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  repo-hygiene:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Validate repository contents
-        run: ./scripts/validate-repo.sh
-
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Validate repository
+        run: ./scripts/validate-repo.sh
 
       - name: Run tests
         run: go test ./...
 
-      - name: Build
+      - name: Verify build
         run: go build ./...

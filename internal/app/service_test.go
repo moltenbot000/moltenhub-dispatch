@@ -1489,6 +1489,86 @@ func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	}
 }
 
+func TestHandleSkillRequestAcceptsJSONStringActivationPayload(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		payload func() hub.OpenClawMessage
+	}{
+		{
+			name: "payload",
+			payload: func() hub.OpenClawMessage {
+				return hub.OpenClawMessage{
+					Type:      "skill_request",
+					SkillName: dispatchSkillName,
+					RequestID: "parent-payload",
+					Payload:   `{"target_agent_ref":"worker-a"}`,
+				}
+			},
+		},
+		{
+			name: "input",
+			payload: func() hub.OpenClawMessage {
+				return hub.OpenClawMessage{
+					Type:      "skill_request",
+					SkillName: dispatchSkillName,
+					RequestID: "parent-input",
+					Input:     `{"target_agent_ref":"worker-a"}`,
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			service, fake := newTestService(t)
+			err := service.store.Update(func(state *AppState) error {
+				state.Session.AgentToken = "agent-token"
+				state.ConnectedAgents = []ConnectedAgent{
+					{
+						ID:               "worker-a",
+						Name:             "Worker A",
+						AgentUUID:        "worker-uuid",
+						DefaultSkill:     "run_task",
+						AdvertisedSkills: []Skill{{Name: "run_task"}},
+					},
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("seed store: %v", err)
+			}
+
+			message := hub.PullResponse{
+				DeliveryID:      "delivery-" + tc.name,
+				FromAgentUUID:   "caller-uuid",
+				OpenClawMessage: tc.payload(),
+			}
+
+			if err := service.handleInboundMessage(context.Background(), message); err != nil {
+				t.Fatalf("handle inbound message: %v", err)
+			}
+
+			if len(fake.publishCalls) != 1 {
+				t.Fatalf("expected one downstream publish call, got %d", len(fake.publishCalls))
+			}
+			if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
+				t.Fatalf("unexpected target agent UUID: %#v", fake.publishCalls[0])
+			}
+			if got := fake.publishCalls[0].Message.SkillName; got != "run_task" {
+				t.Fatalf("expected inferred downstream skill, got %q", got)
+			}
+			if got := fake.publishCalls[0].Message.Payload; got != nil {
+				t.Fatalf("expected nil downstream payload for target-only activation, got %#v", got)
+			}
+		})
+	}
+}
+
 func TestHandleDownstreamFailureStillQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
 	t.Parallel()
 
