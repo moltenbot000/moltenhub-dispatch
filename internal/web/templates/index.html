@@ -146,25 +146,9 @@
             <label id="skill-payload-field" hidden>
               <span class="manual-dispatch-payload-label-row">
                 <span>Skill Payload</span>
-                <span class="manual-dispatch-payload-format-toggle" role="group" aria-label="Skill payload format">
-                  <button
-                    type="button"
-                    class="manual-dispatch-payload-format-button is-active"
-                    data-skill-payload-format-toggle
-                    data-payload-format="markdown"
-                    aria-pressed="true"
-                  >Markdown</button>
-                  <button
-                    type="button"
-                    class="manual-dispatch-payload-format-button"
-                    data-skill-payload-format-toggle
-                    data-payload-format="json"
-                    aria-pressed="false"
-                  >JSON</button>
-                </span>
               </span>
-              <textarea id="skill-payload-input" name="payload" rows="4" placeholder="Enter markdown text for the selected skill." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
-              <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Markdown is default. Switch to JSON to validate before dispatch.</span>
+              <textarea id="skill-payload-input" name="payload" rows="4" placeholder="Enter markdown text or JSON for the selected skill." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
+              <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Format is detected automatically. Valid JSON objects/arrays are sent as JSON; everything else is sent as markdown.</span>
               <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
             </label>
             <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
@@ -509,7 +493,6 @@
       const skillPayloadInput = document.getElementById("skill-payload-input");
       const skillPayloadValidation = document.getElementById("skill-payload-validation");
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
-      const skillPayloadFormatButtons = Array.from(document.querySelectorAll("[data-skill-payload-format-toggle]"));
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
       const connectedAgentsList = document.getElementById("connected-agents-list");
@@ -540,7 +523,6 @@
       const DEFAULT_THEME_MODE = "dark";
       const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_TICK_MS = 250;
-      const DEFAULT_SKILL_PAYLOAD_FORMAT = "markdown";
 
       if (flash) {
         const configuredSeconds = Number.parseFloat(flash.dataset.autoDismissSeconds || "");
@@ -1589,17 +1571,9 @@
         return ordered;
       };
 
-      const normalizeSkillPayloadFormat = (value) => {
-        return trimmedString(value).toLowerCase() === "json"
-          ? "json"
-          : DEFAULT_SKILL_PAYLOAD_FORMAT;
+      const hasSelectedSkill = () => {
+        return skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
       };
-
-      let selectedSkillPayloadFormat = normalizeSkillPayloadFormat(
-        skillPayloadFormatInput instanceof HTMLInputElement
-          ? skillPayloadFormatInput.value
-          : DEFAULT_SKILL_PAYLOAD_FORMAT
-      );
 
       const setSkillPayloadValidationMessage = (message, isError = false) => {
         if (!(skillPayloadValidation instanceof HTMLElement)) {
@@ -1609,86 +1583,75 @@
         skillPayloadValidation.classList.toggle("is-error", isError);
       };
 
-      const syncSkillPayloadFormatButtons = (enabled) => {
-        const activeFormat = normalizeSkillPayloadFormat(selectedSkillPayloadFormat);
-        skillPayloadFormatButtons.forEach((node) => {
-          if (!(node instanceof HTMLButtonElement)) {
-            return;
-          }
-          const buttonFormat = normalizeSkillPayloadFormat(node.dataset.payloadFormat);
-          const active = enabled && buttonFormat === activeFormat;
-          node.disabled = !enabled;
-          node.classList.toggle("is-active", active);
-          node.setAttribute("aria-pressed", active ? "true" : "false");
-        });
-      };
-
-      const validateSkillPayload = () => {
-        if (!(skillPayloadInput instanceof HTMLTextAreaElement)) {
-          return true;
-        }
-        if (skillPayloadInput.disabled || normalizeSkillPayloadFormat(selectedSkillPayloadFormat) !== "json") {
-          skillPayloadInput.setCustomValidity("");
-          setSkillPayloadValidationMessage("");
-          return true;
-        }
-        const rawPayload = skillPayloadInput.value.trim();
+      const detectSkillPayloadFormat = (value) => {
+        const rawPayload = trimmedString(value);
         if (rawPayload === "") {
-          skillPayloadInput.setCustomValidity("");
-          setSkillPayloadValidationMessage("");
-          return true;
+          return { format: "", parseError: "" };
+        }
+        const looksLikeJSON = rawPayload.startsWith("{") || rawPayload.startsWith("[");
+        if (!looksLikeJSON) {
+          return { format: "markdown", parseError: "" };
         }
         try {
           JSON.parse(rawPayload);
-          skillPayloadInput.setCustomValidity("");
-          setSkillPayloadValidationMessage("JSON payload is valid.");
-          return true;
+          return { format: "json", parseError: "" };
         } catch (error) {
-          const detail = error instanceof Error ? error.message : "Unable to parse JSON payload.";
-          const message = `JSON payload is invalid: ${detail}`;
-          skillPayloadInput.setCustomValidity(message);
-          setSkillPayloadValidationMessage(message, true);
-          return false;
+          return {
+            format: "markdown",
+            parseError: error instanceof Error ? error.message : "unable to parse JSON",
+          };
         }
       };
 
-      const setSkillPayloadFormat = (value) => {
-        selectedSkillPayloadFormat = normalizeSkillPayloadFormat(value);
-        const hasSelectedSkill = skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
-        if (skillPayloadFormatInput instanceof HTMLInputElement) {
-          skillPayloadFormatInput.value = hasSelectedSkill ? selectedSkillPayloadFormat : "";
+      const validateSkillPayload = () => {
+        if (!(skillPayloadInput instanceof HTMLTextAreaElement) || !(skillPayloadFormatInput instanceof HTMLInputElement)) {
+          return true;
         }
-        if (skillPayloadInput instanceof HTMLTextAreaElement) {
-          skillPayloadInput.placeholder = selectedSkillPayloadFormat === "json"
-            ? "Enter JSON for the selected skill. Example: {\"input\":\"Review failing logs.\"}"
-            : "Enter markdown text for the selected skill.";
+        if (skillPayloadInput.disabled || !hasSelectedSkill()) {
+          skillPayloadFormatInput.value = "";
+          skillPayloadInput.setCustomValidity("");
+          setSkillPayloadValidationMessage("");
+          return true;
         }
-        syncSkillPayloadFormatButtons(hasSelectedSkill);
-        validateSkillPayload();
+
+        const detection = detectSkillPayloadFormat(skillPayloadInput.value);
+        skillPayloadFormatInput.value = detection.format;
+        skillPayloadInput.setCustomValidity("");
+        if (detection.format === "json") {
+          setSkillPayloadValidationMessage("Detected JSON payload.");
+          return true;
+        }
+        if (detection.parseError !== "") {
+          setSkillPayloadValidationMessage(`JSON looks invalid (${detection.parseError}); sending as markdown payload.`);
+          return true;
+        }
+        if (detection.format === "markdown") {
+          setSkillPayloadValidationMessage("Detected markdown payload.");
+          return true;
+        }
+        setSkillPayloadValidationMessage("");
+        return true;
       };
 
       const syncSkillPayloadField = () => {
-        if (!(skillPayloadField instanceof HTMLElement) || !(skillPayloadFormatInput instanceof HTMLInputElement)) {
+        if (!(skillPayloadField instanceof HTMLElement)) {
           return;
         }
-        const hasSelectedSkill = skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
-        skillPayloadField.hidden = !hasSelectedSkill;
-        if (!hasSelectedSkill) {
-          selectedSkillPayloadFormat = DEFAULT_SKILL_PAYLOAD_FORMAT;
-          skillPayloadFormatInput.value = "";
-          syncSkillPayloadFormatButtons(false);
-        } else {
-          selectedSkillPayloadFormat = normalizeSkillPayloadFormat(skillPayloadFormatInput.value);
-        }
+        const selectedSkill = hasSelectedSkill();
+        skillPayloadField.hidden = !selectedSkill;
         if (skillPayloadInput instanceof HTMLTextAreaElement) {
-          skillPayloadInput.disabled = !hasSelectedSkill;
-          if (!hasSelectedSkill) {
+          skillPayloadInput.disabled = !selectedSkill;
+          if (!selectedSkill) {
             skillPayloadInput.value = "";
             skillPayloadInput.setCustomValidity("");
-            setSkillPayloadValidationMessage("");
+          } else {
+            skillPayloadInput.placeholder = "Enter markdown text or JSON for the selected skill.";
           }
         }
-        setSkillPayloadFormat(selectedSkillPayloadFormat);
+        if (skillPayloadFormatInput instanceof HTMLInputElement && !selectedSkill) {
+          skillPayloadFormatInput.value = "";
+        }
+        validateSkillPayload();
       };
 
       const updateSkillNameOptions = () => {
@@ -2110,13 +2073,6 @@
           });
         }
       });
-      skillPayloadFormatButtons.forEach((node) => {
-        if (node instanceof HTMLButtonElement) {
-          node.addEventListener("click", () => {
-            setSkillPayloadFormat(node.dataset.payloadFormat);
-          });
-        }
-      });
       if (skillPayloadInput instanceof HTMLTextAreaElement) {
         skillPayloadInput.addEventListener("input", () => {
           validateSkillPayload();
@@ -2158,12 +2114,10 @@
             if (skillPayloadInput instanceof HTMLTextAreaElement) {
               skillPayloadInput.value = "";
             }
-            const hasSelectedSkill = skillNameSelect instanceof HTMLSelectElement && trimmedString(skillNameSelect.value) !== "";
-            if (hasSelectedSkill) {
-              setSkillPayloadFormat(DEFAULT_SKILL_PAYLOAD_FORMAT);
-            } else if (skillPayloadFormatInput instanceof HTMLInputElement) {
+            if (skillPayloadFormatInput instanceof HTMLInputElement) {
               skillPayloadFormatInput.value = "";
             }
+            setSkillPayloadValidationMessage("");
             const successMessage = trimmedString(body && body.message)
               || (trimmedString(body && body.task_id) ? `Dispatched task ${String(body.task_id).trim()}` : "Task dispatched.");
             setDispatchSubmitStatus(successMessage);

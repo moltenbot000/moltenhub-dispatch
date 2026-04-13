@@ -440,12 +440,15 @@ func (s *Server) redirectWithMessage(w http.ResponseWriter, r *http.Request, lev
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func decodeJSONObjectPayload(raw string) (map[string]any, bool) {
+func decodeStructuredJSONPayload(raw string) (any, bool) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || !strings.HasPrefix(trimmed, "{") || !strings.HasSuffix(trimmed, "}") {
+	if trimmed == "" {
 		return nil, false
 	}
-	var decoded map[string]any
+	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		return nil, false
+	}
+	var decoded any
 	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
 		return nil, false
 	}
@@ -467,7 +470,7 @@ func dispatchRequestFromValues(values url.Values) (app.DispatchRequest, error) {
 		}
 		payloadValue = decoded
 	case payloadFormat == "", payloadFormat == "text", payloadFormat == "markdown":
-		if decoded, ok := decodeJSONObjectPayload(payloadText); ok {
+		if decoded, ok := decodeStructuredJSONPayload(payloadText); ok {
 			payloadFormat = "json"
 			payloadValue = decoded
 		} else {

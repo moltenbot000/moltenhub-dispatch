@@ -540,14 +540,8 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
 		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
 	}
-	if !strings.Contains(body, `data-skill-payload-format-toggle`) {
-		t.Fatalf("expected manual dispatch payload format toggle buttons, body=%s", body)
-	}
-	if !strings.Contains(body, `data-payload-format="markdown"`) {
-		t.Fatalf("expected markdown payload format toggle option, body=%s", body)
-	}
-	if !strings.Contains(body, `data-payload-format="json"`) {
-		t.Fatalf("expected json payload format toggle option, body=%s", body)
+	if strings.Contains(body, `data-skill-payload-format-toggle`) {
+		t.Fatalf("did not expect manual dispatch payload format toggle buttons, body=%s", body)
 	}
 	if !strings.Contains(body, `id="skill-payload-validation"`) {
 		t.Fatalf("expected payload validation output node, body=%s", body)
@@ -555,11 +549,14 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="skill-payload-format-input" type="hidden" name="payload_format"`) {
 		t.Fatalf("expected manual dispatch payload format field, body=%s", body)
 	}
-	if !strings.Contains(body, `const DEFAULT_SKILL_PAYLOAD_FORMAT = "markdown";`) {
-		t.Fatalf("expected markdown payload format default in client script, body=%s", body)
+	if !strings.Contains(body, `const detectSkillPayloadFormat = (value) => {`) {
+		t.Fatalf("expected automatic payload format detection helper in client script, body=%s", body)
 	}
-	if !strings.Contains(body, `JSON payload is invalid:`) {
-		t.Fatalf("expected JSON validation messaging in client script, body=%s", body)
+	if !strings.Contains(body, `Detected JSON payload.`) {
+		t.Fatalf("expected JSON detection status messaging in client script, body=%s", body)
+	}
+	if !strings.Contains(body, `Detected markdown payload.`) {
+		t.Fatalf("expected markdown detection status messaging in client script, body=%s", body)
 	}
 	if strings.Contains(body, `name="timeout_seconds"`) {
 		t.Fatalf("did not expect manual dispatch timeout field, body=%s", body)
@@ -731,6 +728,46 @@ func TestHandleDispatchAutoPromotesJSONObjectMarkdownPayloadToJSON(t *testing.T)
 	}
 	if got := payload["retry"]; got != true {
 		t.Fatalf("unexpected retry payload value: %#v", payload)
+	}
+}
+
+func TestHandleDispatchAutoPromotesJSONArrayPayloadToJSONWhenFormatIsOmitted(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload=%5B%7B%22path%22%3A%22logs%2Ffailure.log%22%7D%5D"
+	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "json" {
+		t.Fatalf("expected payload format json, got %#v", got)
+	}
+	payload, ok := stub.lastDispatchReq.Payload.([]any)
+	if !ok {
+		t.Fatalf("expected JSON payload array, got %T", stub.lastDispatchReq.Payload)
+	}
+	if len(payload) != 1 {
+		t.Fatalf("expected one payload item, got %#v", payload)
+	}
+	entry, ok := payload[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected JSON payload map entry, got %#v", payload[0])
+	}
+	if got := entry["path"]; got != "logs/failure.log" {
+		t.Fatalf("unexpected payload path: %#v", entry)
 	}
 }
 
