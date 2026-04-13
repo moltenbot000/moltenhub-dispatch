@@ -141,6 +141,37 @@ func TestHandleBindRedirectsOnFailure(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersLocalConnectionAsConnected(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="local-conn-item"`) {
+		t.Fatalf("expected local connection indicator, body=%s", body)
+	}
+	if !strings.Contains(body, `title="Local: Connected"`) {
+		t.Fatalf("expected local connection title to render connected, body=%s", body)
+	}
+	if !strings.Contains(body, `id="local-conn-dot" class="dot online"`) {
+		t.Fatalf("expected local connection dot to render online, body=%s", body)
+	}
+	if !strings.Contains(body, `Local: Connected</span>`) {
+		t.Fatalf("expected local connection tooltip to render connected, body=%s", body)
+	}
+	if strings.Contains(body, `setLocalConnection(false, "Reconnecting...");`) {
+		t.Fatalf("did not expect local connection to downgrade on hub status refresh failures, body=%s", body)
+	}
+}
+
 func TestHandleBindPassesSubmittedProfileToService(t *testing.T) {
 	t.Parallel()
 

@@ -1370,6 +1370,118 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 	}
 }
 
+func TestExpirePendingTasksRetriesOnceBeforeFinalTimeoutFailureHandling(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://dispatch/self"
+		state.ConnectedAgents = []ConnectedAgent{
+			{
+				ID:              "reviewer",
+				Name:            "reviewer",
+				AgentUUID:       "reviewer-uuid",
+				FailureReviewer: true,
+			},
+		}
+		state.PendingTasks = []PendingTask{
+			{
+				ID:                "task-1",
+				ParentRequestID:   "parent-req",
+				ChildRequestID:    "child-req",
+				OriginalSkillName: "run_task",
+				TargetAgentUUID:   "worker-uuid",
+				CallerAgentUUID:   "caller-uuid",
+				CallerRequestID:   "parent-req",
+				Repo:              "/tmp/repo",
+				LogPath:           filepath.Join(service.settings.DataDir, "logs", "task-1.log"),
+				CreatedAt:         time.Now().Add(-2 * time.Minute),
+				ExpiresAt:         time.Now().Add(-time.Minute),
+				DispatchPayload: map[string]any{
+					"repo":      "/tmp/repo",
+					"log_paths": []string{"/tmp/original.log"},
+					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+				},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.expirePendingTasks(context.Background()); err != nil {
+		t.Fatalf("first timeout should trigger retry: %v", err)
+	}
+
+	if len(fake.publishCalls) != 2 {
+		t.Fatalf("expected retry publish plus follow-up publish after first timeout, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[0].Message.Type; got != "skill_request" {
+		t.Fatalf("expected retry publish to be a skill_request, got %q", got)
+	}
+	if got := fake.publishCalls[1].Message.SkillName; got != failureReviewSkillName {
+		t.Fatalf("expected timeout retry to queue a follow-up publish, got %q", got)
+	}
+	if len(fake.offlineCalls) != 0 {
+		t.Fatalf("expected no offline call after first timeout retry, got %d", len(fake.offlineCalls))
+	}
+
+	state := service.store.Snapshot()
+	if len(state.PendingTasks) != 1 {
+		t.Fatalf("expected task to remain pending after timeout retry, got %d pending", len(state.PendingTasks))
+	}
+	retried := state.PendingTasks[0]
+	if retried.ExecutionRetryCount != 1 {
+		t.Fatalf("expected retry counter to increment after timeout retry, got %#v", retried)
+	}
+	if retried.ChildRequestID == "child-req" {
+		t.Fatalf("expected retry to rotate child request id, got %#v", retried)
+	}
+	if retried.ChildRequestID != fake.publishCalls[0].Message.RequestID {
+		t.Fatalf("expected pending retry request id %q, got %q", fake.publishCalls[0].Message.RequestID, retried.ChildRequestID)
+	}
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected one follow-up queued after first timeout retry, got %d", len(state.FollowUpTasks))
+	}
+
+	err = service.store.Update(func(state *AppState) error {
+		if len(state.PendingTasks) != 1 {
+			return errors.New("expected retried task to remain pending")
+		}
+		state.PendingTasks[0].CreatedAt = time.Now().Add(-2 * time.Minute)
+		state.PendingTasks[0].ExpiresAt = time.Now().Add(-time.Minute)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expire retried task: %v", err)
+	}
+
+	if err := service.expirePendingTasks(context.Background()); err != nil {
+		t.Fatalf("second timeout should finalize task failure: %v", err)
+	}
+
+	if len(fake.publishCalls) != 3 {
+		t.Fatalf("expected retry publish + first-timeout follow-up + caller timeout failure, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[2].Message.Type; got != "skill_result" {
+		t.Fatalf("expected caller failure publish on final timeout, got %q", got)
+	}
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call after final timeout failure, got %d", len(fake.offlineCalls))
+	}
+
+	state = service.store.Snapshot()
+	if len(state.PendingTasks) != 0 {
+		t.Fatalf("expected pending task to clear after final timeout failure, got %d", len(state.PendingTasks))
+	}
+	if len(state.FollowUpTasks) != 1 {
+		t.Fatalf("expected one follow-up after final timeout failure, got %d", len(state.FollowUpTasks))
+	}
+}
+
 func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDetails(t *testing.T) {
 	t.Parallel()
 
@@ -1627,8 +1739,8 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 	}
 
 	state := service.store.Snapshot()
-	if len(state.PendingTasks) != 1 {
-		t.Fatalf("expected failed task to remain pending for retry, got %d pending", len(state.PendingTasks))
+	if len(state.PendingTasks) != 0 {
+		t.Fatalf("expected failed task to be cleared after final failure handling, got %d pending", len(state.PendingTasks))
 	}
 	if len(state.FollowUpTasks) != 1 {
 		t.Fatalf("expected follow-up task, got %d", len(state.FollowUpTasks))

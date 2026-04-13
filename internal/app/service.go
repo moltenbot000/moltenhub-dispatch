@@ -871,42 +871,16 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 		return err
 	}
 
-	isFailure := !messageSucceeded(message.OpenClawMessage)
-	if !isFailure {
-		if hasCallerTarget(pending) {
-			if err := s.publishResultToCaller(ctx, state, pending, message.OpenClawMessage); err != nil {
-				return err
-			}
-		}
-	} else {
-		report := failureFromMessage(message.OpenClawMessage)
-		retried, retryErr := s.retryDownstreamExecution(ctx, state, pending, report)
-		if retryErr != nil {
-			retryReport := failureFromError("Task failed while retrying the original execution request.", retryErr)
-			retryReport.Detail = map[string]any{
-				"initial_failure": failureFields(report, explicitFailureMessage(report.Message), report.Detail),
-				"retry_error":     errorDetail(retryErr),
-			}
-			if err := s.handleTaskFailure(ctx, state, pending, retryReport); err != nil {
-				return err
-			}
-		} else if retried {
-			if _, err := s.queueFollowUp(ctx, state, pending, report); err != nil {
-				return err
-			}
-			return nil
-		} else if err := s.handleTaskFailure(ctx, state, pending, report); err != nil {
+	if !messageSucceeded(message.OpenClawMessage) {
+		return s.handleExecutionFailure(ctx, state, pending, failureFromMessage(message.OpenClawMessage))
+	}
+
+	if hasCallerTarget(pending) {
+		if err := s.publishResultToCaller(ctx, state, pending, message.OpenClawMessage); err != nil {
 			return err
 		}
 	}
-
-	if err := s.store.Update(func(current *AppState) error {
-		current.PendingTasks = RemovePendingTask(current.PendingTasks, pending.ChildRequestID)
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
+	return s.removePendingTask(pending.ChildRequestID)
 }
 
 func (s *Service) retryDownstreamExecution(ctx context.Context, state AppState, pending PendingTask, report failureReport) (bool, error) {
@@ -1008,17 +982,45 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 		err := fmt.Errorf("task timed out waiting for %s", pending.OriginalSkillName)
 		report := failureFromError("Task failed because the downstream agent did not reply before the timeout.", err)
 		report.Detail = map[string]any{"timeout": true}
-		if err := s.handleTaskFailure(ctx, state, pending, report); err != nil {
+		if err := s.handleExecutionFailure(ctx, state, pending, report); err != nil {
 			return err
-		}
-		if updateErr := s.store.Update(func(current *AppState) error {
-			current.PendingTasks = RemovePendingTask(current.PendingTasks, pending.ChildRequestID)
-			return nil
-		}); updateErr != nil {
-			return updateErr
 		}
 	}
 	return nil
+}
+
+func (s *Service) handleExecutionFailure(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
+	retried, retryErr := s.retryDownstreamExecution(ctx, state, pending, report)
+	if retryErr != nil {
+		retryReport := failureFromError("Task failed while retrying the original execution request.", retryErr)
+		retryReport.Detail = map[string]any{
+			"initial_failure": failureFields(report, explicitFailureMessage(report.Message), report.Detail),
+			"retry_error":     errorDetail(retryErr),
+		}
+		return s.finalizeTaskFailure(ctx, state, pending, retryReport)
+	}
+	if retried {
+		_, err := s.queueFollowUp(ctx, state, pending, report)
+		return err
+	}
+	return s.finalizeTaskFailure(ctx, state, pending, report)
+}
+
+func (s *Service) finalizeTaskFailure(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
+	failureErr := s.handleTaskFailure(ctx, state, pending, report)
+	removeErr := s.removePendingTask(pending.ChildRequestID)
+	return errors.Join(failureErr, removeErr)
+}
+
+func (s *Service) removePendingTask(childRequestID string) error {
+	childRequestID = strings.TrimSpace(childRequestID)
+	if childRequestID == "" {
+		return nil
+	}
+	return s.store.Update(func(current *AppState) error {
+		current.PendingTasks = RemovePendingTask(current.PendingTasks, childRequestID)
+		return nil
+	})
 }
 
 func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
