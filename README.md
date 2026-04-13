@@ -49,7 +49,7 @@ When a dispatched task fails, the app does all of the following:
 
 ```json
 {
-  "repos": ["git@github.com:Molten-Bot/moltenhub-code.git"],
+  "repos": ["git@github.com:Molten-Bot/moltenhub-dispatch.git"],
   "baseBranch": "main",
   "targetSubdir": ".",
   "prompt": "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."

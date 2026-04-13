@@ -25,7 +25,7 @@ const (
 	openClawHTTPProtocol   = "openclaw.http.v1"
 	openClawSkillRequest   = "skill_request"
 	openClawSkillResult    = "skill_result"
-	followUpRepo           = "git@github.com:Molten-Bot/moltenhub-code.git"
+	followUpRepo           = "git@github.com:Molten-Bot/moltenhub-dispatch.git"
 	followUpPrompt         = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
 	hubPingRetryInterval   = 12 * time.Second
 	hubPingRequestTimeout  = 6 * time.Second

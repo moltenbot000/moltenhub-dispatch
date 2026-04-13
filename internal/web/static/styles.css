@@ -3418,7 +3418,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   }
 }
 
-/* Dispatch compatibility layer mapped onto moltenhub-code design tokens. */
+/* Dispatch compatibility layer mapped onto moltenhub-dispatch design tokens. */
 .shell {
   width: min(1460px, calc(100vw - 32px));
   margin: 0 auto;

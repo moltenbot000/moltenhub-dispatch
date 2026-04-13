@@ -1205,10 +1205,10 @@ func TestHandleIndexKeepsQueuedFollowUpsClosedByDefault(t *testing.T) {
 					ID:           "followup-1",
 					Status:       "queued",
 					FailedTaskID: "task-1",
-					FailedRepo:   "git@github.com:Molten-Bot/moltenhub-code.git",
+					FailedRepo:   "git@github.com:Molten-Bot/moltenhub-dispatch.git",
 					LogPaths:     []string{".moltenhub/logs/task-1.log"},
 					RunConfig: app.FollowUpRunConfig{
-						Repos:        []string{"git@github.com:Molten-Bot/moltenhub-code.git"},
+						Repos:        []string{"git@github.com:Molten-Bot/moltenhub-dispatch.git"},
 						BaseBranch:   "main",
 						TargetSubdir: ".",
 						Prompt:       "Review the failing log paths first.",

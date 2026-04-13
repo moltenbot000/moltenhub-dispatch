@@ -49,11 +49,11 @@ jobs:
 
       - name: Promote existing image
         run: |
-          TAG_ARGS="--tag moltenai/moltenhub-code:latest-${{ matrix.harness }}"
+          TAG_ARGS="--tag moltenai/moltenhub-dispatch:latest-${{ matrix.harness }}"
           if [ "${{ matrix.publish_default_tag }}" = "true" ]; then
-            TAG_ARGS="${TAG_ARGS} --tag moltenai/moltenhub-code:latest"
+            TAG_ARGS="${TAG_ARGS} --tag moltenai/moltenhub-dispatch:latest"
           fi
 
           docker buildx imagetools create \
             ${TAG_ARGS} \
-            moltenai/moltenhub-code:${{ github.event.inputs.source_tag }}${{ matrix.source_suffix }}
+            moltenai/moltenhub-dispatch:${{ github.event.inputs.source_tag }}${{ matrix.source_suffix }}

@@ -82,9 +82,9 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          TAGS="moltenai/moltenhub-code:vnext-${{ matrix.tag_suffix }},moltenai/moltenhub-code:${{ steps.version.outputs.tag }}-${{ matrix.tag_suffix }}"
+          TAGS="moltenai/moltenhub-dispatch:vnext-${{ matrix.tag_suffix }},moltenai/moltenhub-dispatch:${{ steps.version.outputs.tag }}-${{ matrix.tag_suffix }}"
           if [ "${{ matrix.publish_default_tags }}" = "true" ]; then
-            TAGS="${TAGS},moltenai/moltenhub-code:vnext,moltenai/moltenhub-code:${{ steps.version.outputs.tag }}"
+            TAGS="${TAGS},moltenai/moltenhub-dispatch:vnext,moltenai/moltenhub-dispatch:${{ steps.version.outputs.tag }}"
           fi
           echo "value=${TAGS}" >> "$GITHUB_OUTPUT"
 
