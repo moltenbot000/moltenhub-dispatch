@@ -208,6 +208,19 @@ func FindPendingTask(tasks []PendingTask, childRequestID string) (PendingTask, b
 	return PendingTask{}, false
 }
 
+func FindFollowUpTaskByFailedTaskID(tasks []FollowUpTask, failedTaskID string) (FollowUpTask, bool) {
+	failedTaskID = strings.TrimSpace(failedTaskID)
+	if failedTaskID == "" {
+		return FollowUpTask{}, false
+	}
+	for _, task := range tasks {
+		if task.FailedTaskID == failedTaskID {
+			return task, true
+		}
+	}
+	return FollowUpTask{}, false
+}
+
 func UpsertFollowUpTask(tasks []FollowUpTask, next FollowUpTask) []FollowUpTask {
 	for i, task := range tasks {
 		if task.ID == next.ID {
