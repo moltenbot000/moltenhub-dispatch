@@ -101,7 +101,21 @@
         <article class="panel">
           <h2>Manual Dispatch</h2>
           <form method="post" action="/dispatch" class="stack">
-            <label>Target Agent Ref<input name="target_agent_ref" placeholder="worker-a or molten://agent/worker-a"></label>
+            <label>Target Agent Ref
+              <input
+                name="target_agent_ref"
+                list="connected-agent-target-options"
+                placeholder="Select a connected agent display"
+              >
+            </label>
+            <datalist id="connected-agent-target-options">
+              {{range .State.ConnectedAgents}}
+              <option
+                value="{{if .Name}}{{.Name}}{{else if .ID}}{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{end}}"
+                label="{{if .ID}}@{{.ID}}{{else if .AgentUUID}}{{.AgentUUID}}{{else if .AgentURI}}{{.AgentURI}}{{else}}unknown{{end}}"
+              ></option>
+              {{end}}
+            </datalist>
             <label>Skill Name<input name="skill_name" placeholder="run_task" required></label>
             <label>Repo<input name="repo" placeholder="/tmp/repo"></label>
             <label>Log Paths<textarea name="log_paths" rows="2" placeholder="/tmp/repo/logs/build.log"></textarea></label>
@@ -442,6 +456,7 @@
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const connectedAgentsList = document.getElementById("connected-agents-list");
       const connectedAgentsEmpty = document.getElementById("connected-agents-empty");
+      const connectedAgentTargetOptions = document.getElementById("connected-agent-target-options");
       const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));
       const connectedAgentsRefreshStatusNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-status]"));
       const connectedAgentsRefreshProgressNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-progress]"));
@@ -1415,6 +1430,44 @@
         return "unknown";
       };
 
+      const connectedAgentTargetValue = (agent) => {
+        const displayName = trimmedString(agent && agent.name);
+        if (displayName) {
+          return displayName;
+        }
+        const handle = trimmedString(agent && agent.id);
+        if (handle) {
+          return handle;
+        }
+        const uuid = trimmedString(agent && agent.agent_uuid);
+        if (uuid) {
+          return uuid;
+        }
+        const uri = trimmedString(agent && agent.agent_uri);
+        if (uri) {
+          return uri;
+        }
+        return "";
+      };
+
+      const renderConnectedAgentTargetOptions = (agents) => {
+        if (!(connectedAgentTargetOptions instanceof HTMLDataListElement)) {
+          return;
+        }
+        connectedAgentTargetOptions.innerHTML = "";
+        const nextAgents = Array.isArray(agents) ? agents : [];
+        nextAgents.forEach((agent) => {
+          const value = connectedAgentTargetValue(agent);
+          if (!value) {
+            return;
+          }
+          const option = document.createElement("option");
+          option.value = value;
+          option.label = connectedAgentHandle(agent);
+          connectedAgentTargetOptions.appendChild(option);
+        });
+      };
+
       const connectedAgentEmoji = (agent) => {
         const emoji = firstEmojiGrapheme(trimmedString(agent && agent.emoji));
         if (emoji) {
@@ -1432,6 +1485,7 @@
         if (shell instanceof HTMLElement) {
           shell.dataset.connectedAgentCount = String(connectedAgentsCount);
         }
+        renderConnectedAgentTargetOptions(nextAgents);
         syncSubActions(latestHubConnectionState);
         connectedAgentsList.innerHTML = "";
         if (nextAgents.length === 0) {

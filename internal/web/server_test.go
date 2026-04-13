@@ -1357,6 +1357,15 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, "@dispatcher") {
 		t.Fatalf("expected handle fallback on connected agent cards, body=%s", body)
 	}
+	if !strings.Contains(body, `list="connected-agent-target-options"`) {
+		t.Fatalf("expected manual dispatch target agent selector to use connected agent options, body=%s", body)
+	}
+	if !strings.Contains(body, `<datalist id="connected-agent-target-options">`) {
+		t.Fatalf("expected connected agent datalist for manual dispatch, body=%s", body)
+	}
+	if !strings.Contains(body, `value="Dispatcher"`) {
+		t.Fatalf("expected connected agent display name in dispatch selector, body=%s", body)
+	}
 	if strings.Contains(body, "PERSONAL · YOU") {
 		t.Fatalf("did not expect invalid personal-context badge in connected agent card, body=%s", body)
 	}
