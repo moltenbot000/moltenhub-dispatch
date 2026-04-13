@@ -1764,6 +1764,58 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	}
 }
 
+func TestMarkOnlineUpdatesHubPresenceMetadata(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.Handle = "dispatch-agent"
+		state.Session.DisplayName = "Dispatch Agent"
+		state.Session.Emoji = "🤖"
+		state.Session.ProfileBio = "Routes tasks."
+		state.Session.APIBase = "https://runtime.na.hub.molten.bot"
+		state.Settings.HubURL = "https://na.hub.molten.bot"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.MarkOnline(context.Background(), ConnectionTransportHTTPLong); err != nil {
+		t.Fatalf("mark online: %v", err)
+	}
+
+	if len(fake.updateMetadataCalls) != 1 {
+		t.Fatalf("expected one metadata update, got %d", len(fake.updateMetadataCalls))
+	}
+	metadata := fake.updateMetadataCalls[0].Metadata
+	presence, ok := metadata["presence"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected presence metadata, got %#v", metadata["presence"])
+	}
+	if got, want := presence["status"], "online"; got != want {
+		t.Fatalf("presence status = %#v, want %q", got, want)
+	}
+	if got, want := presence["ready"], true; got != want {
+		t.Fatalf("presence ready = %#v, want %v", got, want)
+	}
+	if got, want := presence["transport"], ConnectionTransportHTTPLong; got != want {
+		t.Fatalf("presence transport = %#v, want %q", got, want)
+	}
+	if got, want := presence["session_key"], service.settings.SessionKey; got != want {
+		t.Fatalf("presence session_key = %#v, want %q", got, want)
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusConnected || state.Connection.Transport != ConnectionTransportHTTPLong {
+		t.Fatalf("expected connected http-long-poll state after mark online, got %#v", state.Connection)
+	}
+	if state.Session.OfflineMarked {
+		t.Fatalf("expected offline marker cleared after mark online, got %#v", state.Session)
+	}
+}
+
 func TestPollOnceMarksHTTPConnectivityAfterSuccessfulPull(t *testing.T) {
 	t.Parallel()
 
@@ -1918,6 +1970,68 @@ func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T)
 	}
 	if state.Connection.Transport != ConnectionTransportHTTPLong {
 		t.Fatalf("expected http long-poll transport after websocket fallback, got %#v", state.Connection)
+	}
+}
+
+func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	fake.connectErr = errors.New("websocket unavailable")
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+	fake.pullOK = false
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.DisplayName = "Dispatch Agent"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.PollInterval = 10 * time.Millisecond
+		state.Session.OfflineMarked = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunHubLoop(ctx)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if len(fake.updateMetadataCalls) > 0 {
+			break
+		}
+		select {
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatalf("expected startup presence sync before dispatch loop; metadata_calls=%d pull_calls=%d", len(fake.updateMetadataCalls), fake.pullCalls)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-done
+
+	metadata := fake.updateMetadataCalls[0].Metadata
+	presence, ok := metadata["presence"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected presence metadata, got %#v", metadata["presence"])
+	}
+	if got, want := presence["status"], "online"; got != want {
+		t.Fatalf("presence status = %#v, want %q", got, want)
+	}
+	if got, want := presence["transport"], ConnectionTransportHTTP; got != want {
+		t.Fatalf("presence transport = %#v, want %q", got, want)
+	}
+	if fake.pullCalls == 0 {
+		t.Fatalf("expected dispatch loop to continue into pull fallback after presence sync, got %d pulls", fake.pullCalls)
 	}
 }
 

@@ -66,6 +66,7 @@ type Service struct {
 	hubPingRetryDelay   time.Duration
 	hubPingCheckTimeout time.Duration
 	wsFallbackWindow    time.Duration
+	presenceSynced      bool
 }
 
 type failureReport struct {
@@ -284,6 +285,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if err := s.logEvent("info", "Agent bound", fmt.Sprintf("Bound handle %q against %s", result.Handle, result.APIBase), "", ""); err != nil {
 		return WrapOnboardingError(OnboardingStepWorkActivate, err)
 	}
+	s.presenceSynced = true
 	return nil
 }
 
@@ -474,6 +476,17 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 		if strings.TrimSpace(state.Session.AgentToken) == "" {
 			continue
 		}
+		if !s.presenceSynced {
+			if err := s.MarkOnline(ctx, ConnectionTransportHTTP); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				if !sleepWithContext(ctx, s.pollInterval()) {
+					return
+				}
+				continue
+			}
+		}
 
 		if realtime, ok := s.hub.(realtimeHubClient); ok {
 			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
@@ -614,6 +627,7 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return err
 	}
+	s.presenceSynced = true
 	return s.store.Update(func(current *AppState) error {
 		baseURL, domain := hubConnectionTarget(current.Session.APIBase, current.Settings.HubURL)
 		current.Session.OfflineMarked = true
@@ -628,6 +642,29 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 		}
 		return nil
 	})
+}
+
+func (s *Service) MarkOnline(ctx context.Context, transport string) error {
+	state := s.store.Snapshot()
+	if strings.TrimSpace(state.Session.AgentToken) == "" {
+		return nil
+	}
+	s.syncHubClient(state)
+	profile := AgentProfile{
+		DisplayName:     state.Session.DisplayName,
+		Emoji:           state.Session.Emoji,
+		ProfileMarkdown: state.Session.ProfileBio,
+	}
+	_, err := s.hub.UpdateMetadata(ctx, state.Session.AgentToken, hub.UpdateMetadataRequest{
+		Metadata: buildAgentMetadata(profile, state.Settings.SessionKey, normalizePresenceTransport(transport)),
+	})
+	if err != nil {
+		s.noteHubInteraction(err, normalizePresenceTransport(transport))
+		return err
+	}
+	s.noteHubInteraction(nil, normalizePresenceTransport(transport))
+	s.presenceSynced = true
+	return nil
 }
 
 func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResponse) error {
@@ -966,7 +1003,7 @@ func normalizedFlashLevel(level string) string {
 func (s *Service) updateAgentProfile(ctx context.Context, token string, profile AgentProfile) error {
 	if _, err := s.hub.UpdateMetadata(ctx, token, hub.UpdateMetadataRequest{
 		Handle:   profile.Handle,
-		Metadata: buildAgentMetadata(profile, s.settings.SessionKey),
+		Metadata: buildAgentMetadata(profile, s.settings.SessionKey, ConnectionTransportHTTP),
 	}); err != nil {
 		return err
 	}
@@ -1488,7 +1525,7 @@ func normalizeAgentProfile(profile AgentProfile) AgentProfile {
 	return profile
 }
 
-func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any {
+func buildAgentMetadata(profile AgentProfile, sessionKey, transport string) map[string]any {
 	metadata := map[string]any{
 		"agent_type":       "dispatch",
 		"display_name":     profile.DisplayName,
@@ -1499,7 +1536,7 @@ func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any 
 		"presence": map[string]any{
 			"status":      "online",
 			"ready":       true,
-			"transport":   "http",
+			"transport":   normalizePresenceTransport(transport),
 			"session_key": sessionKey,
 			"updated_at":  time.Now().UTC().Format(time.RFC3339),
 		},
@@ -1514,6 +1551,17 @@ func buildAgentMetadata(profile AgentProfile, sessionKey string) map[string]any 
 		delete(metadata, "profile_markdown")
 	}
 	return metadata
+}
+
+func normalizePresenceTransport(transport string) string {
+	switch strings.TrimSpace(transport) {
+	case ConnectionTransportWebSocket:
+		return ConnectionTransportWebSocket
+	case ConnectionTransportHTTPLong:
+		return ConnectionTransportHTTPLong
+	default:
+		return ConnectionTransportHTTP
+	}
 }
 
 func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
