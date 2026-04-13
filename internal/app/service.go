@@ -30,6 +30,7 @@ const (
 	hubPingRetryInterval   = 12 * time.Second
 	hubPingRequestTimeout  = 6 * time.Second
 	wsFallbackWindow       = 30 * time.Second
+	maxExecutionRetryCount = 1
 )
 
 var advertisedSkills = []Skill{
@@ -799,7 +800,20 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 			}
 		}
 	} else {
-		if err := s.handleTaskFailure(ctx, state, pending, failureFromMessage(message.OpenClawMessage)); err != nil {
+		report := failureFromMessage(message.OpenClawMessage)
+		retried, retryErr := s.retryDownstreamExecution(ctx, state, pending, report)
+		if retryErr != nil {
+			retryReport := failureFromError("Task failed while retrying the original execution request.", retryErr)
+			retryReport.Detail = map[string]any{
+				"initial_failure": failureFields(report, explicitFailureMessage(report.Message), report.Detail),
+				"retry_error":     errorDetail(retryErr),
+			}
+			if err := s.handleTaskFailure(ctx, state, pending, retryReport); err != nil {
+				return err
+			}
+		} else if retried {
+			return nil
+		} else if err := s.handleTaskFailure(ctx, state, pending, report); err != nil {
 			return err
 		}
 	}
@@ -811,6 +825,91 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 		return err
 	}
 	return nil
+}
+
+func (s *Service) retryDownstreamExecution(ctx context.Context, state AppState, pending PendingTask, report failureReport) (bool, error) {
+	if pending.ExecutionRetryCount >= maxExecutionRetryCount {
+		return false, nil
+	}
+
+	timeout := state.Settings.TaskTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	if pending.ExpiresAt.After(pending.CreatedAt) {
+		originalTimeout := pending.ExpiresAt.Sub(pending.CreatedAt)
+		if originalTimeout > 0 {
+			timeout = originalTimeout
+		}
+	}
+
+	now := time.Now().UTC()
+	retryTask := pending
+	retryTask.ChildRequestID = NewID("dispatch")
+	retryTask.CreatedAt = now
+	retryTask.ExpiresAt = now.Add(timeout)
+	retryTask.ExecutionRetryCount++
+	retryTask.DispatchPayloadFormat = normalizePayloadFormat(retryTask.DispatchPayloadFormat, retryTask.DispatchPayload)
+
+	if err := s.store.Update(func(current *AppState) error {
+		for i := range current.PendingTasks {
+			if current.PendingTasks[i].ChildRequestID != pending.ChildRequestID {
+				continue
+			}
+			current.PendingTasks[i] = retryTask
+			return nil
+		}
+		return fmt.Errorf("pending task %q is no longer available for retry", pending.ID)
+	}); err != nil {
+		return false, fmt.Errorf("persist downstream retry state: %w", err)
+	}
+
+	s.syncHubClient(state)
+	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
+		ToAgentUUID: retryTask.TargetAgentUUID,
+		ToAgentURI:  retryTask.TargetAgentURI,
+		ClientMsgID: retryTask.ChildRequestID,
+		Message: newSkillRequestMessage(
+			now,
+			retryTask.OriginalSkillName,
+			retryTask.DispatchPayload,
+			retryTask.DispatchPayloadFormat,
+			retryTask.ChildRequestID,
+			retryTask.ParentRequestID,
+		),
+	})
+	if err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		rollbackErr := s.store.Update(func(current *AppState) error {
+			for i := range current.PendingTasks {
+				if current.PendingTasks[i].ChildRequestID != retryTask.ChildRequestID {
+					continue
+				}
+				current.PendingTasks[i] = pending
+				return nil
+			}
+			return nil
+		})
+		if rollbackErr != nil {
+			return false, errors.Join(
+				fmt.Errorf("retry original task dispatch: %w", err),
+				fmt.Errorf("rollback retry task state: %w", rollbackErr),
+			)
+		}
+		return false, fmt.Errorf("retry original task dispatch: %w", err)
+	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+
+	_ = s.writeTaskLog(pending.LogPath, map[string]any{
+		"phase":                     "retrying",
+		"task_id":                   pending.ID,
+		"retry_attempt":             retryTask.ExecutionRetryCount,
+		"previous_child_request_id": pending.ChildRequestID,
+		"child_request_id":          retryTask.ChildRequestID,
+		"failure":                   failureFields(report, explicitFailureMessage(report.Message), report.Detail),
+	})
+	_ = s.logEvent("info", "Retry queued", fmt.Sprintf("Retrying %s after downstream failure.", retryTask.OriginalSkillName), pending.ID, pending.LogPath)
+	return true, nil
 }
 
 func (s *Service) expirePendingTasks(ctx context.Context) error {
@@ -871,7 +970,7 @@ func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending Pen
 			"original_request": map[string]any{
 				"skill_name":     pending.OriginalSkillName,
 				"repo":           fallbackRepo(pending.Repo),
-				"payload_format": normalizePayloadFormat("", pending.DispatchPayload),
+				"payload_format": normalizePayloadFormat(pending.DispatchPayloadFormat, pending.DispatchPayload),
 				"payload":        originalRequest,
 			},
 		}
@@ -975,28 +1074,30 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 	if payload != nil {
 		outboundPayload = payload
 	}
+	payloadFormat := normalizePayloadFormat(req.PayloadFormat, outboundPayload)
 	task := PendingTask{
-		ID:                taskID,
-		ParentRequestID:   req.RequestID,
-		ChildRequestID:    childRequestID,
-		OriginalSkillName: req.SkillName,
-		TargetAgentUUID:   target.AgentUUID,
-		TargetAgentURI:    target.AgentURI,
-		CallerAgentUUID:   callerAgentUUID,
-		CallerAgentURI:    callerAgentURI,
-		CallerRequestID:   req.RequestID,
-		Repo:              req.Repo,
-		LogPath:           logPath,
-		CreatedAt:         now,
-		ExpiresAt:         now.Add(timeout),
-		DispatchPayload:   payload,
+		ID:                    taskID,
+		ParentRequestID:       req.RequestID,
+		ChildRequestID:        childRequestID,
+		OriginalSkillName:     req.SkillName,
+		TargetAgentUUID:       target.AgentUUID,
+		TargetAgentURI:        target.AgentURI,
+		CallerAgentUUID:       callerAgentUUID,
+		CallerAgentURI:        callerAgentURI,
+		CallerRequestID:       req.RequestID,
+		Repo:                  req.Repo,
+		LogPath:               logPath,
+		CreatedAt:             now,
+		ExpiresAt:             now.Add(timeout),
+		DispatchPayload:       payload,
+		DispatchPayloadFormat: payloadFormat,
 	}
 
 	message := newSkillRequestMessage(
 		now,
 		req.SkillName,
 		outboundPayload,
-		normalizePayloadFormat(req.PayloadFormat, outboundPayload),
+		payloadFormat,
 		childRequestID,
 		req.RequestID,
 	)

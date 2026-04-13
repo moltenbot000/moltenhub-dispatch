@@ -42,9 +42,10 @@ Dispatch activation accepts the generic OpenClaw `input` envelope as well as `pa
 When a dispatched task fails, the app does all of the following:
 
 1. Writes task lifecycle details to a local log file under `.moltenhub/logs/` by default.
-2. Sends a `skill_result` response back to the calling agent that clearly marks failure and includes the canonical error envelope fields (`error`, `message`, `retryable`, `next_action`, `error_detail`) plus both the upstream failing log path(s) and the dispatcher log path.
-3. Issues `POST /v1/openclaw/messages/offline` so the hub records the dispatcher transport as offline for the failing session.
-4. Queues a remediation follow-up task with this run config payload shape:
+2. For downstream execution failures (`skill_result` with failed status), retries the original task one time before final failure handling.
+3. Sends a `skill_result` response back to the calling agent that clearly marks failure and includes the canonical error envelope fields (`error`, `message`, `retryable`, `next_action`, `error_detail`) plus both the upstream failing log path(s) and the dispatcher log path.
+4. Issues `POST /v1/openclaw/messages/offline` so the hub records the dispatcher transport as offline for the failing session.
+5. Queues a remediation follow-up task with this run config payload shape:
 
 ```json
 {

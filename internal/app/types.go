@@ -94,20 +94,22 @@ type FlashMessage struct {
 }
 
 type PendingTask struct {
-	ID                string         `json:"id"`
-	ParentRequestID   string         `json:"parent_request_id"`
-	ChildRequestID    string         `json:"child_request_id"`
-	OriginalSkillName string         `json:"original_skill_name"`
-	TargetAgentUUID   string         `json:"target_agent_uuid"`
-	TargetAgentURI    string         `json:"target_agent_uri"`
-	CallerAgentUUID   string         `json:"caller_agent_uuid"`
-	CallerAgentURI    string         `json:"caller_agent_uri"`
-	CallerRequestID   string         `json:"caller_request_id"`
-	Repo              string         `json:"repo"`
-	LogPath           string         `json:"log_path"`
-	CreatedAt         time.Time      `json:"created_at"`
-	ExpiresAt         time.Time      `json:"expires_at"`
-	DispatchPayload   map[string]any `json:"dispatch_payload"`
+	ID                    string         `json:"id"`
+	ParentRequestID       string         `json:"parent_request_id"`
+	ChildRequestID        string         `json:"child_request_id"`
+	OriginalSkillName     string         `json:"original_skill_name"`
+	TargetAgentUUID       string         `json:"target_agent_uuid"`
+	TargetAgentURI        string         `json:"target_agent_uri"`
+	CallerAgentUUID       string         `json:"caller_agent_uuid"`
+	CallerAgentURI        string         `json:"caller_agent_uri"`
+	CallerRequestID       string         `json:"caller_request_id"`
+	Repo                  string         `json:"repo"`
+	LogPath               string         `json:"log_path"`
+	CreatedAt             time.Time      `json:"created_at"`
+	ExpiresAt             time.Time      `json:"expires_at"`
+	DispatchPayload       map[string]any `json:"dispatch_payload"`
+	DispatchPayloadFormat string         `json:"dispatch_payload_format"`
+	ExecutionRetryCount   int            `json:"execution_retry_count"`
 }
 
 type FollowUpRunConfig struct {

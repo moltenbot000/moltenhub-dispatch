@@ -1138,20 +1138,20 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 			Settings: app.DefaultSettings(),
 			RecentEvents: []app.RuntimeEvent{
 				{
-					Title:  "Task dispatched",
-					Level:  "info",
-					Detail: "Queued code_for_me for moltenbot/jef/codex-beast",
-					TaskID: "task-123",
+					Title:   "Task dispatched",
+					Level:   "info",
+					Detail:  "Queued code_for_me for moltenbot/jef/codex-beast",
+					TaskID:  "task-123",
 					LogPath: ".moltenhub/logs/task-123.log",
-					At:     time.Unix(1, 0).UTC(),
+					At:      time.Unix(1, 0).UTC(),
 				},
 				{
-					Title:  "Dispatch failed",
-					Level:  "error",
-					Detail: "worker panic: boom",
-					TaskID: "task-456",
+					Title:   "Dispatch failed",
+					Level:   "error",
+					Detail:  "worker panic: boom",
+					TaskID:  "task-456",
 					LogPath: ".moltenhub/logs/task-456.log",
-					At:     time.Unix(2, 0).UTC(),
+					At:      time.Unix(2, 0).UTC(),
 				},
 			},
 		},
@@ -1191,6 +1191,58 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	}
 	if !strings.Contains(body, `initRuntimeEventCards();`) {
 		t.Fatalf("expected runtime event toggle initialization on page load, body=%s", body)
+	}
+}
+
+func TestHandleIndexKeepsQueuedFollowUpsClosedByDefault(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			FollowUpTasks: []app.FollowUpTask{
+				{
+					ID:           "followup-1",
+					Status:       "queued",
+					FailedTaskID: "task-1",
+					FailedRepo:   "git@github.com:Molten-Bot/moltenhub-code.git",
+					LogPaths:     []string{".moltenhub/logs/task-1.log"},
+					RunConfig: app.FollowUpRunConfig{
+						Repos:        []string{"git@github.com:Molten-Bot/moltenhub-code.git"},
+						BaseBranch:   "main",
+						TargetSubdir: ".",
+						Prompt:       "Review the failing log paths first.",
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(body, ">Queued Follow-Ups<") {
+		t.Fatalf("expected queued follow-up panel, body=%s", body)
+	}
+	if !strings.Contains(body, `class="card runtime-event-card" data-runtime-event-card`) {
+		t.Fatalf("expected follow-up cards to use collapsible card class, body=%s", body)
+	}
+	if !strings.Contains(body, `data-runtime-event-toggle aria-expanded="false">Open</button>`) {
+		t.Fatalf("expected follow-up toggle to render closed by default, body=%s", body)
+	}
+	if !strings.Contains(body, `class="runtime-event-card-body" data-runtime-event-body hidden`) {
+		t.Fatalf("expected follow-up body to render hidden by default, body=%s", body)
+	}
+	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
+		t.Fatalf("expected follow-up toggles to render closed by default, body=%s", body)
 	}
 }
 

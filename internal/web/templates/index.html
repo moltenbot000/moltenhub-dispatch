@@ -149,16 +149,21 @@
           {{if .State.FollowUpTasks}}
           <div class="list">
             {{range .State.FollowUpTasks}}
-            <article class="card">
-              <h3>{{.ID}}</h3>
-              <p><strong>Status:</strong> {{.Status}}</p>
-              <p><strong>Failed task:</strong> {{.FailedTaskID}}</p>
-              <p><strong>Repo:</strong> {{.FailedRepo}}</p>
-              <p><strong>Log paths:</strong></p>
-              <pre>{{toJSON .LogPaths}}</pre>
-              <p><strong>Run config:</strong></p>
-              <pre>{{toJSON .RunConfig}}</pre>
-              {{if .LastDispatchErr}}<p><strong>Dispatch error:</strong> {{.LastDispatchErr}}</p>{{end}}
+            <article class="card runtime-event-card" data-runtime-event-card>
+              <div class="runtime-event-card-header">
+                <h3>{{.ID}}</h3>
+                <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
+              </div>
+              <div class="runtime-event-card-body" data-runtime-event-body hidden>
+                <p><strong>Status:</strong> {{.Status}}</p>
+                <p><strong>Failed task:</strong> {{.FailedTaskID}}</p>
+                <p><strong>Repo:</strong> {{.FailedRepo}}</p>
+                <p><strong>Log paths:</strong></p>
+                <pre>{{toJSON .LogPaths}}</pre>
+                <p><strong>Run config:</strong></p>
+                <pre>{{toJSON .RunConfig}}</pre>
+                {{if .LastDispatchErr}}<p><strong>Dispatch error:</strong> {{.LastDispatchErr}}</p>{{end}}
+              </div>
             </article>
             {{end}}
           </div>
