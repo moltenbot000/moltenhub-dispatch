@@ -2493,6 +2493,9 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `id="skill-name-select" name="skill_name"`) {
 		t.Fatalf("expected skill-name dropdown in manual dispatch form, body=%s", body)
 	}
+	if strings.Contains(body, "Select a target first. Skills load from the chosen agent's Hub capabilities.") {
+		t.Fatalf("did not expect removed dispatch helper copy, body=%s", body)
+	}
 	if strings.Contains(body, `name="skill_name" placeholder="Optional when the target agent has a default skill"`) {
 		t.Fatalf("did not expect deprecated freeform skill input, body=%s", body)
 	}

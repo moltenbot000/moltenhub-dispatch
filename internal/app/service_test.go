@@ -1092,8 +1092,8 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureWithoutFollowUp(t *t
 	if failurePayload["next_action"] != "" {
 		t.Fatalf("expected empty next_action, got %#v", failurePayload["next_action"])
 	}
-	if got := fake.publishCalls[0].Message.ErrorDetail.(map[string]any)["message"]; got != "Task dispatch failed before it reached a connected agent." {
-		t.Fatalf("unexpected caller error detail payload: %#v", fake.publishCalls[0].Message.ErrorDetail)
+	if got := fake.publishCalls[0].Message.ErrorDetail; got != "no connected agent matched \"missing-agent\"" {
+		t.Fatalf("unexpected caller error detail: %#v", fake.publishCalls[0].Message.ErrorDetail)
 	}
 	if got := fake.publishCalls[0].Message.Error; got != "Task dispatch failed before it reached a connected agent. Error: no connected agent matched \"missing-agent\"" {
 		t.Fatalf("unexpected caller failure summary: %#v", got)
@@ -1207,8 +1207,9 @@ func TestHandleDownstreamFailureSendsDetailedFailureWithoutFollowUp(t *testing.T
 	if got := failurePayload["error_detail"].(map[string]any)["stderr"]; got != "panic: boom" {
 		t.Fatalf("unexpected caller failure detail: %#v", failurePayload["error_detail"])
 	}
-	if got := failureMessage.ErrorDetail.(map[string]any)["status"]; got != "failed" {
-		t.Fatalf("unexpected caller error detail envelope: %#v", failureMessage.ErrorDetail)
+	errorDetail, ok := failureMessage.ErrorDetail.(map[string]any)
+	if !ok || errorDetail["stderr"] != "panic: boom" {
+		t.Fatalf("unexpected caller error detail: %#v", failureMessage.ErrorDetail)
 	}
 
 	state := service.store.Snapshot()
@@ -1420,6 +1421,9 @@ func TestHandleDownstreamPlaintextRunnerFailureReturnsErrorDetailsWithoutFollowU
 	}
 	if errorDetails, ok := failurePayload["error_details"].(string); !ok || !strings.Contains(errorDetails, "githubstatus.com") {
 		t.Fatalf("expected caller error_details to include network diagnostic, got %#v", failurePayload["error_details"])
+	}
+	if detail, ok := fake.publishCalls[0].Message.ErrorDetail.(string); !ok || !strings.Contains(detail, "githubstatus.com") {
+		t.Fatalf("expected caller top-level error detail to include network diagnostic, got %#v", fake.publishCalls[0].Message.ErrorDetail)
 	}
 
 	if len(fake.offlineCalls) != 1 {

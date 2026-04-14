@@ -925,6 +925,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 	}
 
 	failurePayload := callerFailurePayload(report, logPaths)
+	errorDetail := failurePayload["error_detail"]
 
 	message := hub.OpenClawMessage{
 		Protocol:      openClawHTTPProtocol,
@@ -936,7 +937,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		PayloadFormat: "json",
 		Payload:       failurePayload,
 		Error:         callerFailureError(report),
-		ErrorDetail:   failurePayload,
+		ErrorDetail:   errorDetail,
 		OK:            boolPtr(false),
 		Status:        "failed",
 	}
