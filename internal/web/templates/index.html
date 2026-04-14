@@ -161,7 +161,6 @@
             <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
             <fieldset class="manual-dispatch-target-fieldset">
               <legend>Agents</legend>
-              <p class="manual-dispatch-field-copy">Pick the worker that should receive this task. Dispatch keeps the selection synced when the connected-agent list refreshes.</p>
               <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid">
               {{range .State.ConnectedAgents}}
               {{$displayName := connectedAgentDisplayName .}}
