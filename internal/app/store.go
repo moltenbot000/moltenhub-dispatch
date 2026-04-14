@@ -172,20 +172,6 @@ func FindConnectedAgent(agents []ConnectedAgent, ref string) (ConnectedAgent, bo
 	return ConnectedAgent{}, false
 }
 
-func SelectFailureReviewer(state AppState) (ConnectedAgent, bool) {
-	for _, agent := range state.ConnectedAgents {
-		if connectedAgentPresenceStatus(agent) == "online" && connectedAgentSupportsSkill(agent, failureReviewSkillName) {
-			return agent, true
-		}
-	}
-	for _, agent := range state.ConnectedAgents {
-		if connectedAgentSupportsSkill(agent, failureReviewSkillName) {
-			return agent, true
-		}
-	}
-	return ConnectedAgent{}, false
-}
-
 func AddOrReplaceConnectedAgent(agents []ConnectedAgent, next ConnectedAgent) []ConnectedAgent {
 	nextKey := connectedAgentIdentityKey(next)
 	if nextKey == "" {
@@ -218,29 +204,6 @@ func FindPendingTask(tasks []PendingTask, childRequestID string) (PendingTask, b
 		}
 	}
 	return PendingTask{}, false
-}
-
-func FindFollowUpTaskByFailedTaskID(tasks []FollowUpTask, failedTaskID string) (FollowUpTask, bool) {
-	failedTaskID = strings.TrimSpace(failedTaskID)
-	if failedTaskID == "" {
-		return FollowUpTask{}, false
-	}
-	for _, task := range tasks {
-		if task.FailedTaskID == failedTaskID {
-			return task, true
-		}
-	}
-	return FollowUpTask{}, false
-}
-
-func UpsertFollowUpTask(tasks []FollowUpTask, next FollowUpTask) []FollowUpTask {
-	for i, task := range tasks {
-		if task.ID == next.ID {
-			tasks[i] = next
-			return tasks
-		}
-	}
-	return append(tasks, next)
 }
 
 func NewID(prefix string) string {

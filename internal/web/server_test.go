@@ -34,6 +34,8 @@ type stubService struct {
 	lastFlashMessage  string
 }
 
+const testDispatchPrompt = "Review the Hub API integration behavior."
+
 func (s *stubService) Snapshot() app.AppState {
 	return s.state
 }
@@ -648,7 +650,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-overview-close"`) {
 		t.Fatalf("expected dismiss button for dispatch overview, body=%s", body)
 	}
-	if !strings.Contains(body, ">Connected Agents<") || !strings.Contains(body, ">Queued Follow-Ups<") || !strings.Contains(body, ">Recent Events<") {
+	if !strings.Contains(body, ">Connected Agents<") || !strings.Contains(body, ">Pending Tasks<") || !strings.Contains(body, ">Recent Events<") {
 		t.Fatalf("expected overview stat labels for dispatch state, body=%s", body)
 	}
 	if strings.Contains(body, `name="bind_token"`) {
@@ -738,7 +740,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
 		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
 	}
-	if !strings.Contains(body, `placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours."`) {
+	if !strings.Contains(body, `placeholder="Describe the task or paste a JSON payload."`) {
 		t.Fatalf("expected manual dispatch payload placeholder example, body=%s", body)
 	}
 	if strings.Contains(body, `data-skill-payload-format-toggle`) {
@@ -932,7 +934,7 @@ func TestHandleDispatchAPIAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 
-	form := "selectedAgentRef=worker-a&selectedSkill=code_for_me&payload_format=text&payload=Issue+an+offline+to+moltenbot+hub"
+	form := "selectedAgentRef=worker-a&selectedSkill=code_for_me&payload_format=text&payload=Review+the+Hub+API+integration+behavior."
 	req := httptest.NewRequest(http.MethodPost, "/api/dispatch", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -951,7 +953,7 @@ func TestHandleDispatchAPIAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
 	if got := stub.lastDispatchReq.PayloadFormat; got != "markdown" {
 		t.Fatalf("expected payload format markdown, got %#v", stub.lastDispatchReq)
 	}
-	if got := stub.lastDispatchReq.Payload; got != "Issue an offline to moltenbot hub" {
+	if got := stub.lastDispatchReq.Payload; got != testDispatchPrompt {
 		t.Fatalf("unexpected payload value: %#v", stub.lastDispatchReq.Payload)
 	}
 }
@@ -972,7 +974,7 @@ func TestHandleDispatchAPIAcceptsMultipartFormData(t *testing.T) {
 	for key, value := range map[string]string{
 		"target_agent_ref": "worker-a",
 		"skill_name":       "code_for_me",
-		"payload":          "{\"repos\":[\"git@github.com:Molten-Bot/moltenhub-dispatch.git\"],\"prompt\":\"Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.\"}",
+		"payload":          "{\"repos\":[\"git@github.com:Molten-Bot/moltenhub-dispatch.git\"],\"prompt\":\"Review the Hub API integration behavior.\"}",
 	} {
 		if err := writer.WriteField(key, value); err != nil {
 			t.Fatalf("write multipart field %q: %v", key, err)
@@ -1004,7 +1006,7 @@ func TestHandleDispatchAPIAcceptsMultipartFormData(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected JSON payload map, got %T", stub.lastDispatchReq.Payload)
 	}
-	if got := payload["prompt"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
+	if got := payload["prompt"]; got != testDispatchPrompt {
 		t.Fatalf("unexpected prompt payload: %#v", payload)
 	}
 }
@@ -1020,7 +1022,7 @@ func TestHandleDispatchMapsTextPayloadFormatAliasToMarkdown(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 
-	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=text&payload=Issue+an+offline+to+moltenbot+hub"
+	form := "target_agent_ref=worker-a&skill_name=run_task&payload_format=text&payload=Review+the+Hub+API+integration+behavior."
 	req := httptest.NewRequest(http.MethodPost, "/dispatch", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -1033,7 +1035,7 @@ func TestHandleDispatchMapsTextPayloadFormatAliasToMarkdown(t *testing.T) {
 	if got := stub.lastDispatchReq.PayloadFormat; got != "markdown" {
 		t.Fatalf("expected payload format markdown, got %#v", got)
 	}
-	if got := stub.lastDispatchReq.Payload; got != "Issue an offline to moltenbot hub" {
+	if got := stub.lastDispatchReq.Payload; got != testDispatchPrompt {
 		t.Fatalf("unexpected payload value: %#v", got)
 	}
 }
@@ -1352,7 +1354,7 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	}
 }
 
-func TestHandleIndexOmitsPendingTasksPanelFromMainUI(t *testing.T) {
+func TestHandleIndexRendersPendingTasksPanelInMainUI(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
@@ -1388,14 +1390,11 @@ func TestHandleIndexOmitsPendingTasksPanelFromMainUI(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 response, got %d", rec.Code)
 	}
-	if strings.Contains(body, ">Pending Tasks<") {
-		t.Fatalf("did not expect pending tasks panel in main UI, body=%s", body)
+	if !strings.Contains(body, ">Pending Tasks<") {
+		t.Fatalf("expected pending tasks panel in main UI, body=%s", body)
 	}
-	if strings.Contains(body, "No tasks are waiting on downstream results.") {
-		t.Fatalf("did not expect pending tasks empty state in main UI, body=%s", body)
-	}
-	if !strings.Contains(body, ">Queued Follow-Ups<") {
-		t.Fatalf("expected follow-up panel to remain visible, body=%s", body)
+	if strings.Contains(body, ">Queued Follow-Ups<") {
+		t.Fatalf("did not expect queued follow-up panel in main UI, body=%s", body)
 	}
 }
 
@@ -1575,25 +1574,21 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	}
 }
 
-func TestHandleIndexKeepsQueuedFollowUpsClosedByDefault(t *testing.T) {
+func TestHandleIndexKeepsPendingTasksClosedByDefault(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
-			FollowUpTasks: []app.FollowUpTask{
+			PendingTasks: []app.PendingTask{
 				{
-					ID:           "followup-1",
-					Status:       "queued",
-					FailedTaskID: "task-1",
-					FailedRepo:   "git@github.com:Molten-Bot/moltenhub-code.git",
-					LogPaths:     []string{".moltenhub/logs/task-1.log"},
-					RunConfig: app.FollowUpRunConfig{
-						Repos:        []string{"git@github.com:Molten-Bot/moltenhub-code.git"},
-						BaseBranch:   "main",
-						TargetSubdir: ".",
-						Prompt:       "Review the failing log paths first.",
-					},
+					ID:                "task-1",
+					OriginalSkillName: "run_task",
+					ChildRequestID:    "child-1",
+					TargetAgentUUID:   "worker-uuid",
+					Repo:              "git@github.com:Molten-Bot/moltenhub-code.git",
+					LogPath:           ".moltenhub/logs/task-1.log",
+					ExpiresAt:         time.Now().Add(time.Minute),
 				},
 			},
 		},
@@ -1610,20 +1605,20 @@ func TestHandleIndexKeepsQueuedFollowUpsClosedByDefault(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 response, got %d", rec.Code)
 	}
-	if !strings.Contains(body, ">Queued Follow-Ups<") {
-		t.Fatalf("expected queued follow-up panel, body=%s", body)
+	if !strings.Contains(body, ">Pending Tasks<") {
+		t.Fatalf("expected pending tasks panel, body=%s", body)
 	}
 	if !strings.Contains(body, `class="card runtime-event-card" data-runtime-event-card`) {
-		t.Fatalf("expected follow-up cards to use collapsible card class, body=%s", body)
+		t.Fatalf("expected pending task cards to use collapsible card class, body=%s", body)
 	}
 	if !strings.Contains(body, `data-runtime-event-toggle aria-expanded="false">Open</button>`) {
-		t.Fatalf("expected follow-up toggle to render closed by default, body=%s", body)
+		t.Fatalf("expected pending task toggle to render closed by default, body=%s", body)
 	}
 	if !strings.Contains(body, `class="runtime-event-card-body" data-runtime-event-body hidden`) {
-		t.Fatalf("expected follow-up body to render hidden by default, body=%s", body)
+		t.Fatalf("expected pending task body to render hidden by default, body=%s", body)
 	}
 	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
-		t.Fatalf("expected follow-up toggles to render closed by default, body=%s", body)
+		t.Fatalf("expected pending task toggles to render closed by default, body=%s", body)
 	}
 }
 
@@ -1884,7 +1879,7 @@ func TestHandleIndexUsesBioPlaceholderWithoutPrefilledDefaultText(t *testing.T) 
 	if !strings.Contains(body, `placeholder="Please write the bio of your agent..."`) {
 		t.Fatalf("expected bio placeholder hint text, body=%s", body)
 	}
-	if strings.Contains(body, "Dispatches skill requests to connected agents and reports failures with follow-up remediation tasks.") {
+	if strings.Contains(body, "Dispatches skill requests to connected agents and proxies results back to you.") {
 		t.Fatalf("did not expect default bio sentence to be prefilled, body=%s", body)
 	}
 }
@@ -2419,7 +2414,7 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 					"dispatcher-uuid",
 					"molten://agent/dispatcher",
 					app.Skill{Name: "dispatch_skill_request", Description: "Dispatch a task."},
-					app.Skill{Name: "review_failure_logs", Description: "Review logs."},
+					app.Skill{Name: "run_task", Description: "Run a task."},
 				),
 			},
 		},
@@ -2614,7 +2609,7 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 						Emoji:       "🧪",
 						AdvertisedSkills: []map[string]any{
 							{"name": "review_openapi", "description": "Review Hub API integration behavior."},
-							{"name": "review_failure_logs", "description": "Review failing logs."},
+							{"name": "run_task", "description": "Run a task."},
 						},
 						Presence: &hub.AgentPresence{Status: "online"},
 					},
@@ -2640,7 +2635,7 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	if !strings.Contains(body, ">Online<") {
 		t.Fatalf("expected hub presence badge to render online status, body=%s", body)
 	}
-	if !strings.Contains(body, ">review_openapi<") || !strings.Contains(body, ">review_failure_logs<") {
+	if !strings.Contains(body, ">review_openapi<") || !strings.Contains(body, ">run_task<") {
 		t.Fatalf("expected hub advertised skills to render on the agent card, body=%s", body)
 	}
 	if strings.Contains(body, ">8d9add87-10b1-4ee4-a138-acde48001122<") {

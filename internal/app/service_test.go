@@ -202,24 +202,7 @@ func testConnectedAgent(agentID, displayName, agentUUID string, skills ...Skill)
 	return agent
 }
 
-func reviewerConnectedAgent() ConnectedAgent {
-	return ConnectedAgent{
-		AgentID:   "reviewer",
-		Handle:    "reviewer",
-		AgentUUID: "reviewer-uuid",
-		Status:    "online",
-		Metadata: &hub.AgentMetadata{
-			DisplayName: "reviewer",
-			Skills: testSkillMetadata(Skill{
-				Name:        failureReviewSkillName,
-				Description: "Review logs",
-			}),
-			Presence: &hub.AgentPresence{
-				Status: "online",
-			},
-		},
-	}
-}
+const testDispatchPrompt = "Review the Hub API integration behavior."
 
 func testSkillMetadata(skills ...Skill) []map[string]any {
 	if len(skills) == 0 {
@@ -276,10 +259,10 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected skills type: %T", fake.updateMetadataCalls[0].Metadata["skills"])
 	}
-	if len(skills) != 2 {
-		t.Fatalf("expected 2 advertised skills, got %d", len(skills))
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 advertised skill, got %d", len(skills))
 	}
-	if skills[0].Name != dispatchSkillName || skills[1].Name != failureReviewSkillName {
+	if skills[0].Name != dispatchSkillName {
 		t.Fatalf("unexpected advertised skills: %#v", skills)
 	}
 	if _, ok := fake.updateMetadataCalls[0].Metadata["llm"]; ok {
@@ -1042,7 +1025,7 @@ func TestUpdateAgentProfileDerivesRuntimeAPIBaseFromPersistedEndpointAfterRestar
 	}
 }
 
-func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t *testing.T) {
+func TestHandleDispatchResolutionFailureSendsDetailedFailureWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1050,7 +1033,6 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		return nil
 	})
 	if err != nil {
@@ -1070,7 +1052,7 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 				"repo":              "/tmp/repo",
 				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
 				"payload": map[string]any{
-					"input": "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input": testDispatchPrompt,
 				},
 				"payload_format": "json",
 			},
@@ -1081,8 +1063,8 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 		t.Fatalf("handle inbound message: %v", err)
 	}
 
-	if len(fake.publishCalls) != 2 {
-		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected caller failure publish only, got %d", len(fake.publishCalls))
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
@@ -1120,22 +1102,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureAndQueuesFollowUp(t 
 		t.Fatalf("unexpected caller failure reply_to_request_id: %q", got)
 	}
 
-	state := service.store.Snapshot()
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
-	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
-		t.Fatalf("unexpected run config repos: %#v", got)
-	}
-	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
-		t.Fatalf("unexpected follow-up log paths: %#v", got)
-	}
-	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
-		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
-	}
 }
 
-func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing.T) {
+func TestHandleDownstreamFailureSendsDetailedFailureWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1143,7 +1112,6 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                  "task-1",
@@ -1160,7 +1128,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log", "/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input":     testDispatchPrompt,
 				},
 			},
 		}
@@ -1194,8 +1162,8 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 		t.Fatalf("handle inbound message: %v", err)
 	}
 
-	if len(fake.publishCalls) != 2 {
-		t.Fatalf("expected caller failure + follow-up publish, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected caller failure publish only, got %d", len(fake.publishCalls))
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
@@ -1240,55 +1208,13 @@ func TestHandleDownstreamFailureSendsDetailedFailureAndQueuesFollowUp(t *testing
 		t.Fatalf("unexpected caller error detail envelope: %#v", failureMessage.ErrorDetail)
 	}
 
-	followUpMessage := fake.publishCalls[1].Message
-	if followUpMessage.SkillName != failureReviewSkillName {
-		t.Fatalf("unexpected follow-up skill: %s", followUpMessage.SkillName)
-	}
-
 	state := service.store.Snapshot()
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
-	}
 	if len(state.PendingTasks) != 0 {
 		t.Fatalf("expected task to be cleared, got %d pending", len(state.PendingTasks))
 	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
-		t.Fatalf("unexpected run config repos: %#v", got)
-	}
-	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" || got[1] != filepath.Join(service.settings.DataDir, "logs", "task-1.log") {
-		t.Fatalf("unexpected follow-up log paths: %#v", got)
-	}
-	if got := state.FollowUpTasks[0].OriginalRequest["input"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
-		t.Fatalf("unexpected follow-up original request: %#v", state.FollowUpTasks[0].OriginalRequest)
-	}
-
-	payload, ok := followUpMessage.Payload.(map[string]any)
-	if !ok {
-		t.Fatalf("unexpected follow-up payload type: %T", followUpMessage.Payload)
-	}
-	if got := payload["log_paths"].([]string); len(got) != 2 || got[0] != "/tmp/original.log" {
-		t.Fatalf("unexpected published follow-up log paths: %#v", payload["log_paths"])
-	}
-	failureContext, ok := payload["failure"].(map[string]any)
-	if !ok {
-		t.Fatalf("unexpected follow-up failure payload type: %T", payload["failure"])
-	}
-	if got := failureContext["error_detail"].(map[string]any)["stderr"]; got != "panic: boom" {
-		t.Fatalf("unexpected published follow-up failure detail: %#v", failureContext["error_detail"])
-	}
-	originalRequest, ok := payload["original_request"].(map[string]any)
-	if !ok {
-		t.Fatalf("unexpected original_request payload type: %T", payload["original_request"])
-	}
-	if originalRequest["skill_name"] != "run_task" {
-		t.Fatalf("unexpected original_request skill: %#v", originalRequest)
-	}
-	if originalRequest["repo"] != "/tmp/repo" {
-		t.Fatalf("unexpected original_request repo: %#v", originalRequest)
-	}
 }
 
-func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing.T) {
+func TestHandleDownstreamFailureFinalizesImmediately(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1296,7 +1222,6 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
@@ -1313,7 +1238,7 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input":     testDispatchPrompt,
 				},
 			},
 		}
@@ -1339,72 +1264,26 @@ func TestHandleDownstreamFailureRetriesOnceBeforeFinalFailureHandling(t *testing
 	}
 
 	if err := service.handleInboundMessage(context.Background(), firstFailure); err != nil {
-		t.Fatalf("first inbound failure should trigger retry: %v", err)
+		t.Fatalf("first inbound failure should finalize task failure: %v", err)
 	}
 
-	if len(fake.publishCalls) != 2 {
-		t.Fatalf("expected retry publish plus follow-up publish after first failure, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected caller failure publish only, got %d", len(fake.publishCalls))
 	}
-	if got := fake.publishCalls[0].Message.Type; got != "skill_request" {
-		t.Fatalf("expected retry publish to be a skill_request, got %q", got)
+	if got := fake.publishCalls[0].Message.Type; got != "skill_result" {
+		t.Fatalf("expected caller failure publish, got %q", got)
 	}
-	if got := fake.publishCalls[1].Message.SkillName; got != failureReviewSkillName {
-		t.Fatalf("expected first failure to queue a follow-up publish, got %q", got)
-	}
-	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
-		t.Fatalf("unexpected retry target: %#v", fake.publishCalls[0])
-	}
-	if got := fake.publishCalls[0].Message.RequestID; got == "child-req" || got == "" {
-		t.Fatalf("expected retry request id to rotate, got %q", got)
-	}
-	if len(fake.offlineCalls) != 0 {
-		t.Fatalf("expected no offline call after first failure retry, got %d", len(fake.offlineCalls))
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call after failure, got %d", len(fake.offlineCalls))
 	}
 
 	state := service.store.Snapshot()
-	if len(state.PendingTasks) != 1 {
-		t.Fatalf("expected task to remain pending after retry dispatch, got %d pending", len(state.PendingTasks))
-	}
-	retried := state.PendingTasks[0]
-	if retried.ExecutionRetryCount != 1 {
-		t.Fatalf("expected retry counter to increment, got %#v", retried)
-	}
-	if retried.ChildRequestID == "child-req" {
-		t.Fatalf("expected pending task child request id to rotate, got %#v", retried)
-	}
-	if retried.ChildRequestID != fake.publishCalls[0].Message.RequestID {
-		t.Fatalf("expected pending retry request id %q, got %q", fake.publishCalls[0].Message.RequestID, retried.ChildRequestID)
-	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected one follow-up queued after first failure retry, got %d", len(state.FollowUpTasks))
-	}
-
-	secondFailure := firstFailure
-	secondFailure.OpenClawMessage.RequestID = retried.ChildRequestID
-	if err := service.handleInboundMessage(context.Background(), secondFailure); err != nil {
-		t.Fatalf("second inbound failure should finalize task failure: %v", err)
-	}
-
-	if len(fake.publishCalls) != 3 {
-		t.Fatalf("expected retry publish + first-failure follow-up + caller failure, got %d", len(fake.publishCalls))
-	}
-	if got := fake.publishCalls[2].Message.Type; got != "skill_result" {
-		t.Fatalf("expected caller failure publish on second failure, got %q", got)
-	}
-	if len(fake.offlineCalls) != 1 {
-		t.Fatalf("expected one offline call after final failure, got %d", len(fake.offlineCalls))
-	}
-
-	state = service.store.Snapshot()
 	if len(state.PendingTasks) != 0 {
-		t.Fatalf("expected pending task to clear after final failure handling, got %d", len(state.PendingTasks))
-	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected one follow-up after final failure handling, got %d", len(state.FollowUpTasks))
+		t.Fatalf("expected pending task to clear after failure handling, got %d", len(state.PendingTasks))
 	}
 }
 
-func TestExpirePendingTasksRetriesOnceBeforeFinalTimeoutFailureHandling(t *testing.T) {
+func TestExpirePendingTasksFinalizesTimedOutTaskImmediately(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1412,7 +1291,6 @@ func TestExpirePendingTasksRetriesOnceBeforeFinalTimeoutFailureHandling(t *testi
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
@@ -1429,7 +1307,7 @@ func TestExpirePendingTasksRetriesOnceBeforeFinalTimeoutFailureHandling(t *testi
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input":     testDispatchPrompt,
 				},
 			},
 		}
@@ -1440,76 +1318,26 @@ func TestExpirePendingTasksRetriesOnceBeforeFinalTimeoutFailureHandling(t *testi
 	}
 
 	if err := service.expirePendingTasks(context.Background()); err != nil {
-		t.Fatalf("first timeout should trigger retry: %v", err)
+		t.Fatalf("timeout should finalize task failure: %v", err)
 	}
 
-	if len(fake.publishCalls) != 2 {
-		t.Fatalf("expected retry publish plus follow-up publish after first timeout, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected caller timeout failure publish only, got %d", len(fake.publishCalls))
 	}
-	if got := fake.publishCalls[0].Message.Type; got != "skill_request" {
-		t.Fatalf("expected retry publish to be a skill_request, got %q", got)
+	if got := fake.publishCalls[0].Message.Type; got != "skill_result" {
+		t.Fatalf("expected caller timeout failure publish, got %q", got)
 	}
-	if got := fake.publishCalls[1].Message.SkillName; got != failureReviewSkillName {
-		t.Fatalf("expected timeout retry to queue a follow-up publish, got %q", got)
-	}
-	if len(fake.offlineCalls) != 0 {
-		t.Fatalf("expected no offline call after first timeout retry, got %d", len(fake.offlineCalls))
+	if len(fake.offlineCalls) != 1 {
+		t.Fatalf("expected one offline call after timeout failure, got %d", len(fake.offlineCalls))
 	}
 
 	state := service.store.Snapshot()
-	if len(state.PendingTasks) != 1 {
-		t.Fatalf("expected task to remain pending after timeout retry, got %d pending", len(state.PendingTasks))
-	}
-	retried := state.PendingTasks[0]
-	if retried.ExecutionRetryCount != 1 {
-		t.Fatalf("expected retry counter to increment after timeout retry, got %#v", retried)
-	}
-	if retried.ChildRequestID == "child-req" {
-		t.Fatalf("expected retry to rotate child request id, got %#v", retried)
-	}
-	if retried.ChildRequestID != fake.publishCalls[0].Message.RequestID {
-		t.Fatalf("expected pending retry request id %q, got %q", fake.publishCalls[0].Message.RequestID, retried.ChildRequestID)
-	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected one follow-up queued after first timeout retry, got %d", len(state.FollowUpTasks))
-	}
-
-	err = service.store.Update(func(state *AppState) error {
-		if len(state.PendingTasks) != 1 {
-			return errors.New("expected retried task to remain pending")
-		}
-		state.PendingTasks[0].CreatedAt = time.Now().Add(-2 * time.Minute)
-		state.PendingTasks[0].ExpiresAt = time.Now().Add(-time.Minute)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("expire retried task: %v", err)
-	}
-
-	if err := service.expirePendingTasks(context.Background()); err != nil {
-		t.Fatalf("second timeout should finalize task failure: %v", err)
-	}
-
-	if len(fake.publishCalls) != 3 {
-		t.Fatalf("expected retry publish + first-timeout follow-up + caller timeout failure, got %d", len(fake.publishCalls))
-	}
-	if got := fake.publishCalls[2].Message.Type; got != "skill_result" {
-		t.Fatalf("expected caller failure publish on final timeout, got %q", got)
-	}
-	if len(fake.offlineCalls) != 1 {
-		t.Fatalf("expected one offline call after final timeout failure, got %d", len(fake.offlineCalls))
-	}
-
-	state = service.store.Snapshot()
 	if len(state.PendingTasks) != 0 {
-		t.Fatalf("expected pending task to clear after final timeout failure, got %d", len(state.PendingTasks))
-	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected one follow-up after final timeout failure, got %d", len(state.FollowUpTasks))
+		t.Fatalf("expected pending task to clear after timeout failure, got %d", len(state.PendingTasks))
 	}
 }
 
-func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDetails(t *testing.T) {
+func TestHandleDownstreamPlaintextRunnerFailureReturnsErrorDetailsWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1517,7 +1345,6 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 		state.Session.AgentToken = "agent-token"
 		state.Session.AgentUUID = "self-uuid"
 		state.Session.AgentURI = "molten://dispatch/self"
-		state.ConnectedAgents = []ConnectedAgent{reviewerConnectedAgent()}
 		state.PendingTasks = []PendingTask{
 			{
 				ID:                "task-1",
@@ -1534,7 +1361,7 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input":     testDispatchPrompt,
 				},
 			},
 		}
@@ -1558,55 +1385,16 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 	}
 
 	if err := service.handleInboundMessage(context.Background(), firstFailure); err != nil {
-		t.Fatalf("first inbound failure should trigger retry: %v", err)
+		t.Fatalf("failure should finalize task failure: %v", err)
 	}
 
-	if len(fake.publishCalls) != 2 {
-		t.Fatalf("expected retry publish plus follow-up publish after first failure, got %d", len(fake.publishCalls))
-	}
-	if got := fake.publishCalls[0].Message.Type; got != "skill_request" {
-		t.Fatalf("expected retry publish to be a skill_request, got %q", got)
-	}
-	if got := fake.publishCalls[1].Message.SkillName; got != failureReviewSkillName {
-		t.Fatalf("expected first failure to queue a follow-up publish, got %q", got)
-	}
-	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
-		t.Fatalf("unexpected retry target: %#v", fake.publishCalls[0])
-	}
-	if len(fake.offlineCalls) != 0 {
-		t.Fatalf("expected no offline call after first failure retry, got %d", len(fake.offlineCalls))
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected caller failure publish only, got %d", len(fake.publishCalls))
 	}
 
-	state := service.store.Snapshot()
-	if len(state.PendingTasks) != 1 {
-		t.Fatalf("expected task to remain pending after retry dispatch, got %d pending", len(state.PendingTasks))
-	}
-	retried := state.PendingTasks[0]
-	if retried.ExecutionRetryCount != 1 {
-		t.Fatalf("expected retry counter to increment, got %#v", retried)
-	}
-	if retried.ChildRequestID == "child-req" {
-		t.Fatalf("expected pending task child request id to rotate, got %#v", retried)
-	}
-	if retried.ChildRequestID != fake.publishCalls[0].Message.RequestID {
-		t.Fatalf("expected pending retry request id %q, got %q", fake.publishCalls[0].Message.RequestID, retried.ChildRequestID)
-	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected one follow-up queued after first failure retry, got %d", len(state.FollowUpTasks))
-	}
-
-	secondFailure := firstFailure
-	secondFailure.OpenClawMessage.RequestID = retried.ChildRequestID
-	if err := service.handleInboundMessage(context.Background(), secondFailure); err != nil {
-		t.Fatalf("second inbound failure should finalize task failure: %v", err)
-	}
-
-	if len(fake.publishCalls) != 3 {
-		t.Fatalf("expected retry publish + first-failure follow-up + caller failure, got %d", len(fake.publishCalls))
-	}
-	failurePayload, ok := fake.publishCalls[2].Message.Payload.(map[string]any)
+	failurePayload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
 	if !ok {
-		t.Fatalf("unexpected caller failure payload type: %T", fake.publishCalls[2].Message.Payload)
+		t.Fatalf("unexpected caller failure payload type: %T", fake.publishCalls[0].Message.Payload)
 	}
 	if got := failurePayload["status"]; got != "failed" {
 		t.Fatalf("unexpected caller failure status: %#v", got)
@@ -1632,16 +1420,13 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
 	}
 
-	state = service.store.Snapshot()
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected one follow-up task, got %d", len(state.FollowUpTasks))
-	}
-	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/original.log" {
-		t.Fatalf("unexpected follow-up log paths: %#v", got)
+	state := service.store.Snapshot()
+	if len(state.PendingTasks) != 0 {
+		t.Fatalf("expected pending task to clear after failure handling, got %d", len(state.PendingTasks))
 	}
 }
 
-func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
+func TestHandleDispatchResolutionFailureReturnsCallerPublishErrorWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1669,7 +1454,7 @@ func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *
 				"repo":              "/tmp/repo",
 				"log_paths":         []string{"/tmp/repo/logs/failure.log"},
 				"payload": map[string]any{
-					"input": "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input": testDispatchPrompt,
 				},
 				"payload_format": "json",
 			},
@@ -1691,19 +1476,9 @@ func TestHandleDispatchResolutionFailureQueuesFollowUpWhenCallerPublishFails(t *
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
 	}
 
-	state := service.store.Snapshot()
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected 1 follow-up task, got %d", len(state.FollowUpTasks))
-	}
-	if state.FollowUpTasks[0].Status != "pending_reviewer" {
-		t.Fatalf("expected pending reviewer follow-up, got %q", state.FollowUpTasks[0].Status)
-	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
-		t.Fatalf("unexpected run config repos: %#v", got)
-	}
 }
 
-func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.T) {
+func TestHandleDownstreamFailureReturnsCallerPublishErrorWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1728,7 +1503,7 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+					"input":     testDispatchPrompt,
 				},
 			},
 		}
@@ -1771,15 +1546,9 @@ func TestHandleDownstreamFailureQueuesFollowUpWhenCallerPublishFails(t *testing.
 	if len(state.PendingTasks) != 0 {
 		t.Fatalf("expected failed task to be cleared after final failure handling, got %d pending", len(state.PendingTasks))
 	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected follow-up task, got %d", len(state.FollowUpTasks))
-	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
-		t.Fatalf("unexpected follow-up repos: %#v", got)
-	}
 }
 
-func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
+func TestDispatchFromUIFailureMarksOfflineWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -1787,7 +1556,6 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	err := service.store.Update(func(state *AppState) error {
 		state.Session.AgentToken = "agent-token"
 		state.ConnectedAgents = []ConnectedAgent{
-			reviewerConnectedAgent(),
 			testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"}),
 		}
 		return nil
@@ -1801,15 +1569,15 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 		SkillName:     "run_task",
 		Repo:          "/tmp/repo",
 		LogPaths:      []string{"/tmp/repo/logs/failure.log"},
-		Payload:       "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+		Payload:       testDispatchPrompt,
 		PayloadFormat: "markdown",
 	})
 	if err == nil {
 		t.Fatal("expected dispatch failure")
 	}
 
-	if len(fake.publishCalls) != 2 {
-		t.Fatalf("expected initial dispatch publish plus follow-up publish, got %d", len(fake.publishCalls))
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected initial dispatch publish only, got %d", len(fake.publishCalls))
 	}
 	if len(fake.offlineCalls) != 1 {
 		t.Fatalf("expected one offline call, got %d", len(fake.offlineCalls))
@@ -1824,24 +1592,6 @@ func TestDispatchFromUIFailureQueuesFollowUpAndMarksOffline(t *testing.T) {
 	state := service.store.Snapshot()
 	if len(state.PendingTasks) != 0 {
 		t.Fatalf("expected no pending tasks after failed dispatch, got %d", len(state.PendingTasks))
-	}
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected follow-up task after failed dispatch, got %d", len(state.FollowUpTasks))
-	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
-		t.Fatalf("unexpected follow-up repos: %#v", got)
-	}
-	if got := state.FollowUpTasks[0].RunConfig.BaseBranch; got != "main" {
-		t.Fatalf("unexpected follow-up baseBranch: %q", got)
-	}
-	if got := state.FollowUpTasks[0].RunConfig.TargetSubdir; got != "." {
-		t.Fatalf("unexpected follow-up targetSubdir: %q", got)
-	}
-	if got := state.FollowUpTasks[0].LogPaths; len(got) != 2 || got[0] != "/tmp/repo/logs/failure.log" {
-		t.Fatalf("unexpected follow-up log paths: %#v", got)
-	}
-	if got := state.FollowUpTasks[0].RunConfig.Prompt; got != followUpPrompt {
-		t.Fatalf("unexpected follow-up prompt: %q", got)
 	}
 }
 
@@ -2008,10 +1758,6 @@ func TestHandleSkillRequestRequiresSelectionWhenTargetAndSkillAreBlank(t *testin
 		t.Fatalf("unexpected failure status payload: %#v", got)
 	}
 
-	state := service.store.Snapshot()
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected follow-up to be queued, got %d", len(state.FollowUpTasks))
-	}
 }
 
 func TestHandleSkillRequestAcceptsJSONStringActivationPayload(t *testing.T) {
@@ -2110,7 +1856,7 @@ func TestHandleSkillRequestAcceptsSelectedTaskAliasAndInlinePayload(t *testing.T
 				"selectedTask": "code_for_me",
 				"repo":         "/tmp/repo",
 				"logPaths":     []string{"/tmp/repo/logs/failure.log"},
-				"prompt":       "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+				"prompt":       testDispatchPrompt,
 				"baseBranch":   "main",
 				"targetSubdir": ".",
 			},
@@ -2138,7 +1884,7 @@ func TestHandleSkillRequestAcceptsSelectedTaskAliasAndInlinePayload(t *testing.T
 	if !ok {
 		t.Fatalf("expected downstream payload map, got %T", fake.publishCalls[0].Message.Payload)
 	}
-	if got := payload["prompt"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
+	if got := payload["prompt"]; got != testDispatchPrompt {
 		t.Fatalf("unexpected downstream prompt payload: %#v", payload)
 	}
 	if got := payload["baseBranch"]; got != "main" {
@@ -2187,7 +1933,7 @@ func TestHandleSkillRequestAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
 				"selectedSkillName": "code_for_me",
 				"repo":              "/tmp/repo",
 				"logPaths":          []string{"/tmp/repo/logs/failure.log"},
-				"prompt":            "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.",
+				"prompt":            testDispatchPrompt,
 			},
 		},
 	}
@@ -2213,7 +1959,7 @@ func TestHandleSkillRequestAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected downstream payload map, got %T", fake.publishCalls[0].Message.Payload)
 	}
-	if got := payload["prompt"]; got != "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours." {
+	if got := payload["prompt"]; got != testDispatchPrompt {
 		t.Fatalf("unexpected downstream prompt payload: %#v", payload)
 	}
 	if got := payload["repo"]; got != "/tmp/repo" {
@@ -2256,7 +2002,7 @@ func TestHandleDownstreamFailureStillQueuesFollowUpWhenCallerPublishFails(t *tes
 				DispatchPayload: map[string]any{
 					"repo":      "/tmp/repo",
 					"log_paths": []string{"/tmp/original.log"},
-					"input":     "Issue an offline to moltenbot hub",
+					"input":     testDispatchPrompt,
 				},
 			},
 		}
@@ -2287,16 +2033,6 @@ func TestHandleDownstreamFailureStillQueuesFollowUpWhenCallerPublishFails(t *tes
 		t.Fatalf("expected one offline call despite caller publish failure, got %d", len(fake.offlineCalls))
 	}
 
-	state := service.store.Snapshot()
-	if len(state.FollowUpTasks) != 1 {
-		t.Fatalf("expected follow-up queue despite caller publish failure, got %d", len(state.FollowUpTasks))
-	}
-	if state.FollowUpTasks[0].Status != "pending_reviewer" {
-		t.Fatalf("expected local pending reviewer follow-up, got %q", state.FollowUpTasks[0].Status)
-	}
-	if got := state.FollowUpTasks[0].RunConfig.Repos; len(got) != 1 || got[0] != followUpRepo {
-		t.Fatalf("unexpected run config repos: %#v", got)
-	}
 }
 
 func TestFailureFromErrorPreservesStructuredHubAPIErrorDetails(t *testing.T) {
@@ -2448,31 +2184,31 @@ func TestNormalizePayloadFormatCanonicalizesToHubEnum(t *testing.T) {
 		{
 			name:    "string payload defaults to markdown",
 			format:  "",
-			payload: "Issue an offline to moltenbot hub",
+			payload: testDispatchPrompt,
 			want:    "markdown",
 		},
 		{
 			name:    "text alias maps to markdown",
 			format:  "text",
-			payload: "Issue an offline to moltenbot hub",
+			payload: testDispatchPrompt,
 			want:    "markdown",
 		},
 		{
 			name:    "json remains json",
 			format:  "json",
-			payload: map[string]any{"input": "Issue an offline to moltenbot hub"},
+			payload: map[string]any{"input": testDispatchPrompt},
 			want:    "json",
 		},
 		{
 			name:    "unknown format for string payload falls back to markdown",
 			format:  "xml",
-			payload: "Issue an offline to moltenbot hub",
+			payload: testDispatchPrompt,
 			want:    "markdown",
 		},
 		{
 			name:    "unknown format for object payload falls back to json",
 			format:  "xml",
-			payload: map[string]any{"input": "Issue an offline to moltenbot hub"},
+			payload: map[string]any{"input": testDispatchPrompt},
 			want:    "json",
 		},
 	}

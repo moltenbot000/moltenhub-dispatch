@@ -107,8 +107,8 @@
               <dd>{{len .State.ConnectedAgents}}</dd>
             </div>
             <div class="dispatch-overview-stat">
-              <dt>Queued Follow-Ups</dt>
-              <dd>{{len .State.FollowUpTasks}}</dd>
+              <dt>Pending Tasks</dt>
+              <dd>{{len .State.PendingTasks}}</dd>
             </div>
             <div class="dispatch-overview-stat">
               <dt>Recent Events</dt>
@@ -217,7 +217,7 @@
               <span class="manual-dispatch-payload-label-row">
                 <span>Payload</span>
               </span>
-              <textarea id="skill-payload-input" name="payload" rows="4" data-default-placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours." placeholder="Issue an offline to moltenbot hub -&gt; review na.hub.molten.bot.openapi.yaml for integration behaviours." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
+              <textarea id="skill-payload-input" name="payload" rows="4" data-default-placeholder="Describe the task or paste a JSON payload." placeholder="Describe the task or paste a JSON payload." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
               <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Markdown and JSON are both supported. Dispatch sets the payload format automatically.</span>
               <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
             </label>
@@ -235,34 +235,32 @@
         <article class="panel">
           <div class="dispatch-panel-header">
             <div class="dispatch-panel-header-copy">
-              <p class="eyebrow dispatch-panel-eyebrow">Recovery</p>
-              <h2>Queued Follow-Ups</h2>
+              <p class="eyebrow dispatch-panel-eyebrow">Queue</p>
+              <h2>Pending Tasks</h2>
             </div>
-            <p class="dispatch-panel-copy">Automatic remediation runs scheduled after a failed dispatch.</p>
+            <p class="dispatch-panel-copy">In-flight dispatches waiting on connected agents.</p>
           </div>
-          {{if .State.FollowUpTasks}}
+          {{if .State.PendingTasks}}
           <div class="list">
-            {{range .State.FollowUpTasks}}
+            {{range .State.PendingTasks}}
             <article class="card runtime-event-card" data-runtime-event-card>
               <div class="runtime-event-card-header">
-                <h3>{{.ID}}</h3>
+                <h3>{{if .OriginalSkillName}}{{.OriginalSkillName}}{{else}}{{.ID}}{{end}}</h3>
                 <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
               </div>
               <div class="runtime-event-card-body" data-runtime-event-body hidden>
-                <p><strong>Status:</strong> {{.Status}}</p>
-                <p><strong>Failed task:</strong> {{.FailedTaskID}}</p>
-                <p><strong>Repo:</strong> {{.FailedRepo}}</p>
-                <p><strong>Log paths:</strong></p>
-                <pre>{{toJSON .LogPaths}}</pre>
-                <p><strong>Run config:</strong></p>
-                <pre>{{toJSON .RunConfig}}</pre>
-                {{if .LastDispatchErr}}<p><strong>Dispatch error:</strong> {{.LastDispatchErr}}</p>{{end}}
+                <p><strong>Task:</strong> {{.ID}}</p>
+                <p><strong>Child request:</strong> {{.ChildRequestID}}</p>
+                {{if .TargetAgentUUID}}<p><strong>Target agent:</strong> {{.TargetAgentUUID}}</p>{{else if .TargetAgentURI}}<p><strong>Target agent:</strong> {{.TargetAgentURI}}</p>{{end}}
+                {{if .Repo}}<p><strong>Repo:</strong> {{.Repo}}</p>{{end}}
+                {{if .LogPath}}<p><strong>Log path:</strong> {{.LogPath}}</p>{{end}}
+                {{if .ExpiresAt.IsZero}}{{else}}<p><strong>Expires:</strong> {{.ExpiresAt}}</p>{{end}}
               </div>
             </article>
             {{end}}
           </div>
           {{else}}
-          <p class="empty">No remediation follow-ups queued.</p>
+          <p class="empty">No active dispatches.</p>
           {{end}}
         </article>
 
@@ -580,8 +578,8 @@
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
       const trimmedString = (value) => String(value || "").trim();
       const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
-        ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours."
-        : "Issue an offline to moltenbot hub -> review na.hub.molten.bot.openapi.yaml for integration behaviours.";
+        ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Describe the task or paste a JSON payload."
+        : "Describe the task or paste a JSON payload.";
       const dispatchTaskClear = document.getElementById("dispatch-task-clear");
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");

@@ -19,28 +19,20 @@ import (
 )
 
 const (
-	dispatchSkillName      = "dispatch_skill_request"
-	failureReviewSkillName = "review_failure_logs"
-	dispatcherHarness      = "moltenhub-dispatch"
-	openClawHTTPProtocol   = "openclaw.http.v1"
-	openClawSkillRequest   = "skill_request"
-	openClawSkillResult    = "skill_result"
-	followUpRepo           = "git@github.com:Molten-Bot/moltenhub-code.git"
-	followUpPrompt         = "Review the failing log paths first, identify every root cause behind the failed task, fix the underlying issues in this repository, validate locally where possible, and summarize the verified results."
-	hubPingRetryInterval   = 12 * time.Second
-	hubPingRequestTimeout  = 6 * time.Second
-	wsFallbackWindow       = 30 * time.Second
-	maxExecutionRetryCount = 1
+	dispatchSkillName     = "dispatch_skill_request"
+	dispatcherHarness     = "moltenhub-dispatch"
+	openClawHTTPProtocol  = "openclaw.http.v1"
+	openClawSkillRequest  = "skill_request"
+	openClawSkillResult   = "skill_result"
+	hubPingRetryInterval  = 12 * time.Second
+	hubPingRequestTimeout = 6 * time.Second
+	wsFallbackWindow      = 30 * time.Second
 )
 
 var advertisedSkills = []Skill{
 	{
 		Name:        dispatchSkillName,
 		Description: "Dispatch a skill request to a connected agent and proxy the result back to the original caller.",
-	},
-	{
-		Name:        failureReviewSkillName,
-		Description: "Review failing log paths, find root causes, fix the repository, and report verified results.",
 	},
 }
 
@@ -876,91 +868,6 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 	return s.removePendingTask(pending.ChildRequestID)
 }
 
-func (s *Service) retryDownstreamExecution(ctx context.Context, state AppState, pending PendingTask, report failureReport) (bool, error) {
-	if pending.ExecutionRetryCount >= maxExecutionRetryCount {
-		return false, nil
-	}
-
-	timeout := state.Settings.TaskTimeout
-	if timeout <= 0 {
-		timeout = 5 * time.Minute
-	}
-	if pending.ExpiresAt.After(pending.CreatedAt) {
-		originalTimeout := pending.ExpiresAt.Sub(pending.CreatedAt)
-		if originalTimeout > 0 {
-			timeout = originalTimeout
-		}
-	}
-
-	now := time.Now().UTC()
-	retryTask := pending
-	retryTask.ChildRequestID = NewID("dispatch")
-	retryTask.CreatedAt = now
-	retryTask.ExpiresAt = now.Add(timeout)
-	retryTask.ExecutionRetryCount++
-	retryTask.DispatchPayloadFormat = normalizePayloadFormat(retryTask.DispatchPayloadFormat, retryTask.DispatchPayload)
-
-	if err := s.store.Update(func(current *AppState) error {
-		for i := range current.PendingTasks {
-			if current.PendingTasks[i].ChildRequestID != pending.ChildRequestID {
-				continue
-			}
-			current.PendingTasks[i] = retryTask
-			return nil
-		}
-		return fmt.Errorf("pending task %q is no longer available for retry", pending.ID)
-	}); err != nil {
-		return false, fmt.Errorf("persist downstream retry state: %w", err)
-	}
-
-	s.syncHubClient(state)
-	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
-		ToAgentUUID: retryTask.TargetAgentUUID,
-		ToAgentURI:  retryTask.TargetAgentURI,
-		ClientMsgID: retryTask.ChildRequestID,
-		Message: newSkillRequestMessage(
-			now,
-			retryTask.OriginalSkillName,
-			retryTask.DispatchPayload,
-			retryTask.DispatchPayloadFormat,
-			retryTask.ChildRequestID,
-			retryTask.ParentRequestID,
-		),
-	})
-	if err != nil {
-		s.noteHubInteraction(err, ConnectionTransportHTTP)
-		rollbackErr := s.store.Update(func(current *AppState) error {
-			for i := range current.PendingTasks {
-				if current.PendingTasks[i].ChildRequestID != retryTask.ChildRequestID {
-					continue
-				}
-				current.PendingTasks[i] = pending
-				return nil
-			}
-			return nil
-		})
-		if rollbackErr != nil {
-			return false, errors.Join(
-				fmt.Errorf("retry original task dispatch: %w", err),
-				fmt.Errorf("rollback retry task state: %w", rollbackErr),
-			)
-		}
-		return false, fmt.Errorf("retry original task dispatch: %w", err)
-	}
-	s.noteHubInteraction(nil, ConnectionTransportHTTP)
-
-	_ = s.writeTaskLog(pending.LogPath, map[string]any{
-		"phase":                     "retrying",
-		"task_id":                   pending.ID,
-		"retry_attempt":             retryTask.ExecutionRetryCount,
-		"previous_child_request_id": pending.ChildRequestID,
-		"child_request_id":          retryTask.ChildRequestID,
-		"failure":                   failureFields(report, explicitFailureMessage(report.Message), report.Detail),
-	})
-	_ = s.logEvent("info", "Retry queued", fmt.Sprintf("Retrying %s after downstream failure.", retryTask.OriginalSkillName), pending.ID, pending.LogPath)
-	return true, nil
-}
-
 func (s *Service) expirePendingTasks(ctx context.Context) error {
 	state := s.store.Snapshot()
 	if len(state.PendingTasks) == 0 {
@@ -983,19 +890,6 @@ func (s *Service) expirePendingTasks(ctx context.Context) error {
 }
 
 func (s *Service) handleExecutionFailure(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
-	retried, retryErr := s.retryDownstreamExecution(ctx, state, pending, report)
-	if retryErr != nil {
-		retryReport := failureFromError("Task failed while retrying the original execution request.", retryErr)
-		retryReport.Detail = map[string]any{
-			"initial_failure": failureFields(report, explicitFailureMessage(report.Message), report.Detail),
-			"retry_error":     errorDetail(retryErr),
-		}
-		return s.finalizeTaskFailure(ctx, state, pending, retryReport)
-	}
-	if retried {
-		_, err := s.queueFollowUp(ctx, state, pending, report)
-		return err
-	}
 	return s.finalizeTaskFailure(ctx, state, pending, report)
 }
 
@@ -1016,107 +910,12 @@ func (s *Service) removePendingTask(childRequestID string) error {
 	})
 }
 
-func (s *Service) queueFollowUp(ctx context.Context, state AppState, pending PendingTask, report failureReport) (FollowUpTask, error) {
-	s.syncHubClient(state)
-	logPaths := followUpLogPaths(pending)
-	originalRequest := support.CloneMap(pending.DispatchPayload)
-	existing, hasExisting := FindFollowUpTaskByFailedTaskID(state.FollowUpTasks, pending.ID)
-	task := FollowUpTask{
-		ID:               NewID("followup"),
-		CreatedAt:        time.Now().UTC(),
-		Status:           "queued",
-		Reason:           "task_failed",
-		FailedTaskID:     pending.ID,
-		FailedSkillName:  pending.OriginalSkillName,
-		FailedRepo:       fallbackRepo(pending.Repo),
-		LogPaths:         logPaths,
-		RunConfig:        newFollowUpRunConfig(),
-		OriginalError:    formatFailureSummary(report),
-		OriginalRequest:  originalRequest,
-		RequestedByAgent: pending.CallerAgentUUID,
-	}
-	if hasExisting {
-		task.ID = existing.ID
-		task.CreatedAt = existing.CreatedAt
-	}
-
-	shouldPublish := true
-	if hasExisting && existing.Status == "queued" && strings.TrimSpace(existing.LastDispatchErr) == "" {
-		task.Status = existing.Status
-		task.TargetAgentUUID = existing.TargetAgentUUID
-		task.TargetAgentURI = existing.TargetAgentURI
-		task.LastDispatchErr = existing.LastDispatchErr
-		shouldPublish = false
-	} else {
-		reviewer, ok := SelectFailureReviewer(state)
-		if ok {
-			task.TargetAgentUUID = reviewer.AgentUUID
-			task.TargetAgentURI = reviewer.URI
-			payload := map[string]any{
-				"failed_task_id": pending.ID,
-				"log_paths":      task.LogPaths,
-				"run_config":     task.RunConfig,
-				"failure":        failureFields(report, report.Message, report.Detail),
-				"original_request": map[string]any{
-					"skill_name":     pending.OriginalSkillName,
-					"repo":           fallbackRepo(pending.Repo),
-					"payload_format": normalizePayloadFormat(pending.DispatchPayloadFormat, pending.DispatchPayload),
-					"payload":        originalRequest,
-				},
-			}
-			if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
-				ToAgentUUID: reviewer.AgentUUID,
-				ToAgentURI:  reviewer.URI,
-				ClientMsgID: task.ID,
-				Message:     newSkillRequestMessage(time.Now().UTC(), failureReviewSkillName, payload, "json", task.ID, ""),
-			}); err != nil {
-				s.noteHubInteraction(err, ConnectionTransportHTTP)
-				task.Status = "queued_local_only"
-				task.LastDispatchErr = err.Error()
-			} else {
-				s.noteHubInteraction(nil, ConnectionTransportHTTP)
-				task.Status = "queued"
-				task.LastDispatchErr = ""
-			}
-		} else {
-			task.Status = "pending_reviewer"
-			task.LastDispatchErr = "no failure reviewer configured"
-			shouldPublish = false
-		}
-	}
-
-	if err := s.store.Update(func(current *AppState) error {
-		current.FollowUpTasks = UpsertFollowUpTask(current.FollowUpTasks, task)
-		return nil
-	}); err != nil {
-		return FollowUpTask{}, err
-	}
-
-	shouldLog := !hasExisting ||
-		shouldPublish ||
-		task.Status != existing.Status ||
-		task.LastDispatchErr != existing.LastDispatchErr ||
-		task.OriginalError != existing.OriginalError ||
-		!reflect.DeepEqual(task.LogPaths, existing.LogPaths) ||
-		!reflect.DeepEqual(task.OriginalRequest, existing.OriginalRequest)
-	if shouldLog {
-		title := "Follow-up queued"
-		if hasExisting {
-			title = "Follow-up updated"
-		}
-		if err := s.logEvent("error", title, task.OriginalError, pending.ID, pending.LogPath); err != nil {
-			return FollowUpTask{}, err
-		}
-	}
-	return task, nil
-}
-
 func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pending PendingTask, report failureReport) error {
 	s.syncHubClient(state)
 	if pending.LogPath == "" {
 		pending.LogPath = filepath.Join(s.settings.DataDir, "logs", pending.ID+".log")
 	}
-	logPaths := followUpLogPaths(pending)
+	logPaths := failureLogPaths(pending)
 	if err := s.writeTaskLog(pending.LogPath, map[string]any{
 		"phase":  "failed",
 		"error":  report.Error,
@@ -1330,9 +1129,6 @@ func (s *Service) handleTaskFailure(ctx context.Context, state AppState, pending
 		if err := s.publishFailureToCaller(ctx, state, pending, report); err != nil {
 			combinedErr = errors.Join(combinedErr, fmt.Errorf("publish failure response: %w", err))
 		}
-	}
-	if _, err := s.queueFollowUp(ctx, state, pending, report); err != nil {
-		combinedErr = errors.Join(combinedErr, fmt.Errorf("queue follow-up task: %w", err))
 	}
 	s.tryMarkTaskFailureOffline(ctx, pending, report)
 	return combinedErr
@@ -1909,7 +1705,7 @@ func fallbackRepo(repo string) string {
 	return repo
 }
 
-func followUpLogPaths(pending PendingTask) []string {
+func failureLogPaths(pending PendingTask) []string {
 	paths := support.StringSliceFromAny(pending.DispatchPayload["log_paths"])
 	paths = append(paths, pending.LogPath)
 	return support.CompactStrings(paths)
@@ -2630,15 +2426,6 @@ func runtimeAPIBaseFromSession(session Session) string {
 
 func coalesceTrimmed(values ...string) string {
 	return support.FirstNonEmptyString(values...)
-}
-
-func newFollowUpRunConfig() FollowUpRunConfig {
-	return FollowUpRunConfig{
-		Repos:        []string{followUpRepo},
-		BaseBranch:   "main",
-		TargetSubdir: ".",
-		Prompt:       followUpPrompt,
-	}
 }
 
 func defaultAPIBaseForHub(hubURL string) string {

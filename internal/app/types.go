@@ -105,31 +105,6 @@ type PendingTask struct {
 	ExecutionRetryCount   int            `json:"execution_retry_count"`
 }
 
-type FollowUpRunConfig struct {
-	Repos        []string `json:"repos"`
-	BaseBranch   string   `json:"baseBranch"`
-	TargetSubdir string   `json:"targetSubdir"`
-	Prompt       string   `json:"prompt"`
-}
-
-type FollowUpTask struct {
-	ID               string            `json:"id"`
-	CreatedAt        time.Time         `json:"created_at"`
-	Status           string            `json:"status"`
-	Reason           string            `json:"reason"`
-	FailedTaskID     string            `json:"failed_task_id"`
-	FailedSkillName  string            `json:"failed_skill_name"`
-	FailedRepo       string            `json:"failed_repo"`
-	LogPaths         []string          `json:"log_paths"`
-	TargetAgentUUID  string            `json:"target_agent_uuid"`
-	TargetAgentURI   string            `json:"target_agent_uri"`
-	LastDispatchErr  string            `json:"last_dispatch_error"`
-	RunConfig        FollowUpRunConfig `json:"run_config"`
-	OriginalError    string            `json:"original_error"`
-	OriginalRequest  map[string]any    `json:"original_request"`
-	RequestedByAgent string            `json:"requested_by_agent"`
-}
-
 type AppState struct {
 	Settings        Settings         `json:"settings"`
 	Session         Session          `json:"session"`
@@ -137,7 +112,6 @@ type AppState struct {
 	Flash           FlashMessage     `json:"flash"`
 	ConnectedAgents []ConnectedAgent `json:"connected_agents"`
 	PendingTasks    []PendingTask    `json:"pending_tasks"`
-	FollowUpTasks   []FollowUpTask   `json:"follow_up_tasks"`
 	RecentEvents    []RuntimeEvent   `json:"recent_events"`
 }
 
