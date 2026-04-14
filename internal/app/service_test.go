@@ -1625,12 +1625,21 @@ func TestHandleDownstreamPlaintextRunnerFailureQueuesFollowUpAndReturnsErrorDeta
 	if got := failurePayload["status"]; got != "failed" {
 		t.Fatalf("unexpected caller failure status: %#v", got)
 	}
+	if got := failurePayload["message"]; got != "Task failed while dispatching to a connected agent." {
+		t.Fatalf("unexpected caller failure message: %#v", got)
+	}
 	if got := failurePayload["error"]; got != "error connecting to api.github.com" {
 		t.Fatalf("unexpected caller failure error: %#v", got)
+	}
+	if got := failurePayload["failure"]; got != true {
+		t.Fatalf("expected failure marker in caller payload, got %#v", got)
 	}
 	failureDetail, ok := failurePayload["error_detail"].(string)
 	if !ok || !strings.Contains(failureDetail, "githubstatus.com") {
 		t.Fatalf("expected caller failure detail to include network diagnostic, got %#v", failurePayload["error_detail"])
+	}
+	if errorDetails, ok := failurePayload["error_details"].(string); !ok || !strings.Contains(errorDetails, "githubstatus.com") {
+		t.Fatalf("expected caller error_details to include network diagnostic, got %#v", failurePayload["error_details"])
 	}
 
 	if len(fake.offlineCalls) != 1 {

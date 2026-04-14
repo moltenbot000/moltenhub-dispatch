@@ -522,13 +522,13 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	if !strings.Contains(body, `src="/static/logo.svg"`) {
 		t.Fatalf("expected page header to use the bundled logo asset, body=%s", body)
 	}
-	if !strings.Contains(body, `>Dispatch Console</p>`) {
-		t.Fatalf("expected page header eyebrow copy, body=%s", body)
+	if strings.Contains(body, `>Dispatch Console</p>`) {
+		t.Fatalf("did not expect removed page header eyebrow copy, body=%s", body)
 	}
 	if !strings.Contains(body, `>Molten Hub Dispatch</h1>`) {
 		t.Fatalf("expected page header title copy, body=%s", body)
 	}
-	if !strings.Contains(body, `>Choose a connected agent, review its advertised skill, and dispatch the payload it expects.</p>`) {
+	if !strings.Contains(body, `>Remotely control your connected agents.</p>`) {
 		t.Fatalf("expected page header subtitle copy, body=%s", body)
 	}
 }
