@@ -39,7 +39,3 @@ type HubAgent struct {
 	Metadata         *AgentMetadata   `json:"metadata,omitempty"`
 	Owner            *AgentOwner      `json:"owner,omitempty"`
 }
-
-type ListAgentsResponse struct {
-	Agents []HubAgent `json:"agents"`
-}

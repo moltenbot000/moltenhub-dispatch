@@ -1,10 +1,26 @@
 package app
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+func newLoopbackServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on 127.0.0.1:0: %v", err)
+	}
+
+	server := httptest.NewUnstartedServer(handler)
+	server.Listener = listener
+	server.Start()
+	t.Cleanup(server.Close)
+	return server
+}
 
 func TestResolveHubRuntime(t *testing.T) {
 	t.Parallel()
@@ -136,7 +152,7 @@ func TestNormalizeHubEndpointURL(t *testing.T) {
 }
 
 func TestFetchHubRuntimeCatalog(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/hubs.json" {
 			t.Fatalf("unexpected path %q", r.URL.Path)
 		}
@@ -148,7 +164,6 @@ func TestFetchHubRuntimeCatalog(t *testing.T) {
 			{"display":"Duplicate","key":"eu","domain":"eu.hub.molten.bot"}
 		]`))
 	}))
-	defer server.Close()
 
 	runtimes, err := fetchHubRuntimeCatalog(server.URL+"/hubs.json", server.Client())
 	if err != nil {

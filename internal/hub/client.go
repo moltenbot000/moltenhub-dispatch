@@ -233,15 +233,6 @@ func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]
 	return out, err
 }
 
-func (c *Client) ListAgents(ctx context.Context, token string) ([]HubAgent, error) {
-	var out ListAgentsResponse
-	err := c.doJSON(ctx, http.MethodGet, "/v1/me/agents", token, nil, &out)
-	if err != nil {
-		return nil, err
-	}
-	return out.Agents, nil
-}
-
 func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	var out PublishResponse
 	err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &out)

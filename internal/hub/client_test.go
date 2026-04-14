@@ -3,6 +3,7 @@ package hub_test
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,11 +14,26 @@ import (
 	"github.com/moltenbot000/moltenhub-dispatch/internal/hub"
 )
 
+func newLoopbackServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on 127.0.0.1:0: %v", err)
+	}
+
+	server := httptest.NewUnstartedServer(handler)
+	server.Listener = listener
+	server.Start()
+	t.Cleanup(server.Close)
+	return server
+}
+
 func TestBindAgentParsesRuntimeEnvelope(t *testing.T) {
 	t.Parallel()
 
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/bind" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -64,7 +80,6 @@ func TestBindAgentParsesRuntimeEnvelope(t *testing.T) {
 			},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	response, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -88,7 +103,7 @@ func TestBindAgentParsesNestedAgentAccessToken(t *testing.T) {
 	t.Parallel()
 
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/bind" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -110,7 +125,6 @@ func TestBindAgentParsesNestedAgentAccessToken(t *testing.T) {
 			},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	response, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -142,7 +156,7 @@ func TestBindAgentParsesTopLevelPayloadWithoutRuntimeEnvelope(t *testing.T) {
 	t.Parallel()
 
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/bind" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -155,7 +169,6 @@ func TestBindAgentParsesTopLevelPayloadWithoutRuntimeEnvelope(t *testing.T) {
 			"api_base":    server.URL + "/v1",
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	response, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -177,7 +190,7 @@ func TestBindAgentParsesBaseURLAndBindTokenAliases(t *testing.T) {
 	t.Parallel()
 
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/bind" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -193,7 +206,6 @@ func TestBindAgentParsesBaseURLAndBindTokenAliases(t *testing.T) {
 			},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	response, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -217,7 +229,7 @@ func TestBindAgentDoesNotFallbackToBindTokensRouteOnInvalidBindPayload(t *testin
 	var bindRouteCalls int
 	var bindTokensRouteCalls int
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/agents/bind":
 			bindRouteCalls++
@@ -237,7 +249,6 @@ func TestBindAgentDoesNotFallbackToBindTokensRouteOnInvalidBindPayload(t *testin
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	_, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -263,7 +274,7 @@ func TestBindAgentDoesNotFallbackToBindTokensRouteWhenBindRouteIsMissing(t *test
 	var bindRouteCalls int
 	var bindTokensRouteCalls int
 	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server = newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/agents/bind":
 			bindRouteCalls++
@@ -283,7 +294,6 @@ func TestBindAgentDoesNotFallbackToBindTokensRouteWhenBindRouteIsMissing(t *test
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	_, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -307,7 +317,7 @@ func TestBindAgentDoesNotFallbackToBindTokensRouteWhenBindRouteIsMissing(t *test
 func TestBindAgentReturnsCanonicalError(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error":       "agent_exists",
@@ -319,7 +329,6 @@ func TestBindAgentReturnsCanonicalError(t *testing.T) {
 			},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	_, err := client.BindAgent(context.Background(), hub.BindRequest{
@@ -346,7 +355,7 @@ func TestUpdateMetadataUsesAPIBasePathWithoutDoublingVersionPrefix(t *testing.T)
 	t.Parallel()
 
 	var requestPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -354,7 +363,6 @@ func TestUpdateMetadataUsesAPIBasePathWithoutDoublingVersionPrefix(t *testing.T)
 			"result": map[string]any{"status": "ok"},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL + "/v1")
 	if _, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
@@ -371,7 +379,10 @@ func TestUpdateMetadataUsesAPIBasePathWithoutDoublingVersionPrefix(t *testing.T)
 func TestGetCapabilitiesTrimsAuthorizationBearerToken(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/me/capabilities" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
 		if got, want := r.Header.Get("Authorization"), "Bearer agent-token"; got != want {
 			t.Fatalf("authorization header = %q, want %q", got, want)
 		}
@@ -381,7 +392,6 @@ func TestGetCapabilitiesTrimsAuthorizationBearerToken(t *testing.T) {
 			"result": map[string]any{"advertised_skills": []any{}},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	if _, err := client.GetCapabilities(context.Background(), "  agent-token  "); err != nil {
@@ -389,81 +399,26 @@ func TestGetCapabilitiesTrimsAuthorizationBearerToken(t *testing.T) {
 	}
 }
 
-func TestListAgentsUsesMeAgentsEndpointAndParsesEnvelope(t *testing.T) {
+func TestGetCapabilitiesParsesDataEnvelope(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me/agents" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodGet {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
-		if got, want := r.Header.Get("Authorization"), "Bearer human-token"; got != want {
-			t.Fatalf("authorization header = %q, want %q", got, want)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"agents": []map[string]any{
-					{
-						"agent_uuid": "agent-uuid",
-						"agent_id":   "dispatch-agent",
-						"uri":        "molten://agent/dispatch-agent",
-						"status":     "online",
-						"metadata": map[string]any{
-							"display_name": "Dispatch Agent",
-							"emoji":        "🤖",
-							"presence": map[string]any{
-								"status": "online",
-							},
-						},
-					},
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	client := hub.NewClient(server.URL)
-	agents, err := client.ListAgents(context.Background(), " human-token ")
-	if err != nil {
-		t.Fatalf("list agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one agent, got %#v", agents)
-	}
-	if got, want := agents[0].AgentID, "dispatch-agent"; got != want {
-		t.Fatalf("agent id = %q, want %q", got, want)
-	}
-	if agents[0].Metadata == nil || agents[0].Metadata.DisplayName != "Dispatch Agent" {
-		t.Fatalf("unexpected metadata payload: %#v", agents[0])
-	}
-	if agents[0].Metadata.Presence == nil || agents[0].Metadata.Presence.Status != "online" {
-		t.Fatalf("unexpected presence payload: %#v", agents[0].Metadata)
-	}
-}
-
-func TestListAgentsUsesMeAgentsEndpointAndParsesDataEnvelope(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me/agents" {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/me/capabilities" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok": true,
 			"data": map[string]any{
-				"agents": []map[string]any{
+				"peer_skill_catalog": []map[string]any{
 					{
 						"agent_uuid": "agent-uuid",
 						"agent_id":   "dispatch-agent",
 						"uri":        "molten://agent/dispatch-agent",
 						"metadata": map[string]any{
 							"display_name": "Dispatch Agent",
-							"advertised_skills": []map[string]any{
+							"emoji":        "🤖",
+							"skills": []map[string]any{
 								{
 									"name":        "review_openapi",
 									"description": "Review Hub API integration behavior.",
@@ -475,120 +430,41 @@ func TestListAgentsUsesMeAgentsEndpointAndParsesDataEnvelope(t *testing.T) {
 			},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
-	agents, err := client.ListAgents(context.Background(), "human-token")
+	capabilities, err := client.GetCapabilities(context.Background(), " human-token ")
 	if err != nil {
-		t.Fatalf("list agents: %v", err)
+		t.Fatalf("get capabilities: %v", err)
 	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one agent, got %#v", agents)
+	catalog, ok := capabilities["peer_skill_catalog"].([]any)
+	if !ok || len(catalog) != 1 {
+		t.Fatalf("expected peer skill catalog in data envelope, got %#v", capabilities)
 	}
-	if got, want := agents[0].AgentID, "dispatch-agent"; got != want {
-		t.Fatalf("agent id = %q, want %q", got, want)
+	entry, ok := catalog[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first catalog entry to be an object, got %#v", catalog[0])
 	}
-	if agents[0].Metadata == nil || agents[0].Metadata.DisplayName != "Dispatch Agent" {
-		t.Fatalf("unexpected metadata payload: %#v", agents[0])
+	if got, want := entry["agent_id"], "dispatch-agent"; got != want {
+		t.Fatalf("agent id = %#v, want %q", got, want)
 	}
-	if len(agents[0].Metadata.AdvertisedSkills) != 1 || agents[0].Metadata.AdvertisedSkills[0]["name"] != "review_openapi" {
-		t.Fatalf("unexpected advertised_skills payload: %#v", agents[0].Metadata.AdvertisedSkills)
+	metadata, ok := entry["metadata"].(map[string]any)
+	if !ok || metadata["display_name"] != "Dispatch Agent" {
+		t.Fatalf("unexpected metadata payload: %#v", entry["metadata"])
+	}
+	skills, ok := metadata["skills"].([]any)
+	if !ok || len(skills) != 1 {
+		t.Fatalf("expected skills payload, got %#v", metadata["skills"])
+	}
+	skill, ok := skills[0].(map[string]any)
+	if !ok || skill["name"] != "review_openapi" {
+		t.Fatalf("unexpected skill payload: %#v", skills[0])
 	}
 }
-
-func TestListAgentsParsesAdvertisedSkillsFromMetadata(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me/agents" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"agents": []map[string]any{
-					{
-						"agent_uuid": "agent-uuid",
-						"agent_id":   "dispatch-agent",
-						"metadata": map[string]any{
-							"display_name": "Dispatch Agent",
-							"advertised_skills": []map[string]any{
-								{
-									"name":        "review_openapi",
-									"description": "Review Hub API integration behavior.",
-								},
-							},
-						},
-					},
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	client := hub.NewClient(server.URL)
-	agents, err := client.ListAgents(context.Background(), "human-token")
-	if err != nil {
-		t.Fatalf("list agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one agent, got %#v", agents)
-	}
-	if agents[0].Metadata == nil {
-		t.Fatalf("expected metadata payload, got %#v", agents[0])
-	}
-	if len(agents[0].Metadata.AdvertisedSkills) != 1 || agents[0].Metadata.AdvertisedSkills[0]["name"] != "review_openapi" {
-		t.Fatalf("unexpected advertised_skills payload: %#v", agents[0].Metadata.AdvertisedSkills)
-	}
-}
-
-func TestListAgentsParsesAdvertisedSkillsFromAgentRoot(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/me/agents" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok": true,
-			"result": map[string]any{
-				"agents": []map[string]any{
-					{
-						"agent_uuid": "agent-uuid",
-						"agent_id":   "dispatch-agent",
-						"advertised_skills": []map[string]any{
-							{
-								"name":        "review_openapi",
-								"description": "Review Hub API integration behavior.",
-							},
-						},
-					},
-				},
-			},
-		})
-	}))
-	defer server.Close()
-
-	client := hub.NewClient(server.URL)
-	agents, err := client.ListAgents(context.Background(), "human-token")
-	if err != nil {
-		t.Fatalf("list agents: %v", err)
-	}
-	if len(agents) != 1 {
-		t.Fatalf("expected one agent, got %#v", agents)
-	}
-	if len(agents[0].AdvertisedSkills) != 1 || agents[0].AdvertisedSkills[0]["name"] != "review_openapi" {
-		t.Fatalf("unexpected advertised_skills payload: %#v", agents[0].AdvertisedSkills)
-	}
-}
-
 func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testing.T) {
 	t.Parallel()
 
 	var metadataCalls int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/agents/me/metadata":
 			metadataCalls++
@@ -617,7 +493,6 @@ func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testin
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	_, err := client.UpdateMetadata(context.Background(), "agent-token", hub.UpdateMetadataRequest{
@@ -635,7 +510,7 @@ func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testin
 func TestUpdateMetadataUsesCanonicalMetadataEndpointWhenProvided(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/runtime/profile" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -648,7 +523,6 @@ func TestUpdateMetadataUsesCanonicalMetadataEndpointWhenProvided(t *testing.T) {
 			"result": map[string]any{"status": "ok"},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
@@ -669,7 +543,7 @@ func TestUpdateMetadataFallsBackWhenCanonicalMetadataEndpointIsMissing(t *testin
 	var runtimeMetadataCalls int
 	var canonicalMetadataCalls int
 	var aliasCalls int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/runtime/profile":
 			runtimeMetadataCalls++
@@ -706,7 +580,6 @@ func TestUpdateMetadataFallsBackWhenCanonicalMetadataEndpointIsMissing(t *testin
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
@@ -736,7 +609,7 @@ func TestUpdateMetadataFallsBackWhenRuntimeMetadataEndpointReturnsUnauthorized(t
 
 	var runtimeMetadataCalls int
 	var canonicalMetadataCalls int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/runtime/profile":
 			runtimeMetadataCalls++
@@ -756,7 +629,6 @@ func TestUpdateMetadataFallsBackWhenRuntimeMetadataEndpointReturnsUnauthorized(t
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
@@ -791,7 +663,7 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 		mu.Unlock()
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/runtime/openclaw/publish":
 			markCalled("publish")
@@ -881,7 +753,6 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
@@ -940,7 +811,7 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 func TestPullOpenClawDecodesMessageAliasesFromRuntimeContract(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/runtime/openclaw/pull" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -960,7 +831,6 @@ func TestPullOpenClawDecodesMessageAliasesFromRuntimeContract(t *testing.T) {
 			},
 		})
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL)
 	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
@@ -989,11 +859,10 @@ func TestCheckPingUsesRootPingPathFromVersionedBaseURL(t *testing.T) {
 	t.Parallel()
 
 	var requestPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestPath = r.URL.Path
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL + "/v1")
 	detail, err := client.CheckPing(context.Background())
@@ -1011,10 +880,9 @@ func TestCheckPingUsesRootPingPathFromVersionedBaseURL(t *testing.T) {
 func TestCheckPingReturnsErrorWhenPingStatusIsNotSuccess(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
-	defer server.Close()
 
 	client := hub.NewClient(server.URL + "/v1")
 	_, err := client.CheckPing(context.Background())
