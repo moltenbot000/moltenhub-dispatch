@@ -4783,18 +4783,18 @@ body {
 
 .shell {
   width: min(1380px, calc(100vw - 24px));
-  padding: 32px 20px var(--hub-content-bottom-padding);
-  gap: 24px;
+  padding: 24px 20px var(--hub-content-bottom-padding);
+  gap: 22px;
 }
 
 .page-header {
-  align-items: flex-start;
-  gap: 20px;
-  padding: 4px 2px 0;
+  align-items: center;
+  gap: 16px;
+  padding: 0 2px;
 }
 
 .page-title-block {
-  gap: 0;
+  gap: 2px;
   max-width: 46rem;
 }
 
@@ -4818,6 +4818,7 @@ p,
 
 .connection-status-row {
   gap: 12px;
+  align-self: center;
 }
 
 .connection-status-row .status-item-compact {
@@ -4828,6 +4829,10 @@ p,
 
 .connection-status-row .status-tooltip {
   color: var(--foreground);
+}
+
+.page-brand-subtitle {
+  line-height: 1.3;
 }
 
 .panel,
