@@ -1783,6 +1783,46 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	}
 }
 
+func TestHandleIndexKeepsDispatchVisibleWhenAgentsExistButHubStatusIsOffline(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportOffline,
+				Error:     "publish failed",
+			},
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			ConnectedAgents: []app.ConnectedAgent{
+				testConnectedAgent("worker-a", "Worker A", "worker-uuid", "molten://agent/worker-a", app.Skill{Name: "run_task"}),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, `id="sub-actions" hidden`) {
+		t.Fatalf("expected dispatch surface to remain visible with known connected agents, body=%s", body)
+	}
+	if !strings.Contains(body, `id="sub-actions-notice" class="panel dispatch-gate-panel" hidden`) {
+		t.Fatalf("expected hidden sub-actions notice when connected agents exist, body=%s", body)
+	}
+	if !strings.Contains(body, `const dispatchEnabled = bound && connectedAgentsCount > 0;`) {
+		t.Fatalf("expected client-side sub-action gate to keep dispatch visible when agents exist, body=%s", body)
+	}
+}
+
 func TestHandleIndexUsesBioPlaceholderWithoutPrefilledDefaultText(t *testing.T) {
 	t.Parallel()
 

@@ -757,21 +757,21 @@ func subActionState(state app.AppState) subActionView {
 			Reason:  "Sub-actions stay hidden until this runtime is bound to Molten Hub and connectivity is working.",
 		}
 	}
+	if len(state.ConnectedAgents) > 0 {
+		return subActionView{Visible: true}
+	}
 	if state.Connection.Status != app.ConnectionStatusConnected {
 		return subActionView{
 			Visible: false,
 			Reason:  "Sub-actions stay hidden while the Hub connection is offline or unavailable.",
 		}
 	}
-	if len(state.ConnectedAgents) == 0 {
-		return subActionView{
-			Visible:                 false,
-			Reason:                  "No talkable peer agents are available yet. Bound agents are listed in Molten Bot Hub, and dispatch targets appear here after Hub trust/connectivity makes them reachable.",
-			RequiresAgentConnection: true,
-			AgentConnectURL:         "https://app.molten.bot/hub",
-		}
+	return subActionView{
+		Visible:                 false,
+		Reason:                  "No talkable peer agents are available yet. Bound agents are listed in Molten Bot Hub, and dispatch targets appear here after Hub trust/connectivity makes them reachable.",
+		RequiresAgentConnection: true,
+		AgentConnectURL:         "https://app.molten.bot/hub",
 	}
-	return subActionView{Visible: true}
 }
 
 func defaultOnboardingView(state app.AppState) onboardingView {

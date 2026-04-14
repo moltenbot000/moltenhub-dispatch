@@ -1497,7 +1497,7 @@
           return;
         }
         const connected = bound && (state.status === "connected" || state.transport === "ws" || state.transport === "http_long_poll" || state.transport === "connected");
-        const dispatchEnabled = connected && connectedAgentsCount > 0;
+        const dispatchEnabled = bound && connectedAgentsCount > 0;
         const requiresAgentConnection = connected && connectedAgentsCount === 0;
 
         subActions.hidden = !dispatchEnabled;
