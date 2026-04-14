@@ -34,6 +34,9 @@ type HubAgent struct {
 	URI              string           `json:"uri,omitempty"`
 	Handle           string           `json:"handle,omitempty"`
 	Status           string           `json:"status,omitempty"`
+	DisplayName      string           `json:"display_name,omitempty"`
+	Emoji            string           `json:"emoji,omitempty"`
+	Presence         *AgentPresence   `json:"presence,omitempty"`
 	AdvertisedSkills []map[string]any `json:"advertised_skills,omitempty"`
 	Skills           []map[string]any `json:"skills,omitempty"`
 	Metadata         *AgentMetadata   `json:"metadata,omitempty"`

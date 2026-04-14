@@ -1770,6 +1770,7 @@
       const connectedAgentDisplayName = (agent) => {
         for (const candidate of [
           agent && agent.metadata && agent.metadata.display_name,
+          agent && agent.display_name,
           agent && agent.handle,
           agent && agent.agent_id,
           agent && agent.uri,
@@ -1900,6 +1901,10 @@
       const connectedAgentPresenceStatus = (agent) => {
         const presenceStatus = trimmedString(agent && agent.metadata && agent.metadata.presence && agent.metadata.presence.status).toLowerCase();
         if (presenceStatus === "online") {
+          return "online";
+        }
+        const rootPresenceStatus = trimmedString(agent && agent.presence && agent.presence.status).toLowerCase();
+        if (rootPresenceStatus === "online") {
           return "online";
         }
         const status = trimmedString(agent && agent.status).toLowerCase();
@@ -2147,7 +2152,10 @@
       };
 
       const connectedAgentEmoji = (agent) => {
-        const emoji = firstEmojiGrapheme(trimmedString(agent && agent.metadata && agent.metadata.emoji));
+        const emoji = firstEmojiGrapheme(
+          trimmedString(agent && agent.metadata && agent.metadata.emoji)
+          || trimmedString(agent && agent.emoji)
+        );
         if (emoji) {
           return emoji;
         }

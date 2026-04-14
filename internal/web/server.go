@@ -594,6 +594,7 @@ func connectedAgentDisplayName(agent app.ConnectedAgent) string {
 	}
 	for _, candidate := range []string{
 		displayName,
+		agent.DisplayName,
 		agent.Handle,
 		agent.AgentID,
 		agent.URI,
@@ -618,6 +619,9 @@ func connectedAgentPresenceStatus(agent app.ConnectedAgent) string {
 	if agent.Metadata != nil && agent.Metadata.Presence != nil && strings.EqualFold(strings.TrimSpace(agent.Metadata.Presence.Status), "online") {
 		return "online"
 	}
+	if agent.Presence != nil && strings.EqualFold(strings.TrimSpace(agent.Presence.Status), "online") {
+		return "online"
+	}
 	if strings.EqualFold(strings.TrimSpace(agent.Status), "online") {
 		return "online"
 	}
@@ -636,6 +640,9 @@ func connectedAgentEmoji(agent app.ConnectedAgent) string {
 		if emoji := strings.TrimSpace(agent.Metadata.Emoji); emoji != "" {
 			return emoji
 		}
+	}
+	if emoji := strings.TrimSpace(agent.Emoji); emoji != "" {
+		return emoji
 	}
 	return "🤖"
 }

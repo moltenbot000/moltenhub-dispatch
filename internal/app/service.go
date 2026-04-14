@@ -1928,7 +1928,7 @@ func connectedAgentDisplayName(agent ConnectedAgent) string {
 	if metadata != nil && strings.TrimSpace(metadata.DisplayName) != "" {
 		return strings.TrimSpace(metadata.DisplayName)
 	}
-	return coalesceTrimmed(agent.Handle, agent.AgentID, agent.URI, agent.AgentUUID, "Unknown agent")
+	return coalesceTrimmed(agent.DisplayName, agent.Handle, agent.AgentID, agent.URI, agent.AgentUUID, "Unknown agent")
 }
 
 func connectedAgentSecondaryRef(agent ConnectedAgent) string {
@@ -1937,15 +1937,18 @@ func connectedAgentSecondaryRef(agent ConnectedAgent) string {
 
 func connectedAgentEmoji(agent ConnectedAgent) string {
 	metadata := connectedAgentMetadata(agent)
-	if metadata == nil {
-		return ""
+	if metadata != nil && strings.TrimSpace(metadata.Emoji) != "" {
+		return strings.TrimSpace(metadata.Emoji)
 	}
-	return strings.TrimSpace(metadata.Emoji)
+	return strings.TrimSpace(agent.Emoji)
 }
 
 func connectedAgentPresenceStatus(agent ConnectedAgent) string {
 	metadata := connectedAgentMetadata(agent)
 	if metadata != nil && metadata.Presence != nil && strings.EqualFold(strings.TrimSpace(metadata.Presence.Status), "online") {
+		return "online"
+	}
+	if agent.Presence != nil && strings.EqualFold(strings.TrimSpace(agent.Presence.Status), "online") {
 		return "online"
 	}
 	if strings.EqualFold(strings.TrimSpace(agent.Status), "online") {
@@ -2016,6 +2019,16 @@ func normalizeConnectedAgent(agent ConnectedAgent) ConnectedAgent {
 	agent.URI = strings.TrimSpace(agent.URI)
 	agent.Handle = strings.TrimSpace(agent.Handle)
 	agent.Status = strings.TrimSpace(agent.Status)
+	agent.DisplayName = strings.TrimSpace(agent.DisplayName)
+	agent.Emoji = strings.TrimSpace(agent.Emoji)
+	if agent.Presence != nil {
+		presence := *agent.Presence
+		presence.Status = strings.TrimSpace(presence.Status)
+		presence.Transport = strings.TrimSpace(presence.Transport)
+		presence.SessionKey = strings.TrimSpace(presence.SessionKey)
+		presence.UpdatedAt = strings.TrimSpace(presence.UpdatedAt)
+		agent.Presence = &presence
+	}
 	if agent.Metadata != nil {
 		metadata := *agent.Metadata
 		metadata.AgentType = strings.TrimSpace(metadata.AgentType)

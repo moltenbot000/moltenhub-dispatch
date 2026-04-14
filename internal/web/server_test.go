@@ -2648,6 +2648,67 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+			ConnectedAgents: []app.ConnectedAgent{
+				{
+					AgentID:     "hub-worker",
+					AgentUUID:   "8d9add87-10b1-4ee4-a138-acde48001122",
+					URI:         "molten://agent/hub-worker",
+					DisplayName: "Hub Worker",
+					Emoji:       "🧪",
+					Skills: []map[string]any{
+						{"name": "review_openapi", "description": "Review Hub API integration behavior."},
+						{"name": "review_failure_logs", "description": "Review failing logs."},
+					},
+					Presence: &hub.AgentPresence{Status: "online"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, ">Hub Worker<") {
+		t.Fatalf("expected root hub display name to render on the agent card, body=%s", body)
+	}
+	if !strings.Contains(body, "🧪") {
+		t.Fatalf("expected root hub emoji to render on the agent card, body=%s", body)
+	}
+	if !strings.Contains(body, ">Online<") {
+		t.Fatalf("expected root hub presence badge to render online status, body=%s", body)
+	}
+	if !strings.Contains(body, ">review_openapi<") || !strings.Contains(body, ">review_failure_logs<") {
+		t.Fatalf("expected root hub skills to render on the agent card, body=%s", body)
+	}
+	if !strings.Contains(body, `agent && agent.display_name,`) {
+		t.Fatalf("expected client-side display-name helper to read root display_name, body=%s", body)
+	}
+	if !strings.Contains(body, `trimmedString(agent && agent.emoji)`) {
+		t.Fatalf("expected client-side emoji helper to read root emoji, body=%s", body)
+	}
+	if !strings.Contains(body, `trimmedString(agent && agent.presence && agent.presence.status).toLowerCase()`) {
+		t.Fatalf("expected client-side presence helper to read root presence.status, body=%s", body)
+	}
+}
+
 func TestHandleIndexDefinesTrimmedStringBeforeDispatchPlaceholderSetup(t *testing.T) {
 	t.Parallel()
 

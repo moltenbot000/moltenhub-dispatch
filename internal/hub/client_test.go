@@ -584,6 +584,61 @@ func TestListAgentsParsesAdvertisedSkillsFromAgentRoot(t *testing.T) {
 	}
 }
 
+func TestListAgentsParsesHubProfileFieldsFromAgentRoot(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/me/agents" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"agents": []map[string]any{
+					{
+						"agent_uuid":   "agent-uuid",
+						"agent_id":     "dispatch-agent",
+						"display_name": "Dispatch Agent",
+						"emoji":        "🤖",
+						"presence": map[string]any{
+							"status": "online",
+						},
+						"skills": []map[string]any{
+							{
+								"name":        "review_openapi",
+								"description": "Review Hub API integration behavior.",
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	agents, err := client.ListAgents(context.Background(), "agent-token")
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one agent, got %#v", agents)
+	}
+	if got, want := agents[0].DisplayName, "Dispatch Agent"; got != want {
+		t.Fatalf("display_name = %q, want %q", got, want)
+	}
+	if got, want := agents[0].Emoji, "🤖"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
+	}
+	if agents[0].Presence == nil || agents[0].Presence.Status != "online" {
+		t.Fatalf("unexpected presence payload: %#v", agents[0].Presence)
+	}
+	if len(agents[0].Skills) != 1 || agents[0].Skills[0]["name"] != "review_openapi" {
+		t.Fatalf("unexpected skills payload: %#v", agents[0].Skills)
+	}
+}
+
 func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testing.T) {
 	t.Parallel()
 
