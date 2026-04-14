@@ -12,6 +12,23 @@ permissions:
   contents: read
 
 jobs:
+  validate-pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          case "$PR_TITLE" in
+            moltenhub-*)
+              ;;
+            *)
+              echo "Pull request title must start with 'moltenhub-'. Got: $PR_TITLE" >&2
+              exit 1
+              ;;
+          esac
+
   test:
     runs-on: ubuntu-latest
     steps:
