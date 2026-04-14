@@ -2332,7 +2332,7 @@ func TestHandleConnectedAgentsReturnsStructuredRefreshError(t *testing.T) {
 		state: app.AppState{
 			ConnectedAgents: []app.ConnectedAgent{{AgentID: "stale-agent", Handle: "stale-agent"}},
 		},
-		refreshAgentsErr: errors.New("refresh connected agents from /v1/me/agents: hub API 401 unauthorized: missing or invalid bearer token"),
+		refreshAgentsErr: errors.New("refresh connected agents from /v1/agents/me/capabilities: hub API 401 unauthorized: missing or invalid bearer token"),
 	})
 	if err != nil {
 		t.Fatalf("new server: %v", err)
