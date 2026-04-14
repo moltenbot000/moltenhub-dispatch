@@ -3162,6 +3162,64 @@ func TestRefreshConnectedAgentsUsesHubListResponse(t *testing.T) {
 	}
 }
 
+func TestRefreshConnectedAgentsAcceptsAdvertisedSkillsFields(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.listAgentsResponse = []hub.HubAgent{
+		{
+			AgentUUID: "self-uuid",
+			AgentID:   "self-agent",
+			URI:       "molten://agent/self",
+		},
+		{
+			AgentUUID: "peer-a-uuid",
+			AgentID:   "peer-a",
+			Handle:    "peer-a",
+			URI:       "molten://agent/peer-a",
+			Metadata: &hub.AgentMetadata{
+				DisplayName: "Peer A",
+				AdvertisedSkills: []map[string]any{
+					{"name": "review_failure_logs", "description": "Review logs"},
+				},
+			},
+		},
+		{
+			AgentUUID: "peer-b-uuid",
+			AgentID:   "peer-b",
+			Handle:    "peer-b",
+			URI:       "molten://agent/peer-b",
+			AdvertisedSkills: []map[string]any{
+				{"name": "review_openapi", "description": "Review Hub API integration behavior."},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://agent/self"
+		state.Session.Handle = "self-agent"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 2 {
+		t.Fatalf("expected two peer agents, got %#v", agents)
+	}
+	if skills := connectedAgentSkills(agents[0]); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
+		t.Fatalf("expected metadata.advertised_skills fallback, got %#v", skills)
+	}
+	if skills := connectedAgentSkills(agents[1]); len(skills) != 1 || skills[0].Name != "review_openapi" {
+		t.Fatalf("expected agent.advertised_skills fallback, got %#v", skills)
+	}
+}
+
 func TestRefreshConnectedAgentsReturnsListEndpointError(t *testing.T) {
 	t.Parallel()
 

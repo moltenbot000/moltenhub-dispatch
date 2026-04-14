@@ -1767,15 +1767,22 @@
           });
         };
 
-        const advertisedSkills = Array.isArray(agent && agent.metadata && agent.metadata.skills)
-          ? agent.metadata.skills
-          : [];
-        advertisedSkills.forEach((skill) => {
-          if (skill && typeof skill === "object") {
-            pushSkill(skill.name, skill.description);
+        [
+          agent && agent.metadata && agent.metadata.skills,
+          agent && agent.metadata && agent.metadata.advertised_skills,
+          agent && agent.skills,
+          agent && agent.advertised_skills,
+        ].forEach((advertisedSkills) => {
+          if (!Array.isArray(advertisedSkills)) {
             return;
           }
-          pushSkill(skill);
+          advertisedSkills.forEach((skill) => {
+            if (skill && typeof skill === "object") {
+              pushSkill(skill.name, skill.description);
+              return;
+            }
+            pushSkill(skill);
+          });
         });
 
         return ordered;

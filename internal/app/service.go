@@ -1969,10 +1969,19 @@ func connectedAgentSupportsSkill(agent ConnectedAgent, skillName string) bool {
 
 func connectedAgentSkills(agent ConnectedAgent) []Skill {
 	metadata := connectedAgentMetadata(agent)
-	if metadata == nil {
-		return nil
+	if metadata != nil {
+		for _, raw := range []any{metadata.Skills, metadata.AdvertisedSkills} {
+			if skills := skillsFromAny(raw); len(skills) > 0 {
+				return skills
+			}
+		}
 	}
-	return skillsFromAny(metadata.Skills)
+	for _, raw := range []any{agent.Skills, agent.AdvertisedSkills} {
+		if skills := skillsFromAny(raw); len(skills) > 0 {
+			return skills
+		}
+	}
+	return nil
 }
 
 func connectedAgentRefs(agent ConnectedAgent) []string {
@@ -2026,10 +2035,19 @@ func normalizeConnectedAgent(agent ConnectedAgent) ConnectedAgent {
 		if agent.Metadata.Skills == nil {
 			metadata.Skills = nil
 		}
+		if agent.Metadata.AdvertisedSkills == nil {
+			metadata.AdvertisedSkills = nil
+		}
 		if agent.Metadata.Activities == nil {
 			metadata.Activities = nil
 		}
 		agent.Metadata = &metadata
+	}
+	if agent.Skills == nil {
+		agent.Skills = nil
+	}
+	if agent.AdvertisedSkills == nil {
+		agent.AdvertisedSkills = nil
 	}
 	return agent
 }

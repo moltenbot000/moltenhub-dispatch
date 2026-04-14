@@ -445,6 +445,94 @@ func TestListAgentsUsesMeAgentsEndpointAndParsesEnvelope(t *testing.T) {
 	}
 }
 
+func TestListAgentsParsesAdvertisedSkillsFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/me/agents" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"agents": []map[string]any{
+					{
+						"agent_uuid": "agent-uuid",
+						"agent_id":   "dispatch-agent",
+						"metadata": map[string]any{
+							"display_name": "Dispatch Agent",
+							"advertised_skills": []map[string]any{
+								{
+									"name":        "review_openapi",
+									"description": "Review Hub API integration behavior.",
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	agents, err := client.ListAgents(context.Background(), "human-token")
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one agent, got %#v", agents)
+	}
+	if agents[0].Metadata == nil {
+		t.Fatalf("expected metadata payload, got %#v", agents[0])
+	}
+	if len(agents[0].Metadata.AdvertisedSkills) != 1 || agents[0].Metadata.AdvertisedSkills[0]["name"] != "review_openapi" {
+		t.Fatalf("unexpected advertised_skills payload: %#v", agents[0].Metadata.AdvertisedSkills)
+	}
+}
+
+func TestListAgentsParsesAdvertisedSkillsFromAgentRoot(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/me/agents" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"agents": []map[string]any{
+					{
+						"agent_uuid": "agent-uuid",
+						"agent_id":   "dispatch-agent",
+						"advertised_skills": []map[string]any{
+							{
+								"name":        "review_openapi",
+								"description": "Review Hub API integration behavior.",
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := hub.NewClient(server.URL)
+	agents, err := client.ListAgents(context.Background(), "human-token")
+	if err != nil {
+		t.Fatalf("list agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one agent, got %#v", agents)
+	}
+	if len(agents[0].AdvertisedSkills) != 1 || agents[0].AdvertisedSkills[0]["name"] != "review_openapi" {
+		t.Fatalf("unexpected advertised_skills payload: %#v", agents[0].AdvertisedSkills)
+	}
+}
+
 func TestUpdateMetadataFallsBackToAgentAliasWhenMetadataRouteIsMissing(t *testing.T) {
 	t.Parallel()
 

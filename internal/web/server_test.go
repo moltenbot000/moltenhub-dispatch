@@ -750,6 +750,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `targetAgentRefInput.value = connectedAgentTargetRef(nextAgents[0]);`) {
 		t.Fatalf("expected first connected agent auto-selection logic, body=%s", body)
 	}
+	if !strings.Contains(body, `agent && agent.metadata && agent.metadata.advertised_skills`) {
+		t.Fatalf("expected manual dispatch client to read metadata.advertised_skills, body=%s", body)
+	}
+	if !strings.Contains(body, `agent && agent.advertised_skills`) {
+		t.Fatalf("expected manual dispatch client to read top-level advertised_skills, body=%s", body)
+	}
 	if strings.Contains(body, `name="timeout_seconds"`) {
 		t.Fatalf("did not expect manual dispatch timeout field, body=%s", body)
 	}
