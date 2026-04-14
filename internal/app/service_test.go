@@ -1095,6 +1095,9 @@ func TestHandleDispatchResolutionFailureSendsDetailedFailureWithoutFollowUp(t *t
 	if got := fake.publishCalls[0].Message.ErrorDetail.(map[string]any)["message"]; got != "Task dispatch failed before it reached a connected agent." {
 		t.Fatalf("unexpected caller error detail payload: %#v", fake.publishCalls[0].Message.ErrorDetail)
 	}
+	if got := fake.publishCalls[0].Message.Error; got != "Task dispatch failed before it reached a connected agent. Error: no connected agent matched \"missing-agent\"" {
+		t.Fatalf("unexpected caller failure summary: %#v", got)
+	}
 	if got := fake.publishCalls[0].Message.RequestID; got != "parent-req" {
 		t.Fatalf("unexpected caller failure request id: %q", got)
 	}
@@ -1176,8 +1179,8 @@ func TestHandleDownstreamFailureSendsDetailedFailureWithoutFollowUp(t *testing.T
 	if failureMessage.Type != "skill_result" {
 		t.Fatalf("unexpected caller message type: %s", failureMessage.Type)
 	}
-	if failureMessage.Error == "" {
-		t.Fatal("expected detailed failure error")
+	if failureMessage.Error != "Task failed while dispatching to a connected agent. Error: task execution failed" {
+		t.Fatalf("unexpected caller failure summary: %q", failureMessage.Error)
 	}
 	failurePayload, ok := failureMessage.Payload.(map[string]any)
 	if !ok {
@@ -1404,6 +1407,9 @@ func TestHandleDownstreamPlaintextRunnerFailureReturnsErrorDetailsWithoutFollowU
 	}
 	if got := failurePayload["error"]; got != "error connecting to api.github.com" {
 		t.Fatalf("unexpected caller failure error: %#v", got)
+	}
+	if got := fake.publishCalls[0].Message.Error; got != "Task failed while dispatching to a connected agent. Error: error connecting to api.github.com" {
+		t.Fatalf("unexpected caller failure summary: %#v", got)
 	}
 	if got := failurePayload["failure"]; got != true {
 		t.Fatalf("expected failure marker in caller payload, got %#v", got)
@@ -1756,6 +1762,9 @@ func TestHandleSkillRequestRequiresSelectionWhenTargetAndSkillAreBlank(t *testin
 	}
 	if got := failurePayload["status"]; got != "failed" {
 		t.Fatalf("unexpected failure status payload: %#v", got)
+	}
+	if got := fake.publishCalls[0].Message.Error; got != "Task dispatch failed before it reached a connected agent. Error: Please select agent, skill to dispatch a request." {
+		t.Fatalf("unexpected caller failure summary: %#v", got)
 	}
 
 }
@@ -2145,6 +2154,19 @@ func TestCallerFailurePayloadIncludesExplicitFailureDetails(t *testing.T) {
 	}
 	if detail["stderr"] != "stacktrace" || detail["exit_code"] != 1 {
 		t.Fatalf("unexpected error_details payload: %#v", detail)
+	}
+}
+
+func TestCallerFailureErrorIncludesExplicitFailureSummary(t *testing.T) {
+	t.Parallel()
+
+	got := callerFailureError(failureReport{
+		Message: "downstream worker returned a non-zero exit code",
+		Error:   "panic: boom",
+	})
+
+	if got != "Task failed: downstream worker returned a non-zero exit code. Error: panic: boom" {
+		t.Fatalf("unexpected caller failure error: %q", got)
 	}
 }
 

@@ -698,6 +698,15 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, ">Dispatch<") {
 		t.Fatalf("expected sub-actions when bound and connected, body=%s", body)
 	}
+	if !strings.Contains(body, "Markdown and JSON are both supported.") {
+		t.Fatalf("expected simplified payload format hint, body=%s", body)
+	}
+	if strings.Contains(body, "Select a target first. Skills load from the chosen agent's Hub capabilities.") {
+		t.Fatalf("did not expect removed dispatch target hint, body=%s", body)
+	}
+	if strings.Contains(body, "Dispatch sets the payload format automatically.") {
+		t.Fatalf("did not expect removed payload auto-format hint, body=%s", body)
+	}
 	if strings.Contains(body, ">Manual Dispatch<") {
 		t.Fatalf("did not expect previous manual dispatch heading, body=%s", body)
 	}
