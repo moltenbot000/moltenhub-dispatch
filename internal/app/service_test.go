@@ -21,9 +21,6 @@ type fakeHubClient struct {
 	capabilitiesResponse  map[string]any
 	capabilitiesErr       error
 	capabilitiesErrOnCall int
-	listAgentsCalls       int
-	listAgentsResponse    []hub.HubAgent
-	listAgentsErr         error
 	publishCalls          []hub.PublishRequest
 	offlineCalls          []hub.OfflineRequest
 	baseURLCalls          []string
@@ -81,17 +78,6 @@ func (f *fakeHubClient) GetCapabilities(_ context.Context, _ string) (map[string
 		return f.capabilitiesResponse, nil
 	}
 	return map[string]any{"advertised_skills": []any{}}, nil
-}
-
-func (f *fakeHubClient) ListAgents(_ context.Context, _ string) ([]hub.HubAgent, error) {
-	f.listAgentsCalls++
-	if f.listAgentsErr != nil {
-		return nil, f.listAgentsErr
-	}
-	if f.listAgentsResponse != nil {
-		return f.listAgentsResponse, nil
-	}
-	return nil, nil
 }
 
 func (f *fakeHubClient) PublishOpenClaw(_ context.Context, _ string, req hub.PublishRequest) (hub.PublishResponse, error) {
@@ -3087,32 +3073,35 @@ func TestSetFlashNormalizesInfoLevel(t *testing.T) {
 	}
 }
 
-func TestRefreshConnectedAgentsUsesHubListResponse(t *testing.T) {
+func TestRefreshConnectedAgentsUsesPeerSkillCatalogFromCapabilities(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
 	ready := true
-	fake.listAgentsResponse = []hub.HubAgent{
-		{
-			AgentUUID: "self-uuid",
-			AgentID:   "self-agent",
-			URI:       "molten://agent/self",
-		},
-		{
-			AgentUUID: "peer-uuid",
-			AgentID:   "peer-agent",
-			Handle:    "peer-agent",
-			URI:       "molten://agent/peer",
-			Status:    "online",
-			Metadata: &hub.AgentMetadata{
-				DisplayName: "Peer Agent",
-				Emoji:       "🛠",
-				Skills: []map[string]any{
-					{"name": "review_failure_logs", "description": "Review logs"},
-				},
-				Presence: &hub.AgentPresence{
-					Status: "online",
-					Ready:  &ready,
+	fake.capabilitiesResponse = map[string]any{
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent_uuid": "self-uuid",
+				"agent_id":   "self-agent",
+				"uri":        "molten://agent/self",
+			},
+			map[string]any{
+				"agent": map[string]any{
+					"agent_uuid": "peer-uuid",
+					"agent_id":   "peer-agent",
+					"handle":     "peer-agent",
+					"uri":        "molten://agent/peer",
+					"metadata": map[string]any{
+						"display_name": "Peer Agent",
+						"emoji":        "🛠",
+						"skills": []map[string]any{
+							{"name": "review_failure_logs", "description": "Review logs"},
+						},
+						"presence": map[string]any{
+							"status": "online",
+							"ready":  ready,
+						},
+					},
 				},
 			},
 		},
@@ -3132,8 +3121,8 @@ func TestRefreshConnectedAgentsUsesHubListResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh connected agents: %v", err)
 	}
-	if fake.listAgentsCalls != 1 {
-		t.Fatalf("expected one list-agents call, got %d", fake.listAgentsCalls)
+	if fake.capabilitiesCalls != 1 {
+		t.Fatalf("expected one capabilities call, got %d", fake.capabilitiesCalls)
 	}
 	if len(agents) != 1 {
 		t.Fatalf("expected one connected agent, got %#v", agents)
@@ -3162,35 +3151,37 @@ func TestRefreshConnectedAgentsUsesHubListResponse(t *testing.T) {
 	}
 }
 
-func TestRefreshConnectedAgentsAcceptsAdvertisedSkillsFields(t *testing.T) {
+func TestRefreshConnectedAgentsAcceptsPeerCatalogSkillFields(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
-	fake.listAgentsResponse = []hub.HubAgent{
-		{
-			AgentUUID: "self-uuid",
-			AgentID:   "self-agent",
-			URI:       "molten://agent/self",
-		},
-		{
-			AgentUUID: "peer-a-uuid",
-			AgentID:   "peer-a",
-			Handle:    "peer-a",
-			URI:       "molten://agent/peer-a",
-			Metadata: &hub.AgentMetadata{
-				DisplayName: "Peer A",
-				AdvertisedSkills: []map[string]any{
-					{"name": "review_failure_logs", "description": "Review logs"},
+	fake.capabilitiesResponse = map[string]any{
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent_uuid": "self-uuid",
+				"agent_id":   "self-agent",
+				"uri":        "molten://agent/self",
+			},
+			map[string]any{
+				"agent_uuid": "peer-a-uuid",
+				"agent_id":   "peer-a",
+				"handle":     "peer-a",
+				"uri":        "molten://agent/peer-a",
+				"metadata": map[string]any{
+					"display_name": "Peer A",
+					"advertised_skills": []map[string]any{
+						{"name": "review_failure_logs", "description": "Review logs"},
+					},
 				},
 			},
-		},
-		{
-			AgentUUID: "peer-b-uuid",
-			AgentID:   "peer-b",
-			Handle:    "peer-b",
-			URI:       "molten://agent/peer-b",
-			AdvertisedSkills: []map[string]any{
-				{"name": "review_openapi", "description": "Review Hub API integration behavior."},
+			map[string]any{
+				"agent_uuid": "peer-b-uuid",
+				"agent_id":   "peer-b",
+				"handle":     "peer-b",
+				"uri":        "molten://agent/peer-b",
+				"advertised_skills": []map[string]any{
+					{"name": "review_openapi", "description": "Review Hub API integration behavior."},
+				},
 			},
 		},
 	}
@@ -3225,25 +3216,27 @@ func TestRefreshConnectedAgentsAcceptsHubProfileFieldsAtAgentRoot(t *testing.T) 
 
 	service, fake := newTestService(t)
 	ready := true
-	fake.listAgentsResponse = []hub.HubAgent{
-		{
-			AgentUUID: "self-uuid",
-			AgentID:   "self-agent",
-			URI:       "molten://agent/self",
-		},
-		{
-			AgentUUID:   "peer-uuid",
-			AgentID:     "peer-agent",
-			Handle:      "peer-agent",
-			URI:         "molten://agent/peer",
-			DisplayName: "Peer Agent",
-			Emoji:       "🛠",
-			Presence: &hub.AgentPresence{
-				Status: "online",
-				Ready:  &ready,
+	fake.capabilitiesResponse = map[string]any{
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent_uuid": "self-uuid",
+				"agent_id":   "self-agent",
+				"uri":        "molten://agent/self",
 			},
-			Skills: []map[string]any{
-				{"name": "review_failure_logs", "description": "Review logs"},
+			map[string]any{
+				"agent_uuid":   "peer-uuid",
+				"agent_id":     "peer-agent",
+				"handle":       "peer-agent",
+				"uri":          "molten://agent/peer",
+				"display_name": "Peer Agent",
+				"emoji":        "🛠",
+				"presence": map[string]any{
+					"status": "online",
+					"ready":  ready,
+				},
+				"skills": []map[string]any{
+					{"name": "review_failure_logs", "description": "Review logs"},
+				},
 			},
 		},
 	}
@@ -3266,6 +3259,9 @@ func TestRefreshConnectedAgentsAcceptsHubProfileFieldsAtAgentRoot(t *testing.T) 
 		t.Fatalf("expected one connected agent, got %#v", agents)
 	}
 	agent := agents[0]
+	if agent.Metadata == nil {
+		t.Fatalf("expected metadata synthesized from root capability fields, got %#v", agent)
+	}
 	if got, want := connectedAgentDisplayName(agent), "Peer Agent"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
@@ -3276,15 +3272,15 @@ func TestRefreshConnectedAgentsAcceptsHubProfileFieldsAtAgentRoot(t *testing.T) 
 		t.Fatalf("presence = %q, want %q", got, want)
 	}
 	if skills := connectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
-		t.Fatalf("expected root-level skills from hub list response, got %#v", skills)
+		t.Fatalf("expected root-level skills from capabilities response, got %#v", skills)
 	}
 }
 
-func TestRefreshConnectedAgentsReturnsListEndpointError(t *testing.T) {
+func TestRefreshConnectedAgentsReturnsCapabilitiesEndpointError(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
-	fake.listAgentsErr = &hub.APIError{
+	fake.capabilitiesErr = &hub.APIError{
 		StatusCode: 401,
 		Code:       "unauthorized",
 		Message:    "missing or invalid bearer token",
@@ -3301,8 +3297,8 @@ func TestRefreshConnectedAgentsReturnsListEndpointError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected refresh error")
 	}
-	if !strings.Contains(err.Error(), "/v1/me/agents") {
-		t.Fatalf("expected list-agents route in error, got %v", err)
+	if !strings.Contains(err.Error(), "/v1/agents/me/capabilities") {
+		t.Fatalf("expected capabilities route in error, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "missing or invalid bearer token") {
 		t.Fatalf("expected bearer-token detail in error, got %v", err)
