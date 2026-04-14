@@ -168,7 +168,6 @@
               {{$secondaryLabel := connectedAgentSecondaryLabel .}}
               {{$presenceStatus := connectedAgentPresenceStatus .}}
               {{$presenceLabel := connectedAgentPresenceLabel .}}
-              {{$skills := connectedAgentSkills .}}
               <button
                 type="button"
                 class="connected-agent-card connected-agent-card-button"
@@ -184,15 +183,6 @@
                       <span>{{$displayName}}</span>
                     </h3>
                     {{if $secondaryLabel}}<p class="connected-agent-secondary">{{$secondaryLabel}}</p>{{end}}
-                    {{if $skills}}
-                    <ul class="connected-agent-skills" aria-label="Advertised skills">
-                      {{range $skills}}
-                      <li class="connected-agent-skill"{{if .Description}} title="{{.Description}}"{{end}}>{{.Name}}</li>
-                      {{end}}
-                    </ul>
-                    {{else}}
-                    <p class="connected-agent-skills-empty">No skills advertised</p>
-                    {{end}}
                   </div>
                   <div class="connected-agent-card-meta">
                     <span class="connected-agent-presence {{if eq $presenceStatus "online"}}is-online{{else}}is-offline{{end}}">
@@ -2154,32 +2144,6 @@
         return "🤖";
       };
 
-      const buildConnectedAgentSkills = (agent) => {
-        const skillEntries = connectedAgentSkillEntries(agent);
-        if (skillEntries.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "connected-agent-skills-empty";
-          empty.textContent = "No skills advertised";
-          return empty;
-        }
-
-        const list = document.createElement("ul");
-        list.className = "connected-agent-skills";
-        list.setAttribute("aria-label", "Advertised skills");
-
-        skillEntries.forEach((skill) => {
-          const item = document.createElement("li");
-          item.className = "connected-agent-skill";
-          item.textContent = skill.name;
-          if (skill.description) {
-            item.title = skill.description;
-          }
-          list.appendChild(item);
-        });
-
-        return list;
-      };
-
       const buildConnectedAgentCard = (agent, selectable = false) => {
         const card = document.createElement(selectable ? "button" : "article");
         card.className = selectable
@@ -2229,7 +2193,6 @@
           secondary.textContent = secondaryLabel;
           copy.appendChild(secondary);
         }
-        copy.appendChild(buildConnectedAgentSkills(agent));
         cardMain.appendChild(copy);
 
         const meta = document.createElement("div");
