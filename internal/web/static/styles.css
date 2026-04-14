@@ -319,20 +319,6 @@ textarea {
   filter: var(--agent-logo-filter);
 }
 
-.title {
-  font-family: "Sora", "Instrument Sans", sans-serif;
-  font-size: clamp(1.35rem, 1.8vw, 1.6rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--text);
-  text-transform: none;
-}
-
-.sub {
-  color: var(--text-soft);
-  font-size: 0.92rem;
-}
-
 .status-row {
   display: flex;
   align-items: center;
@@ -3467,7 +3453,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
 
 .page-title-block {
   display: grid;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
 }
 
@@ -3515,22 +3501,21 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   transform: scale(1);
 }
 
-.title {
-  font-family: "Sora", "Instrument Sans", sans-serif;
-  font-size: clamp(1.35rem, 1.8vw, 1.6rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--text);
-  text-transform: none;
-}
-
-.sub {
-  color: var(--text-soft);
-  font-size: 0.92rem;
-}
-
-.page-subtitle {
+.page-brand-title {
   margin: 0;
+  font-family: var(--font-family);
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.page-brand-subtitle {
+  font-family: var(--font-family);
+  font-size: 1rem;
+  color: rgb(var(--hub-meta-rgb));
   line-height: 1.5;
   font-weight: 600;
 }
@@ -4809,7 +4794,7 @@ body {
 }
 
 .page-title-block {
-  gap: 10px;
+  gap: 0;
   max-width: 46rem;
 }
 
@@ -4825,29 +4810,10 @@ body {
   text-transform: uppercase;
 }
 
-.title {
-  margin: 0;
-  font-family: var(--font-family);
-  font-size: clamp(2rem, 4vw, 2.6rem);
-  font-weight: var(--font-weight-bold);
-  line-height: 1.02;
-  color: var(--foreground);
-  letter-spacing: -0.04em;
-}
-
-.sub,
-.page-subtitle,
 p,
 .hint,
 .empty {
   font-family: var(--font-family);
-}
-
-.page-subtitle {
-  max-width: 42rem;
-  font-size: var(--text-h4);
-  color: var(--muted-foreground);
-  line-height: 1.65;
 }
 
 .connection-status-row {
