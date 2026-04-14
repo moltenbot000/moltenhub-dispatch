@@ -2449,11 +2449,11 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, "Offline") {
 		t.Fatalf("expected presence badge on connected agent cards, body=%s", body)
 	}
-	if !strings.Contains(body, `class="connected-agent-skills"`) {
-		t.Fatalf("expected connected agent skill list on cards, body=%s", body)
+	if strings.Contains(body, `class="connected-agent-skills"`) {
+		t.Fatalf("did not expect connected agent skill list on cards, body=%s", body)
 	}
-	if !strings.Contains(body, `class="connected-agent-skill"`) {
-		t.Fatalf("expected connected agent skill chip styling in markup, body=%s", body)
+	if strings.Contains(body, `class="connected-agent-skill"`) {
+		t.Fatalf("did not expect connected agent skill chips in markup, body=%s", body)
 	}
 	if !strings.Contains(body, `id="target-agent-ref-input"`) {
 		t.Fatalf("expected hidden target agent ref input for card selection UI, body=%s", body)
@@ -2539,8 +2539,8 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `const selectConnectedAgentTarget = (targetRef, options = {}) => {`) {
 		t.Fatalf("expected connected agent selector click handler, body=%s", body)
 	}
-	if !strings.Contains(body, `const buildConnectedAgentSkills = (agent) => {`) {
-		t.Fatalf("expected connected agent skill list renderer in client script, body=%s", body)
+	if strings.Contains(body, `const buildConnectedAgentSkills = (agent) => {`) {
+		t.Fatalf("did not expect removed connected agent skill list renderer in client script, body=%s", body)
 	}
 	if !strings.Contains(body, `formData.set("target_agent_ref", dispatchState.targetRef);`) {
 		t.Fatalf("expected dispatch submit flow to explicitly serialize target agent selection, body=%s", body)
@@ -2635,8 +2635,8 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	if !strings.Contains(body, ">Online<") {
 		t.Fatalf("expected hub presence badge to render online status, body=%s", body)
 	}
-	if !strings.Contains(body, ">review_openapi<") || !strings.Contains(body, ">run_task<") {
-		t.Fatalf("expected hub advertised skills to render on the agent card, body=%s", body)
+	if strings.Contains(body, ">review_openapi<") || strings.Contains(body, ">run_task<") {
+		t.Fatalf("did not expect hub advertised skills to render on the agent card, body=%s", body)
 	}
 	if strings.Contains(body, ">8d9add87-10b1-4ee4-a138-acde48001122<") {
 		t.Fatalf("did not expect UUID values to be rendered as visible card labels, body=%s", body)
@@ -2690,8 +2690,8 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	if !strings.Contains(body, ">Online<") {
 		t.Fatalf("expected root hub presence badge to render online status, body=%s", body)
 	}
-	if !strings.Contains(body, ">review_openapi<") || !strings.Contains(body, ">review_failure_logs<") {
-		t.Fatalf("expected root hub skills to render on the agent card, body=%s", body)
+	if strings.Contains(body, ">review_openapi<") || strings.Contains(body, ">review_failure_logs<") {
+		t.Fatalf("did not expect root hub skills to render on the agent card, body=%s", body)
 	}
 	if !strings.Contains(body, `agent && agent.display_name,`) {
 		t.Fatalf("expected client-side display-name helper to read root display_name, body=%s", body)

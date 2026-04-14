@@ -4383,40 +4383,6 @@ body.settings-modal-open {
   text-overflow: ellipsis;
 }
 
-.connected-agent-skills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.connected-agent-skill {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  padding: 4px 9px;
-  border: 1px solid color-mix(in srgb, var(--running) 14%, var(--border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--running) 8%, rgba(255, 255, 255, 0.92));
-  color: color-mix(in srgb, var(--text) 86%, var(--running));
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.connected-agent-skills-empty {
-  margin: 0;
-  color: var(--surface-label);
-  font-size: 0.74rem;
-  font-weight: 600;
-}
-
 .connected-agent-card-meta {
   margin-left: auto;
   display: grid;
