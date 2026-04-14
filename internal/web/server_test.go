@@ -525,11 +525,14 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	if strings.Contains(body, `>Dispatch Console</p>`) {
 		t.Fatalf("did not expect removed page header eyebrow copy, body=%s", body)
 	}
-	if !strings.Contains(body, `>Molten Hub Dispatch</h1>`) {
-		t.Fatalf("expected page header title copy, body=%s", body)
+	if !strings.Contains(body, `<h1 class="page-brand-title">Molten Hub Dispatch</h1>`) {
+		t.Fatalf("expected page header title lockup to match moltenhub-code, body=%s", body)
 	}
-	if !strings.Contains(body, `>Control your team of agents.</p>`) {
-		t.Fatalf("expected page header subtitle copy, body=%s", body)
+	if !strings.Contains(body, `<p class="page-brand-subtitle">Control your team of agents.</p>`) {
+		t.Fatalf("expected page header subtitle lockup to match moltenhub-code, body=%s", body)
+	}
+	if strings.Contains(body, `class="title brand-heading-h1"`) || strings.Contains(body, `class="sub page-subtitle brand-copy-h4-muted-tight"`) {
+		t.Fatalf("did not expect legacy dispatch-only title/subtitle styling, body=%s", body)
 	}
 }
 
@@ -633,8 +636,17 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="panel dispatch-overview brand-login-card-shell"`) {
 		t.Fatalf("expected bound dispatch overview panel, body=%s", body)
 	}
+	if !strings.Contains(body, `id="dispatch-overview"`) {
+		t.Fatalf("expected dispatch overview id for dismiss-once behavior, body=%s", body)
+	}
+	if !strings.Contains(body, `data-auto-dismiss-seconds="30"`) {
+		t.Fatalf("expected dispatch overview to advertise 30s auto-dismiss, body=%s", body)
+	}
 	if !strings.Contains(body, "Queue the right task with fewer clicks.") {
 		t.Fatalf("expected practical dispatch overview heading, body=%s", body)
+	}
+	if !strings.Contains(body, `id="dispatch-overview-close"`) {
+		t.Fatalf("expected dismiss button for dispatch overview, body=%s", body)
 	}
 	if !strings.Contains(body, ">Connected Agents<") || !strings.Contains(body, ">Queued Follow-Ups<") || !strings.Contains(body, ">Recent Events<") {
 		t.Fatalf("expected overview stat labels for dispatch state, body=%s", body)
@@ -773,6 +785,18 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `const dispatchTaskClear = document.getElementById("dispatch-task-clear");`) {
 		t.Fatalf("expected clear button hook in client script, body=%s", body)
+	}
+	if !strings.Contains(body, `const dispatchOverview = document.getElementById("dispatch-overview");`) {
+		t.Fatalf("expected dispatch overview client hook, body=%s", body)
+	}
+	if !strings.Contains(body, `const DISPATCH_OVERVIEW_STORAGE_KEY = "moltenhub.dispatchOverview.dismissed";`) {
+		t.Fatalf("expected dispatch overview dismissal storage key, body=%s", body)
+	}
+	if !strings.Contains(body, `dismissDispatchOverview(true);`) {
+		t.Fatalf("expected dispatch overview dismissal to persist, body=%s", body)
+	}
+	if !strings.Contains(body, `if (readDispatchOverviewDismissed() && hubConnected) {`) {
+		t.Fatalf("expected dispatch overview to stay suppressible only while connected to hub, body=%s", body)
 	}
 	if !strings.Contains(body, `dispatchTaskClear.disabled = busy;`) {
 		t.Fatalf("expected dispatch busy state to disable the clear action, body=%s", body)
@@ -1672,6 +1696,12 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.dispatch-overview {`) {
 		t.Fatalf("expected dispatch overview layout styles, body=%s", body)
 	}
+	if !strings.Contains(body, `.dispatch-overview-close {`) {
+		t.Fatalf("expected dispatch overview dismiss button styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.dispatch-overview-fading {`) {
+		t.Fatalf("expected dispatch overview fade-out styles, body=%s", body)
+	}
 	if !strings.Contains(body, `display: none !important;`) {
 		t.Fatalf("expected explicit hidden display override, body=%s", body)
 	}
@@ -2510,6 +2540,12 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if !strings.Contains(body, `const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));`) {
 		t.Fatalf("expected shared manual refresh button hooks, body=%s", body)
+	}
+	if !strings.Contains(body, `const detail = trimmedString(body && body.detail)`) {
+		t.Fatalf("expected connected-agents refresh errors to surface backend detail, body=%s", body)
+	}
+	if !strings.Contains(body, `renderConnectedAgents(staleAgents);`) {
+		t.Fatalf("expected connected-agents refresh failures to preserve stale agent context, body=%s", body)
 	}
 	if strings.Contains(body, `const connectedAgentsRefreshNextNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-next]"));`) {
 		t.Fatalf("did not expect removed refresh countdown node hooks, body=%s", body)

@@ -41,8 +41,8 @@
             alt="MoltenHub logo">
         </div>
         <div class="page-title-block">
-          <h1 class="title brand-heading-h1">Molten Hub Dispatch</h1>
-          <p class="sub page-subtitle brand-copy-h4-muted-tight">Control your team of agents.</p>
+          <h1 class="page-brand-title">Molten Hub Dispatch</h1>
+          <p class="page-brand-subtitle">Control your team of agents.</p>
         </div>
       </div>
       <div class="status-row connection-status-row" aria-live="polite">
@@ -81,27 +81,41 @@
     {{end}}
 
     {{if .State.Session.AgentToken}}
-    <section class="panel dispatch-overview brand-login-card-shell">
+    <section
+      id="dispatch-overview"
+      class="panel dispatch-overview brand-login-card-shell"
+      data-auto-dismiss-seconds="30"
+    >
       <div class="dispatch-overview-hero">
         <div class="dispatch-overview-copy">
           <p class="eyebrow dispatch-overview-eyebrow">Dispatch Workflow</p>
           <h2 class="dispatch-overview-title brand-heading-h2-bold">Queue the right task with fewer clicks.</h2>
           <p class="dispatch-overview-body brand-body-base-muted">Select a worker, let Dispatch load the first advertised skill from Molten Hub, then send markdown or JSON with automatic payload detection.</p>
         </div>
-        <dl class="dispatch-overview-stats" aria-label="Dispatch state summary">
-          <div class="dispatch-overview-stat">
-            <dt>Connected Agents</dt>
-            <dd>{{len .State.ConnectedAgents}}</dd>
-          </div>
-          <div class="dispatch-overview-stat">
-            <dt>Queued Follow-Ups</dt>
-            <dd>{{len .State.FollowUpTasks}}</dd>
-          </div>
-          <div class="dispatch-overview-stat">
-            <dt>Recent Events</dt>
-            <dd>{{len .State.RecentEvents}}</dd>
-          </div>
-        </dl>
+        <div class="dispatch-overview-summary">
+          <button
+            type="button"
+            id="dispatch-overview-close"
+            class="dispatch-overview-close"
+            aria-label="Close dispatch overview"
+          >
+            Close
+          </button>
+          <dl class="dispatch-overview-stats" aria-label="Dispatch state summary">
+            <div class="dispatch-overview-stat">
+              <dt>Connected Agents</dt>
+              <dd>{{len .State.ConnectedAgents}}</dd>
+            </div>
+            <div class="dispatch-overview-stat">
+              <dt>Queued Follow-Ups</dt>
+              <dd>{{len .State.FollowUpTasks}}</dd>
+            </div>
+            <div class="dispatch-overview-stat">
+              <dt>Recent Events</dt>
+              <dd>{{len .State.RecentEvents}}</dd>
+            </div>
+          </dl>
+        </div>
       </div>
       <ol class="dispatch-overview-steps" aria-label="Dispatch steps">
         <li>Pick one connected agent.</li>
@@ -537,6 +551,8 @@
       const hubConnItem = document.getElementById("hub-conn-item");
       const hubConnDot = document.getElementById("hub-conn-dot");
       const hubConnText = document.getElementById("hub-conn-text");
+      const dispatchOverview = document.getElementById("dispatch-overview");
+      const dispatchOverviewClose = document.getElementById("dispatch-overview-close");
       const subActions = document.getElementById("sub-actions");
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const manualDispatchForm = document.getElementById("manual-dispatch-form");
@@ -588,6 +604,9 @@
       const THEME_KEY = "hubui.theme";
       const THEME_MODES = ["light", "dark", "night"];
       const DEFAULT_THEME_MODE = "dark";
+      const DISPATCH_OVERVIEW_STORAGE_KEY = "moltenhub.dispatchOverview.dismissed";
+      const DISPATCH_OVERVIEW_DISMISS_ANIMATION_MS = 240;
+      const DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_TICK_MS = 250;
 
@@ -1478,6 +1497,8 @@
         transport: String(hubConnItem && hubConnItem.dataset.transport || "").trim() || "offline",
       };
       let latestConnectedAgents = [];
+      let dispatchOverviewDismissTimer = 0;
+      let dispatchOverviewDismissedThisSession = false;
 
       const parseInitialConnectedAgents = () => {
         if (!(initialConnectedAgentsData instanceof HTMLScriptElement)) {
@@ -1491,11 +1512,103 @@
         }
       };
 
+      const isHubConnectedState = (state = latestHubConnectionState) => {
+        if (!bound || !state || typeof state !== "object") {
+          return false;
+        }
+        const status = trimmedString(state.status).toLowerCase();
+        const transport = trimmedString(state.transport).toLowerCase();
+        return status === "connected" || transport === "ws" || transport === "http_long_poll" || transport === "connected";
+      };
+
+      const clearDispatchOverviewDismissTimer = () => {
+        if (!dispatchOverviewDismissTimer) {
+          return;
+        }
+        window.clearTimeout(dispatchOverviewDismissTimer);
+        dispatchOverviewDismissTimer = 0;
+      };
+
+      const readDispatchOverviewDismissed = () => {
+        try {
+          return localStorage.getItem(DISPATCH_OVERVIEW_STORAGE_KEY) === "true";
+        } catch (_error) {
+          return false;
+        }
+      };
+
+      const persistDispatchOverviewDismissed = () => {
+        try {
+          localStorage.setItem(DISPATCH_OVERVIEW_STORAGE_KEY, "true");
+        } catch (_error) {
+          // Ignore localStorage failures.
+        }
+      };
+
+      const dispatchOverviewAutoDismissDelay = () => {
+        if (!(dispatchOverview instanceof HTMLElement)) {
+          return DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS;
+        }
+        const configuredSeconds = Number.parseFloat(dispatchOverview.dataset.autoDismissSeconds || "");
+        if (Number.isFinite(configuredSeconds) && configuredSeconds > 0) {
+          return configuredSeconds * 1000;
+        }
+        return DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS;
+      };
+
+      const dismissDispatchOverview = (persist) => {
+        if (!(dispatchOverview instanceof HTMLElement)) {
+          return;
+        }
+        dispatchOverviewDismissedThisSession = true;
+        clearDispatchOverviewDismissTimer();
+        if (persist) {
+          persistDispatchOverviewDismissed();
+        }
+        if (dispatchOverview.hidden) {
+          return;
+        }
+        dispatchOverview.classList.add("dispatch-overview-fading");
+        window.setTimeout(() => {
+          if (!(dispatchOverview instanceof HTMLElement)) {
+            return;
+          }
+          dispatchOverview.hidden = true;
+          dispatchOverview.classList.remove("dispatch-overview-fading");
+        }, DISPATCH_OVERVIEW_DISMISS_ANIMATION_MS);
+      };
+
+      const showDispatchOverview = () => {
+        if (!(dispatchOverview instanceof HTMLElement)) {
+          return;
+        }
+        clearDispatchOverviewDismissTimer();
+        dispatchOverview.hidden = false;
+        dispatchOverview.classList.remove("dispatch-overview-fading");
+        dispatchOverviewDismissTimer = window.setTimeout(() => {
+          dismissDispatchOverview(true);
+        }, dispatchOverviewAutoDismissDelay());
+      };
+
+      const syncDispatchOverview = (state = latestHubConnectionState) => {
+        if (!(dispatchOverview instanceof HTMLElement) || dispatchOverviewDismissedThisSession) {
+          return;
+        }
+        const hubConnected = isHubConnectedState(state);
+        if (readDispatchOverviewDismissed() && hubConnected) {
+          clearDispatchOverviewDismissTimer();
+          dispatchOverview.hidden = true;
+          dispatchOverview.classList.remove("dispatch-overview-fading");
+          return;
+        }
+        showDispatchOverview();
+      };
+
       const syncSubActions = (state = latestHubConnectionState) => {
         if (!subActions || !subActionsNotice) {
           return;
         }
-        const connected = bound && (state.status === "connected" || state.transport === "ws" || state.transport === "http_long_poll" || state.transport === "connected");
+        const connected = isHubConnectedState(state);
         const dispatchEnabled = bound && connectedAgentsCount > 0;
         const requiresAgentConnection = connected && connectedAgentsCount === 0;
 
@@ -1603,6 +1716,7 @@
           transport: mode || "offline",
         };
         syncSubActions(latestHubConnectionState);
+        syncDispatchOverview(latestHubConnectionState);
       };
       let dispatchRequestInFlight = false;
       let dispatchStatusClearTimer = 0;
@@ -2287,10 +2401,24 @@
             method: "GET",
             headers: { Accept: "application/json" },
           });
-          if (!response.ok) {
-            throw new Error(`connected agents refresh failed with ${response.status}`);
+          let body = null;
+          try {
+            body = await response.json();
+          } catch (_parseError) {
+            body = null;
           }
-          const body = await response.json();
+          if (!response.ok) {
+            const staleAgents = Array.isArray(body && body.connected_agents)
+              ? body.connected_agents
+              : null;
+            if (staleAgents) {
+              renderConnectedAgents(staleAgents);
+            }
+            const detail = trimmedString(body && body.detail)
+              || trimmedString(body && body.error)
+              || `connected agents refresh failed with ${response.status}`;
+            throw new Error(detail);
+          }
           const agents = Array.isArray(body && body.connected_agents)
             ? body.connected_agents
             : [];
@@ -2399,6 +2527,7 @@
       if (shell && hubConnItem && hubConnText && subActions && subActionsNotice) {
         setLocalConnection();
         syncSubActions(latestHubConnectionState);
+        syncDispatchOverview(latestHubConnectionState);
         refreshState();
         window.setInterval(refreshState, 3000);
       }
@@ -2410,6 +2539,11 @@
           });
         }
       });
+      if (dispatchOverviewClose instanceof HTMLButtonElement) {
+        dispatchOverviewClose.addEventListener("click", () => {
+          dismissDispatchOverview(true);
+        });
+      }
       if (skillPayloadInput instanceof HTMLTextAreaElement) {
         skillPayloadInput.addEventListener("input", () => {
           validateSkillPayload();

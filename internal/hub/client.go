@@ -403,9 +403,15 @@ func (c *Client) doJSON(ctx context.Context, method, endpoint, token string, bod
 	envelope := struct {
 		OK     bool            `json:"ok"`
 		Result json.RawMessage `json:"result"`
+		Data   json.RawMessage `json:"data"`
 	}{}
-	if err := json.Unmarshal(rawBody, &envelope); err == nil && len(bytes.TrimSpace(envelope.Result)) > 0 {
-		payload = envelope.Result
+	if err := json.Unmarshal(rawBody, &envelope); err == nil {
+		switch {
+		case len(bytes.TrimSpace(envelope.Result)) > 0:
+			payload = envelope.Result
+		case len(bytes.TrimSpace(envelope.Data)) > 0:
+			payload = envelope.Data
+		}
 	}
 	if err := json.Unmarshal(payload, out); err != nil {
 		return fmt.Errorf("decode hub result payload: %w", err)
