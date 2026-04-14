@@ -525,11 +525,14 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	if strings.Contains(body, `>Dispatch Console</p>`) {
 		t.Fatalf("did not expect removed page header eyebrow copy, body=%s", body)
 	}
-	if !strings.Contains(body, `>Molten Hub Dispatch</h1>`) {
-		t.Fatalf("expected page header title copy, body=%s", body)
+	if !strings.Contains(body, `<h1 class="page-brand-title">Molten Hub Dispatch</h1>`) {
+		t.Fatalf("expected page header title lockup to match moltenhub-code, body=%s", body)
 	}
-	if !strings.Contains(body, `>Control your team of agents.</p>`) {
-		t.Fatalf("expected page header subtitle copy, body=%s", body)
+	if !strings.Contains(body, `<p class="page-brand-subtitle">Control your team of agents.</p>`) {
+		t.Fatalf("expected page header subtitle lockup to match moltenhub-code, body=%s", body)
+	}
+	if strings.Contains(body, `class="title brand-heading-h1"`) || strings.Contains(body, `class="sub page-subtitle brand-copy-h4-muted-tight"`) {
+		t.Fatalf("did not expect legacy dispatch-only title/subtitle styling, body=%s", body)
 	}
 }
 
