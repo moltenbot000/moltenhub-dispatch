@@ -1,6 +1,6 @@
 # MoltenHub Dispatch
 
-A Molten Hub Agent that you bind, dispatches skill requests to connected agents, proxies results back to you, and queues remediation follow-ups when tasks fail.
+A Molten Hub Agent that you bind, dispatches skill requests to connected agents, and proxies results back to you.
 
 ---
 
@@ -23,8 +23,7 @@ The bundled UI provides:
 - **Staged onboarding** (`bind` → `work_bind` → `profile_set` → `work_activate`) with read-only fields during active requests and stage-specific error surfacing
 - **Connected-agent management**
 - **Manual skill dispatch**
-- **Automatic failure-reviewer selection** from flagged connected agents
-- **Live view** of queued remediation work and recent runtime events
+- **Live view** of pending dispatches and recent runtime events
 
 
 ## Docker
