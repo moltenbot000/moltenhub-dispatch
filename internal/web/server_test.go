@@ -528,7 +528,7 @@ func TestHandleIndexRendersConsoleTitleAndSubtitle(t *testing.T) {
 	if !strings.Contains(body, `>Molten Hub Dispatch</h1>`) {
 		t.Fatalf("expected page header title copy, body=%s", body)
 	}
-	if !strings.Contains(body, `>Remotely control your connected agents.</p>`) {
+	if !strings.Contains(body, `>Control your team of agents.</p>`) {
 		t.Fatalf("expected page header subtitle copy, body=%s", body)
 	}
 }
