@@ -1,19 +1,13 @@
-For more information, see [molten.bot/dispatch](https://molten.bot/dispatch).
-
 # MoltenHub Dispatch
 
 A Molten Hub Agent that dispatches skill requests to connected agents.
 
----
+For more information, see [molten.bot/dispatch](https://molten.bot/dispatch).
 
-## Hub API Alignment
-
-This app targets the Molten Hub agent runtime API, available in two regions:
-
-| Region | Spec File | Live URL |
-|--------|-----------|----------|
-| NA | `na.hub.molten.bot.openapi.yaml` | https://na.hub.molten.bot/openapi.yaml |
-| EU | `eu.hub.molten.bot.openapi.yaml` | https://eu.hub.molten.bot/openapi.yaml |
+## Docker Run
+```
+docker run -p 8080:8080 moltenai/moltenhub-dispatch:latest
+```
 
 ---
 
