@@ -63,6 +63,7 @@ type Service struct {
 	hubPingCheckTimeout time.Duration
 	wsFallbackWindow    time.Duration
 	presenceSynced      bool
+	presenceTransport   string
 }
 
 type failureReport struct {
@@ -544,8 +545,26 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 		if strings.TrimSpace(state.Session.AgentToken) == "" {
 			continue
 		}
-		if !s.presenceSynced {
-			if err := s.MarkOnline(ctx, ConnectionTransportHTTP); err != nil {
+		if realtime, ok := s.hub.(realtimeHubClient); ok {
+			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
+			if err == nil {
+				if err := s.ensurePresenceOnline(ctx, ConnectionTransportWebSocket); err != nil {
+					if ctx.Err() != nil {
+						return
+					}
+					if !sleepWithContext(ctx, s.pollInterval()) {
+						return
+					}
+					continue
+				}
+				s.noteHubInteraction(nil, ConnectionTransportWebSocket)
+				err = s.consumeRealtimeSession(ctx, session)
+				if err == nil || ctx.Err() != nil {
+					continue
+				}
+			}
+			s.noteRealtimeFallback(err)
+			if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTPLong); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -554,24 +573,21 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 				}
 				continue
 			}
-		}
-
-		if realtime, ok := s.hub.(realtimeHubClient); ok {
-			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
-			if err == nil {
-				s.noteHubInteraction(nil, ConnectionTransportWebSocket)
-				err = s.consumeRealtimeSession(ctx, session)
-				if err == nil || ctx.Err() != nil {
-					continue
-				}
-			}
-			s.noteRealtimeFallback(err)
 			if err := s.runHTTPFallbackWindow(ctx); err != nil {
 				return
 			}
 			continue
 		}
 
+		if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTP); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			if !sleepWithContext(ctx, s.pollInterval()) {
+				return
+			}
+			continue
+		}
 		if err := s.pollOnceWithTimeout(ctx); err != nil {
 			return
 		}
@@ -586,8 +602,11 @@ func (s *Service) pollOnceWithTimeout(ctx context.Context) error {
 		return ctx.Err()
 	}
 	pollCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
-	_ = s.PollOnce(pollCtx)
+	err := s.PollOnce(pollCtx)
 	cancel()
+	if err != nil {
+		return err
+	}
 	return ctx.Err()
 }
 
@@ -717,7 +736,8 @@ func (s *Service) MarkOffline(ctx context.Context, reason string) error {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		return err
 	}
-	s.presenceSynced = true
+	s.presenceSynced = false
+	s.presenceTransport = ""
 	return s.store.Update(func(current *AppState) error {
 		baseURL, domain := hubConnectionTarget(current.Session.APIBase, current.Settings.HubURL)
 		current.Session.OfflineMarked = true
@@ -739,6 +759,7 @@ func (s *Service) MarkOnline(ctx context.Context, transport string) error {
 	if strings.TrimSpace(state.Session.AgentToken) == "" {
 		return nil
 	}
+	normalizedTransport := normalizePresenceTransport(transport)
 	s.syncHubClient(state)
 	profile := AgentProfile{
 		DisplayName:     state.Session.DisplayName,
@@ -746,15 +767,24 @@ func (s *Service) MarkOnline(ctx context.Context, transport string) error {
 		ProfileMarkdown: state.Session.ProfileBio,
 	}
 	_, err := s.hub.UpdateMetadata(ctx, state.Session.AgentToken, hub.UpdateMetadataRequest{
-		Metadata: buildAgentMetadata(profile, state.Settings.SessionKey, normalizePresenceTransport(transport)),
+		Metadata: buildAgentMetadata(profile, state.Settings.SessionKey, normalizedTransport),
 	})
 	if err != nil {
-		s.noteHubInteraction(err, normalizePresenceTransport(transport))
+		s.noteHubInteraction(err, normalizedTransport)
 		return err
 	}
-	s.noteHubInteraction(nil, normalizePresenceTransport(transport))
+	s.noteHubInteraction(nil, normalizedTransport)
 	s.presenceSynced = true
+	s.presenceTransport = normalizedTransport
 	return nil
+}
+
+func (s *Service) ensurePresenceOnline(ctx context.Context, transport string) error {
+	normalizedTransport := normalizePresenceTransport(transport)
+	if s.presenceSynced && s.presenceTransport == normalizedTransport {
+		return nil
+	}
+	return s.MarkOnline(ctx, normalizedTransport)
 }
 
 func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResponse) error {
