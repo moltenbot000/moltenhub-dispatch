@@ -21,9 +21,11 @@ type RealtimeSession interface {
 }
 
 type websocketSession struct {
-	conn  *websocket.Conn
-	mu    sync.Mutex
-	queue []PullResponse
+	conn      *websocket.Conn
+	mu        sync.Mutex
+	queue     []PullResponse
+	closeOnce sync.Once
+	closed    chan struct{}
 }
 
 type realtimeEnvelope struct {
@@ -57,16 +59,20 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 		return nil, fmt.Errorf("open websocket session: %w", err)
 	}
 
-	session := &websocketSession{conn: conn}
+	session := &websocketSession{
+		conn:   conn,
+		closed: make(chan struct{}),
+	}
 	first, err := session.readEnvelope(ctx)
 	if err != nil {
-		_ = conn.Close()
+		_ = session.Close()
 		return nil, err
 	}
 	if !strings.EqualFold(first.Type, "session_ready") {
-		_ = conn.Close()
+		_ = session.Close()
 		return nil, fmt.Errorf("unexpected websocket handshake message type %q", first.Type)
 	}
+	session.bindContext(ctx)
 	return session, nil
 }
 
@@ -105,7 +111,14 @@ func (s *websocketSession) Nack(ctx context.Context, deliveryID string) error {
 }
 
 func (s *websocketSession) Close() error {
-	return s.conn.Close()
+	var closeErr error
+	s.closeOnce.Do(func() {
+		if s.closed != nil {
+			close(s.closed)
+		}
+		closeErr = s.conn.Close()
+	})
+	return closeErr
 }
 
 func (s *websocketSession) respond(ctx context.Context, action, deliveryID string) error {
@@ -185,6 +198,19 @@ func (s *websocketSession) applyDeadline(ctx context.Context) error {
 		return s.conn.SetDeadline(deadline)
 	}
 	return s.conn.SetDeadline(time.Time{})
+}
+
+func (s *websocketSession) bindContext(ctx context.Context) {
+	if s == nil || ctx == nil || ctx.Done() == nil {
+		return
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = s.Close()
+		case <-s.closed:
+		}
+	}()
 }
 
 func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {

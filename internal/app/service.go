@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -303,6 +304,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 		return WrapOnboardingError(OnboardingStepWorkActivate, err)
 	}
 	s.presenceSynced = true
+	s.presenceTransport = ConnectionTransportHTTP
 	return nil
 }
 
@@ -361,6 +363,7 @@ func (s *Service) connectExistingAgent(ctx context.Context, runtime HubRuntime, 
 		return WrapOnboardingError(OnboardingStepWorkActivate, err)
 	}
 	s.presenceSynced = true
+	s.presenceTransport = ConnectionTransportHTTP
 	return nil
 }
 
@@ -549,7 +552,11 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
 			if err == nil {
 				if err := s.ensurePresenceOnline(ctx, ConnectionTransportWebSocket); err != nil {
+					_ = session.Close()
 					if ctx.Err() != nil {
+						return
+					}
+					if isUnauthorizedHubError(err) {
 						return
 					}
 					if !sleepWithContext(ctx, s.pollInterval()) {
@@ -562,10 +569,19 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 				if err == nil || ctx.Err() != nil {
 					continue
 				}
+				if !shouldFallbackToLongPoll(err) {
+					if !sleepWithContext(ctx, s.pollInterval()) {
+						return
+					}
+					continue
+				}
 			}
 			s.noteRealtimeFallback(err)
 			if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTPLong); err != nil {
 				if ctx.Err() != nil {
+					return
+				}
+				if isUnauthorizedHubError(err) {
 					return
 				}
 				if !sleepWithContext(ctx, s.pollInterval()) {
@@ -579,8 +595,11 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 			continue
 		}
 
-		if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTP); err != nil {
+		if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTPLong); err != nil {
 			if ctx.Err() != nil {
+				return
+			}
+			if isUnauthorizedHubError(err) {
 				return
 			}
 			if !sleepWithContext(ctx, s.pollInterval()) {
@@ -589,7 +608,13 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 			continue
 		}
 		if err := s.pollOnceWithTimeout(ctx); err != nil {
-			return
+			if ctx.Err() != nil || isUnauthorizedHubError(err) {
+				return
+			}
+			if !sleepWithContext(ctx, s.pollInterval()) {
+				return
+			}
+			continue
 		}
 		if !sleepWithContext(ctx, s.pollInterval()) {
 			return
@@ -602,9 +627,11 @@ func (s *Service) pollOnceWithTimeout(ctx context.Context) error {
 		return ctx.Err()
 	}
 	pollCtx, cancel := context.WithTimeout(ctx, 35*time.Second)
-	err := s.PollOnce(pollCtx)
-	cancel()
-	if err != nil {
+	defer cancel()
+	if err := s.PollOnce(pollCtx); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	}
 	return ctx.Err()
@@ -618,8 +645,17 @@ func (s *Service) runHTTPFallbackWindow(ctx context.Context) error {
 	deadline := time.Now().Add(window)
 
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err := s.pollOnceWithTimeout(ctx); err != nil {
-			return err
+			if isUnauthorizedHubError(err) {
+				return err
+			}
+			if !sleepWithContext(ctx, s.pollInterval()) {
+				return ctx.Err()
+			}
+			continue
 		}
 		if time.Now().After(deadline) {
 			return nil
@@ -721,6 +757,14 @@ func (s *Service) noteRealtimeFallback(err error) {
 		state.Session.OfflineMarked = false
 		return nil
 	})
+}
+
+func (s *Service) syncPresenceTransport(ctx context.Context, transport string) error {
+	transport = normalizePresenceTransport(transport)
+	if s.presenceSynced && s.presenceTransport == transport {
+		return nil
+	}
+	return s.MarkOnline(ctx, transport)
 }
 
 func (s *Service) MarkOffline(ctx context.Context, reason string) error {
@@ -2601,9 +2645,7 @@ func newSkillRequestMessage(timestamp time.Time, skillName string, payload any, 
 }
 
 func (s *Service) noteHubInteraction(err error, transport string) {
-	if transport == "" {
-		transport = ConnectionTransportHTTP
-	}
+	transport = normalizePresenceTransport(transport)
 	now := time.Now().UTC()
 	if !hubReachable(err) {
 		_ = s.store.Update(func(state *AppState) error {
@@ -2624,6 +2666,12 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 
 	_ = s.store.Update(func(state *AppState) error {
 		baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
+		currentTransport := normalizePresenceTransport(state.Connection.Transport)
+		if transport == ConnectionTransportHTTP &&
+			state.Connection.Status == ConnectionStatusConnected &&
+			currentTransport == ConnectionTransportWebSocket {
+			transport = ConnectionTransportWebSocket
+		}
 		state.Connection = ConnectionState{
 			Status:        ConnectionStatusConnected,
 			Transport:     transport,
@@ -2670,6 +2718,44 @@ func (s *Service) pollInterval() time.Duration {
 		return 2 * time.Second
 	}
 	return interval
+}
+
+func shouldFallbackToLongPoll(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	for _, marker := range []string{
+		"use of closed network connection",
+		"connection reset by peer",
+		"broken pipe",
+		"websocket session closed",
+	} {
+		if strings.Contains(text, marker) {
+			return false
+		}
+	}
+	return true
+}
+
+func isUnauthorizedHubError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *hub.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden
+	}
+	text := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(text, "status=401") ||
+		strings.Contains(text, "status 401") ||
+		strings.Contains(text, "status=403") ||
+		strings.Contains(text, "status 403") ||
+		strings.Contains(text, "unauthorized") ||
+		strings.Contains(text, "forbidden")
 }
 
 func hubReachable(err error) bool {

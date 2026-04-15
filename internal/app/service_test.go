@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,9 +45,10 @@ type fakeHubClient struct {
 }
 
 type fakeRealtimeSession struct {
-	messages []hub.PullResponse
-	acked    []string
-	nacked   []string
+	messages   []hub.PullResponse
+	receiveErr error
+	acked      []string
+	nacked     []string
 }
 
 func (f *fakeHubClient) BindAgent(_ context.Context, req hub.BindRequest) (hub.BindResponse, error) {
@@ -159,6 +161,9 @@ func (f *fakeHubClient) CheckPing(_ context.Context) (string, error) {
 
 func (f *fakeRealtimeSession) Receive(_ context.Context) (hub.PullResponse, error) {
 	if len(f.messages) == 0 {
+		if f.receiveErr != nil {
+			return hub.PullResponse{}, f.receiveErr
+		}
 		return hub.PullResponse{}, context.Canceled
 	}
 	message := f.messages[0]
@@ -2551,6 +2556,31 @@ func TestNoteRealtimeFallbackKeepsHubReachableWhileWebsocketFallsBack(t *testing
 	}
 }
 
+func TestNoteHubInteractionDoesNotDowngradeConnectedWebsocketOnHTTPSuccess(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Connection = ConnectionState{
+			Status:    ConnectionStatusConnected,
+			Transport: ConnectionTransportWebSocket,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	service.noteHubInteraction(nil, ConnectionTransportHTTP)
+
+	state := service.store.Snapshot()
+	if state.Connection.Transport != ConnectionTransportWebSocket {
+		t.Fatalf("expected websocket transport to survive incidental HTTP success, got %#v", state.Connection)
+	}
+}
+
 func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T) {
 	t.Parallel()
 
@@ -2721,13 +2751,13 @@ func TestEnsurePresenceOnlineResyncsWhenTransportChanges(t *testing.T) {
 	}
 }
 
-func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) {
+func TestRunHubLoopRetriesWebsocketBeforeHTTPLongPollAfterRealtimeDisconnect(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
 	service.hubPingRetryDelay = 2 * time.Millisecond
 	service.hubPingCheckTimeout = 250 * time.Millisecond
-	fake.connectSession = &fakeRealtimeSession{}
+	fake.connectSession = &fakeRealtimeSession{receiveErr: io.EOF}
 	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
 	fake.pullOK = false
 
@@ -2750,32 +2780,70 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) 
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if fake.pullCalls > 0 {
+		if fake.connectCalls >= 2 {
 			break
 		}
 		select {
 		case <-deadline:
 			cancel()
 			<-done
-			t.Fatalf("expected poll fallback after websocket disconnect; pull_calls=%d ping_calls=%d", fake.pullCalls, fake.pingCalls)
+			t.Fatalf("expected websocket reconnect before HTTP fallback; connect_calls=%d pull_calls=%d", fake.connectCalls, fake.pullCalls)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	time.Sleep(120 * time.Millisecond)
 
 	cancel()
 	<-done
-	if fake.connectCalls != 1 {
-		t.Fatalf("expected one websocket reconnect attempt before HTTP fallback window, got %d", fake.connectCalls)
+	if fake.pullCalls != 0 {
+		t.Fatalf("expected clean websocket disconnect to retry websocket without HTTP fallback, got %d pulls", fake.pullCalls)
+	}
+}
+
+func TestRunHubLoopMarksPresenceWebsocketWhenRealtimeConnects(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	fake.connectSession = &fakeRealtimeSession{receiveErr: io.EOF}
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.PollInterval = 10 * time.Millisecond
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
 	}
 
-	state := service.store.Snapshot()
-	if state.Connection.Status != ConnectionStatusConnected {
-		t.Fatalf("expected connected status after fallback pull, got %#v", state.Connection)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunHubLoop(ctx)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if len(fake.updateMetadataCalls) > 0 {
+			presence, _ := fake.updateMetadataCalls[len(fake.updateMetadataCalls)-1].Metadata["presence"].(map[string]any)
+			if presence["transport"] == ConnectionTransportWebSocket {
+				break
+			}
+		}
+		select {
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatalf("expected websocket presence sync, got %#v", fake.updateMetadataCalls)
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
-	if state.Connection.Transport != ConnectionTransportHTTPLong {
-		t.Fatalf("expected http long-poll transport after websocket disconnect fallback, got %#v", state.Connection)
-	}
+
+	cancel()
+	<-done
 }
 
 func TestHandleInboundMessageAcceptsKindWhenTypeIsOmitted(t *testing.T) {
