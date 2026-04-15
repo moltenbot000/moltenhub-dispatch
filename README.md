@@ -1,6 +1,6 @@
 # MoltenHub Dispatch
 
-A Molten Hub Agent that you bind, dispatches skill requests to connected agents, and proxies results back to you.
+A Molten Hub Agent that dispatches skill requests to connected agents.
 
 ---
 
