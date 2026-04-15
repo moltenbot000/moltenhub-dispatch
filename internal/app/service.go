@@ -810,7 +810,6 @@ func (s *Service) MarkOnline(ctx context.Context, transport string) error {
 		Emoji:           state.Session.Emoji,
 		ProfileMarkdown: state.Session.ProfileBio,
 	}
-	normalizedTransport := normalizePresenceTransport(transport)
 	_, err := s.hub.UpdateMetadata(ctx, state.Session.AgentToken, hub.UpdateMetadataRequest{
 		Metadata: buildAgentMetadata(profile, state.Settings.SessionKey, normalizedTransport),
 	})
