@@ -2458,6 +2458,25 @@ func TestPollOnceMarksDisconnectedWhenHubIsUnreachable(t *testing.T) {
 	}
 }
 
+func TestPollOnceWithTimeoutReturnsPollError(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	fake.pullErr = errors.New("dial tcp 10.0.0.1:443: connect: connection refused")
+
+	err = service.pollOnceWithTimeout(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "connection refused") {
+		t.Fatalf("poll once with timeout error = %v, want connection refused", err)
+	}
+}
+
 func TestWaitForHubReachableRetriesPingUntilLive(t *testing.T) {
 	t.Parallel()
 
@@ -2650,11 +2669,55 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	if got, want := presence["status"], "online"; got != want {
 		t.Fatalf("presence status = %#v, want %q", got, want)
 	}
-	if got, want := presence["transport"], ConnectionTransportHTTP; got != want {
+	if got, want := presence["transport"], ConnectionTransportHTTPLong; got != want {
 		t.Fatalf("presence transport = %#v, want %q", got, want)
 	}
 	if fake.pullCalls == 0 {
 		t.Fatalf("expected dispatch loop to continue into pull fallback after presence sync, got %d pulls", fake.pullCalls)
+	}
+}
+
+func TestEnsurePresenceOnlineResyncsWhenTransportChanges(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.DisplayName = "Dispatch Agent"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.ensurePresenceOnline(context.Background(), ConnectionTransportHTTPLong); err != nil {
+		t.Fatalf("ensure presence online http: %v", err)
+	}
+	if err := service.ensurePresenceOnline(context.Background(), ConnectionTransportHTTPLong); err != nil {
+		t.Fatalf("ensure presence online http repeat: %v", err)
+	}
+	if err := service.ensurePresenceOnline(context.Background(), ConnectionTransportWebSocket); err != nil {
+		t.Fatalf("ensure presence online websocket: %v", err)
+	}
+
+	if got, want := len(fake.updateMetadataCalls), 2; got != want {
+		t.Fatalf("update metadata calls = %d, want %d", got, want)
+	}
+
+	firstPresence, ok := fake.updateMetadataCalls[0].Metadata["presence"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first presence metadata, got %#v", fake.updateMetadataCalls[0].Metadata["presence"])
+	}
+	if got, want := firstPresence["transport"], ConnectionTransportHTTPLong; got != want {
+		t.Fatalf("first presence transport = %#v, want %q", got, want)
+	}
+
+	secondPresence, ok := fake.updateMetadataCalls[1].Metadata["presence"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected second presence metadata, got %#v", fake.updateMetadataCalls[1].Metadata["presence"])
+	}
+	if got, want := secondPresence["transport"], ConnectionTransportWebSocket; got != want {
+		t.Fatalf("second presence transport = %#v, want %q", got, want)
 	}
 }
 
