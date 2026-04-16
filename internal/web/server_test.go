@@ -2810,8 +2810,11 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `class="connected-agent-card connected-agent-card-button"`) {
 		t.Fatalf("expected connected agent card layout, body=%s", body)
 	}
-	if !strings.Contains(body, ">dispatcher<") {
-		t.Fatalf("expected agent id secondary label on connected agent cards, body=%s", body)
+	if !strings.Contains(body, ">Dispatcher<") {
+		t.Fatalf("expected connected agent display name on connected agent cards, body=%s", body)
+	}
+	if strings.Contains(body, `class="connected-agent-secondary"`) {
+		t.Fatalf("did not expect connected-agent secondary handle/id label on cards, body=%s", body)
 	}
 	if !strings.Contains(body, `class="connected-agent-presence is-offline"`) {
 		t.Fatalf("expected offline presence indicator on connected agent cards, body=%s", body)
@@ -3098,24 +3101,7 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	}
 }
 
-func TestConnectedAgentSecondaryLabelPrefersAgentIDThenURI(t *testing.T) {
-	t.Parallel()
-
-	agent := app.ConnectedAgent{
-		Handle: "peer-handle",
-		URI:    "https://hub.example/v1/agents/peer-uuid",
-	}
-	if got, want := connectedAgentSecondaryLabel(agent), "https://hub.example/v1/agents/peer-uuid"; got != want {
-		t.Fatalf("secondary label = %q, want %q", got, want)
-	}
-
-	agent.AgentID = "peer-agent"
-	if got, want := connectedAgentSecondaryLabel(agent), "peer-agent"; got != want {
-		t.Fatalf("secondary label = %q, want %q", got, want)
-	}
-}
-
-func TestHandleIndexClientSecondaryLabelUsesAgentIDThenURI(t *testing.T) {
+func TestHandleIndexOmitsConnectedAgentSecondaryLabel(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
@@ -3139,11 +3125,11 @@ func TestHandleIndexClientSecondaryLabelUsesAgentIDThenURI(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `for (const candidate of [agent && agent.agent_id, agent && agent.uri]) {`) {
-		t.Fatalf("expected client-side secondary-label helper to use agent_id then agent_uri, body=%s", body)
+	if strings.Contains(body, `connectedAgentSecondaryLabel`) {
+		t.Fatalf("did not expect secondary-label helper in rendered template, body=%s", body)
 	}
-	if strings.Contains(body, `for (const candidate of [agent && agent.agent_id, agent && agent.handle, agent && agent.uri]) {`) {
-		t.Fatalf("did not expect client-side secondary-label helper to prefer handle over agent_uri, body=%s", body)
+	if strings.Contains(body, `class="connected-agent-secondary"`) {
+		t.Fatalf("did not expect connected-agent-secondary element in rendered template, body=%s", body)
 	}
 }
 

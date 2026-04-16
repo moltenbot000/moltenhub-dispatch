@@ -60,7 +60,6 @@ func New(service service) (*Server, error) {
 			return string(data)
 		},
 		"connectedAgentDisplayName":    connectedAgentDisplayName,
-		"connectedAgentSecondaryLabel": connectedAgentSecondaryLabel,
 		"connectedAgentPresenceStatus": connectedAgentPresenceStatus,
 		"connectedAgentPresenceLabel":  connectedAgentPresenceLabel,
 		"connectedAgentEmoji":          connectedAgentEmoji,
@@ -618,15 +617,6 @@ func connectedAgentDisplayName(agent app.ConnectedAgent) string {
 		}
 	}
 	return "Connected agent"
-}
-
-func connectedAgentSecondaryLabel(agent app.ConnectedAgent) string {
-	for _, candidate := range []string{agent.AgentID, agent.URI} {
-		if label := visibleAgentLabel(candidate); label != "" {
-			return label
-		}
-	}
-	return ""
 }
 
 func connectedAgentPresenceStatus(agent app.ConnectedAgent) string {

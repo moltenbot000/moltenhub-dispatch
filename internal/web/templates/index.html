@@ -163,7 +163,6 @@
               <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid">
               {{range .State.ConnectedAgents}}
               {{$displayName := connectedAgentDisplayName .}}
-              {{$secondaryLabel := connectedAgentSecondaryLabel .}}
               {{$presenceStatus := connectedAgentPresenceStatus .}}
               {{$presenceLabel := connectedAgentPresenceLabel .}}
               <button
@@ -180,7 +179,6 @@
                       <span class="connected-agent-title-emoji">{{connectedAgentEmoji .}}</span>
                       <span>{{$displayName}}</span>
                     </h3>
-                    {{if $secondaryLabel}}<p class="connected-agent-secondary">{{$secondaryLabel}}</p>{{end}}
                   </div>
                   <div class="connected-agent-card-meta">
                     <span
@@ -1898,16 +1896,6 @@
         return "Connected agent";
       };
 
-      const connectedAgentSecondaryLabel = (agent) => {
-        for (const candidate of [agent && agent.agent_id, agent && agent.uri]) {
-          const label = visibleAgentLabel(candidate);
-          if (label) {
-            return label;
-          }
-        }
-        return "";
-      };
-
       const connectedAgentPrimaryLabel = (agent) => {
         return `${connectedAgentEmoji(agent)} ${connectedAgentDisplayName(agent)}`.trim();
       };
@@ -2376,13 +2364,6 @@
         title.appendChild(titleText);
 
         copy.appendChild(title);
-        const secondaryLabel = connectedAgentSecondaryLabel(agent);
-        if (secondaryLabel) {
-          const secondary = document.createElement("p");
-          secondary.className = "connected-agent-secondary";
-          secondary.textContent = secondaryLabel;
-          copy.appendChild(secondary);
-        }
         cardMain.appendChild(copy);
 
         const meta = document.createElement("div");
