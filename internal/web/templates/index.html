@@ -473,7 +473,7 @@
             </div>
             <div class="onboarding-toggle-group" id="onboarding-mode-field" role="tablist" aria-label="Agent mode">
               <button id="onboarding-existing-agent-toggle" class="onboarding-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
-              <button id="onboarding-new-agent-toggle" class="onboarding-toggle" type="button" data-agent-mode="new" aria-pressed="false">Bind New</button>
+              <button id="onboarding-new-agent-toggle" class="onboarding-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>
             </div>
           </div>
           <fieldset class="runtime-toggle onboarding-section">
@@ -491,7 +491,7 @@
             </div>
           </fieldset>
           <label id="onboarding-token-field" class="onboarding-token-field">
-            <span id="onboarding-token-label">Agent Token</span>
+            <span id="onboarding-token-label">Token</span>
             <input id="onboarding-token-input" name="bind_token" value="{{.ProfileForm.BindToken}}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
             <small id="onboarding-token-hint" class="onboarding-token-hint">Paste the existing Molten Hub agent token.</small>
           </label>
@@ -1318,7 +1318,7 @@
           onboardingNewAgentToggle.setAttribute("aria-pressed", isNew ? "true" : "false");
         }
         if (onboardingTokenLabel) {
-          onboardingTokenLabel.textContent = isNew ? "Bind Token" : "Agent Token";
+          onboardingTokenLabel.textContent = "Token";
         }
         if (onboardingTokenHint) {
           onboardingTokenHint.textContent = isNew

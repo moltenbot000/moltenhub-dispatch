@@ -2037,6 +2037,20 @@ func TestEmojiPickerPanelStacksAboveModalBackdrop(t *testing.T) {
 	}
 }
 
+func TestOnboardingStylesForceHiddenProfileFields(t *testing.T) {
+	t.Parallel()
+
+	styles, err := os.ReadFile("static/styles.css")
+	if err != nil {
+		t.Fatalf("read styles.css: %v", err)
+	}
+
+	content := string(styles)
+	if !strings.Contains(content, "#onboarding-profile-fields[hidden] {\n  display: none !important;\n}") {
+		t.Fatalf("expected onboarding profile fields hidden override to defeat .stack display grid")
+	}
+}
+
 func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing.T) {
 	t.Parallel()
 
@@ -2068,14 +2082,17 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `id="onboarding-existing-agent-toggle"`) || !strings.Contains(body, `id="onboarding-new-agent-toggle"`) {
 		t.Fatalf("expected existing/new agent mode toggles in onboarding modal, body=%s", body)
 	}
+	if !strings.Contains(body, `id="onboarding-new-agent-toggle" class="onboarding-toggle" type="button" data-agent-mode="new" aria-pressed="false">New</button>`) {
+		t.Fatalf("expected onboarding new-agent toggle copy to be concise, body=%s", body)
+	}
 	if !strings.Contains(body, `name="hub_region"`) {
 		t.Fatalf("expected runtime region selector in onboarding modal, body=%s", body)
 	}
 	if !strings.Contains(body, `<legend>Region</legend>`) {
 		t.Fatalf("expected onboarding region legend to use concise label, body=%s", body)
 	}
-	if !strings.Contains(body, `id="onboarding-profile-fields"`) {
-		t.Fatalf("expected onboarding profile fields wrapper for mode toggling, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden`) {
+		t.Fatalf("expected onboarding profile fields to stay hidden in existing-agent mode, body=%s", body)
 	}
 	if !strings.Contains(body, `id="onboarding-steps"`) {
 		t.Fatalf("expected onboarding steps container, body=%s", body)
@@ -2094,6 +2111,12 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	}
 	if !strings.Contains(body, `id="onboarding-mode-field"`) || !strings.Contains(body, `id="onboarding-token-label"`) {
 		t.Fatalf("expected redesigned onboarding form fields, body=%s", body)
+	}
+	if !strings.Contains(body, `id="onboarding-token-label">Token</span>`) {
+		t.Fatalf("expected onboarding token label to use neutral token copy, body=%s", body)
+	}
+	if !strings.Contains(body, `onboardingTokenLabel.textContent = "Token";`) {
+		t.Fatalf("expected onboarding token label script to stay mode-agnostic, body=%s", body)
 	}
 }
 
