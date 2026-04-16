@@ -617,7 +617,7 @@ func connectedAgentDisplayName(agent app.ConnectedAgent) string {
 }
 
 func connectedAgentSecondaryLabel(agent app.ConnectedAgent) string {
-	for _, candidate := range []string{agent.AgentID, agent.Handle, agent.URI} {
+	for _, candidate := range []string{agent.AgentID, agent.URI} {
 		if label := visibleAgentLabel(candidate); label != "" {
 			return label
 		}

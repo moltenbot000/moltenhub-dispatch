@@ -3007,6 +3007,131 @@ func TestSetFlashNormalizesInfoLevel(t *testing.T) {
 	}
 }
 
+func TestRefreshConnectedAgentsUsesControlPlaneTalkablePeers(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"control_plane": map[string]any{
+			"talkable_peers": []any{
+				map[string]any{
+					"agent_uuid":   "self-uuid",
+					"agent_id":     "self-agent",
+					"agent_uri":    "https://hub.example/v1/agents/self-uuid",
+					"display_name": "Self Agent",
+					"emoji":        "🙂",
+				},
+				map[string]any{
+					"agent_uuid":   "peer-uuid",
+					"agent_id":     "peer-agent",
+					"agent_uri":    "https://hub.example/v1/agents/peer-uuid",
+					"display_name": "Codex Beast",
+					"emoji":        "🤖",
+				},
+			},
+		},
+		"communication": map[string]any{
+			"talkable_peers": []any{
+				map[string]any{
+					"agent_uuid":   "fallback-uuid",
+					"agent_id":     "fallback-agent",
+					"agent_uri":    "https://hub.example/v1/agents/fallback-uuid",
+					"display_name": "Fallback Agent",
+					"emoji":        "🛰️",
+				},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "https://hub.example/v1/agents/self-uuid"
+		state.Session.Handle = "self-agent"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one connected agent from control_plane.talkable_peers, got %#v", agents)
+	}
+	agent := agents[0]
+	if got, want := agent.AgentID, "peer-agent"; got != want {
+		t.Fatalf("agent id = %q, want %q", got, want)
+	}
+	if got, want := agent.URI, "https://hub.example/v1/agents/peer-uuid"; got != want {
+		t.Fatalf("agent uri = %q, want %q", got, want)
+	}
+	if got, want := connectedAgentDisplayName(agent), "Codex Beast"; got != want {
+		t.Fatalf("display name = %q, want %q", got, want)
+	}
+	if got, want := connectedAgentEmoji(agent), "🤖"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
+	}
+}
+
+func TestRefreshConnectedAgentsFallsBackToCommunicationTalkablePeers(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"control_plane": map[string]any{
+			"talkable_peers": []any{},
+		},
+		"communication": map[string]any{
+			"talkable_peers": []any{
+				map[string]any{
+					"agent_uuid":   "self-uuid",
+					"agent_id":     "self-agent",
+					"agent_uri":    "https://hub.example/v1/agents/self-uuid",
+					"display_name": "Self Agent",
+				},
+				map[string]any{
+					"agent_uri":    "https://hub.example/v1/agents/peer-uuid",
+					"display_name": "Peer Without ID",
+					"emoji":        "🛰️",
+				},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "https://hub.example/v1/agents/self-uuid"
+		state.Session.Handle = "self-agent"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one connected agent from communication.talkable_peers fallback, got %#v", agents)
+	}
+	agent := agents[0]
+	if got := agent.AgentID; got != "" {
+		t.Fatalf("agent id = %q, want empty", got)
+	}
+	if got, want := agent.URI, "https://hub.example/v1/agents/peer-uuid"; got != want {
+		t.Fatalf("agent uri = %q, want %q", got, want)
+	}
+	if got, want := connectedAgentDisplayName(agent), "Peer Without ID"; got != want {
+		t.Fatalf("display name = %q, want %q", got, want)
+	}
+	if got, want := connectedAgentEmoji(agent), "🛰️"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
+	}
+}
+
 func TestRefreshConnectedAgentsUsesPeerSkillCatalogFromCapabilities(t *testing.T) {
 	t.Parallel()
 

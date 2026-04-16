@@ -2295,11 +2295,37 @@ func capabilityPeerCatalogEntries(capabilities map[string]any) []map[string]any 
 			continue
 		}
 		seen[ref] = struct{}{}
+		if peers := capabilityTalkablePeerEntries(root, "control_plane", "controlPlane"); len(peers) > 0 {
+			entries = append(entries, peers...)
+			continue
+		}
+		if peers := capabilityTalkablePeerEntries(root, "communication"); len(peers) > 0 {
+			entries = append(entries, peers...)
+			continue
+		}
 		for _, key := range []string{"peer_skill_catalog", "peerSkillCatalog"} {
 			entries = append(entries, mapsFromAny(root[key])...)
 		}
 	}
 	return entries
+}
+
+func capabilityTalkablePeerEntries(root map[string]any, containerKeys ...string) []map[string]any {
+	if len(root) == 0 {
+		return nil
+	}
+	for _, containerKey := range containerKeys {
+		container := nestedMap(root, containerKey)
+		if len(container) == 0 {
+			continue
+		}
+		for _, peersKey := range []string{"talkable_peers", "talkablePeers"} {
+			if peers := mapsFromAny(container[peersKey]); len(peers) > 0 {
+				return peers
+			}
+		}
+	}
+	return nil
 }
 
 func connectedAgentFromCapabilityEntry(entry map[string]any) ConnectedAgent {

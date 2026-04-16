@@ -1765,7 +1765,7 @@
       };
 
       const connectedAgentSecondaryLabel = (agent) => {
-        for (const candidate of [agent && agent.agent_id, agent && agent.handle, agent && agent.uri]) {
+        for (const candidate of [agent && agent.agent_id, agent && agent.uri]) {
           const label = visibleAgentLabel(candidate);
           if (label) {
             return label;

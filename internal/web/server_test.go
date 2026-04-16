@@ -2957,6 +2957,55 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	}
 }
 
+func TestConnectedAgentSecondaryLabelPrefersAgentIDThenURI(t *testing.T) {
+	t.Parallel()
+
+	agent := app.ConnectedAgent{
+		Handle: "peer-handle",
+		URI:    "https://hub.example/v1/agents/peer-uuid",
+	}
+	if got, want := connectedAgentSecondaryLabel(agent), "https://hub.example/v1/agents/peer-uuid"; got != want {
+		t.Fatalf("secondary label = %q, want %q", got, want)
+	}
+
+	agent.AgentID = "peer-agent"
+	if got, want := connectedAgentSecondaryLabel(agent), "peer-agent"; got != want {
+		t.Fatalf("secondary label = %q, want %q", got, want)
+	}
+}
+
+func TestHandleIndexClientSecondaryLabelUsesAgentIDThenURI(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `for (const candidate of [agent && agent.agent_id, agent && agent.uri]) {`) {
+		t.Fatalf("expected client-side secondary-label helper to use agent_id then agent_uri, body=%s", body)
+	}
+	if strings.Contains(body, `for (const candidate of [agent && agent.agent_id, agent && agent.handle, agent && agent.uri]) {`) {
+		t.Fatalf("did not expect client-side secondary-label helper to prefer handle over agent_uri, body=%s", body)
+	}
+}
+
 func TestHandleIndexDefinesTrimmedStringBeforeDispatchPlaceholderSetup(t *testing.T) {
 	t.Parallel()
 
