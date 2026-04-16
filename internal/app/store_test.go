@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -203,5 +204,88 @@ func TestNewStoreRejectsNonHubSessionEndpoints(t *testing.T) {
 	}
 	if got, want := state.Connection.Domain, "na.hub.molten.bot"; got != want {
 		t.Fatalf("connection domain = %q, want %q", got, want)
+	}
+}
+
+func TestStoreUpdatePersistsAgentSettingsToMoltenbotConfig(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, defaultDataDir)
+	path, err := ResolveStorePath(dataDir)
+	if err != nil {
+		t.Fatalf("resolve store path: %v", err)
+	}
+
+	settings := DefaultSettings()
+	settings.DataDir = dataDir
+
+	store, err := NewStore(path, settings)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	err = store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update store: %v", err)
+	}
+
+	configData, err := os.ReadFile(filepath.Join(dir, defaultAgentConfigDir, "config.json"))
+	if err != nil {
+		t.Fatalf("read agent config: %v", err)
+	}
+
+	var payload struct {
+		Agent agentConfig `json:"agent"`
+	}
+	if err := json.Unmarshal(configData, &payload); err != nil {
+		t.Fatalf("decode agent config: %v", err)
+	}
+	if got, want := payload.Agent.AgentToken, "agent-token"; got != want {
+		t.Fatalf("agent_token = %q, want %q", got, want)
+	}
+	if got, want := payload.Agent.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
+		t.Fatalf("base_url = %q, want %q", got, want)
+	}
+}
+
+func TestStoreUpdateRemovesMoltenbotAgentConfigWhenSessionClears(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, defaultDataDir)
+	path, err := ResolveStorePath(dataDir)
+	if err != nil {
+		t.Fatalf("resolve store path: %v", err)
+	}
+
+	settings := DefaultSettings()
+	settings.DataDir = dataDir
+
+	store, err := NewStore(path, settings)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	err = store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	err = store.Update(func(state *AppState) error {
+		state.Session = Session{}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("clear store: %v", err)
+	}
+
+	agentConfigPath := filepath.Join(dir, defaultAgentConfigDir, "config.json")
+	if _, err := os.Stat(agentConfigPath); !os.IsNotExist(err) {
+		t.Fatalf("expected agent config removal, stat err=%v", err)
 	}
 }

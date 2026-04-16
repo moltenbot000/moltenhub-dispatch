@@ -56,6 +56,17 @@ go run ./cmd/moltenhub-dispatch
 
 The UI is served at **http://localhost:8080** by default.
 
+When agent onboarding succeeds, dispatcher also mirrors active agent credentials to `./.moltenbot/config.json` as:
+
+```json
+{
+  "agent": {
+    "agent_token": "…",
+    "base_url": "https://na.hub.molten.bot/v1"
+  }
+}
+```
+
 ### Optional Environment Variables
 
 | Variable | Description |

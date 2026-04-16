@@ -16,6 +16,7 @@ const maxRecentEvents = 40
 
 const (
 	defaultDataDir                  = ".moltenhub"
+	defaultAgentConfigDir           = ".moltenbot"
 	defaultGoogleAnalyticsMeasureID = "G-BY33RFG2WB"
 )
 
@@ -141,6 +142,9 @@ func (s *Store) saveLocked() error {
 	}
 	if err := os.WriteFile(s.path, data, 0o644); err != nil {
 		return fmt.Errorf("write store: %w", err)
+	}
+	if err := syncAgentConfig(s.path, s.state.Session); err != nil {
+		return err
 	}
 	return nil
 }
@@ -316,6 +320,65 @@ func normalizeFlash(flash *FlashMessage) {
 			flash.Level = "info"
 		}
 	}
+}
+
+type agentConfigFile struct {
+	Agent agentConfig `json:"agent"`
+}
+
+type agentConfig struct {
+	AgentToken string `json:"agent_token"`
+	BaseURL    string `json:"base_url"`
+}
+
+func syncAgentConfig(storePath string, session Session) error {
+	agent, ok := configuredAgentConfig(session)
+	path := resolveAgentConfigPath(storePath)
+	if path == "" {
+		return nil
+	}
+	if !ok {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove agent config: %w", err)
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create agent config directory: %w", err)
+	}
+	data, err := json.MarshalIndent(agentConfigFile{Agent: agent}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode agent config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write agent config: %w", err)
+	}
+	return nil
+}
+
+func configuredAgentConfig(session Session) (agentConfig, bool) {
+	token := coalesceTrimmed(session.AgentToken, session.BindToken)
+	baseURL := NormalizeHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL, runtimeAPIBaseFromSession(session)))
+	if token == "" || baseURL == "" {
+		return agentConfig{}, false
+	}
+	return agentConfig{
+		AgentToken: token,
+		BaseURL:    baseURL,
+	}, true
+}
+
+func resolveAgentConfigPath(storePath string) string {
+	storePath = strings.TrimSpace(storePath)
+	if storePath == "" {
+		return ""
+	}
+	rootDir := filepath.Dir(storePath)
+	base := filepath.Base(rootDir)
+	if strings.HasPrefix(base, ".") && base != "." {
+		rootDir = filepath.Dir(rootDir)
+	}
+	return filepath.Join(rootDir, defaultAgentConfigDir, "config.json")
 }
 
 func cloneState(state AppState) AppState {
