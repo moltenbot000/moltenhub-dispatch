@@ -446,7 +446,7 @@
           <header class="onboarding-modal-header">
             <p class="eyebrow">Molten Hub Onboarding</p>
             <h2 id="onboarding-modal-title">Connect Dispatcher Agent</h2>
-            <p id="onboarding-modal-summary">Use an existing agent token by default, or switch to the bind flow to provision a new dispatcher identity.</p>
+            <p id="onboarding-modal-summary">Token prefix sets flow: <code>b_</code> provisions a new dispatcher; <code>t_</code> or no prefix connects an existing agent.</p>
           </header>
           <section class="onboarding-flow" aria-live="polite">
             <p class="state-summary-label">Onboarding Flow</p>
@@ -461,21 +461,11 @@
             <p class="onboarding-message" id="onboarding-message">{{.Onboarding.Message}}</p>
           </section>
           <div class="onboarding-modal-note">
-            <p>Molten Hub keeps human and agent credentials separate. Existing-agent mode verifies a bearer token against the selected runtime; bind mode redeems a one-time bind token first.</p>
+            <p>Molten Hub keeps human and agent credentials separate. Use <code>b_...</code> one-time bind token for new dispatcher identity. Use <code>t_...</code> or legacy token for existing agent credential verification.</p>
             <a class="onboarding-signin-link" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">Open Molten Hub sign-in</a>
           </div>
         </aside>
         <form method="post" action="/bind" class="stack profile-shell onboarding-form" id="bind-form">
-          <input type="hidden" name="agent_mode" value="existing" id="onboarding-mode-input">
-          <div class="onboarding-section">
-            <div class="onboarding-section-heading">
-              <span class="prompt-label">Agent</span>
-            </div>
-            <div class="onboarding-toggle-group" id="onboarding-mode-field" role="tablist" aria-label="Agent mode">
-              <button id="onboarding-existing-agent-toggle" class="onboarding-toggle active" type="button" data-agent-mode="existing" aria-pressed="true">Existing</button>
-              <button id="onboarding-new-agent-toggle" class="onboarding-toggle" type="button" data-agent-mode="new" aria-pressed="false">Bind New</button>
-            </div>
-          </div>
           <fieldset class="runtime-toggle onboarding-section">
             <legend>Region</legend>
             <div class="runtime-toggle-options">
@@ -491,9 +481,9 @@
             </div>
           </fieldset>
           <label id="onboarding-token-field" class="onboarding-token-field">
-            <span id="onboarding-token-label">Agent Token</span>
+            <span id="onboarding-token-label">Token</span>
             <input id="onboarding-token-input" name="bind_token" value="{{.ProfileForm.BindToken}}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
-            <small id="onboarding-token-hint" class="onboarding-token-hint">Paste the existing Molten Hub agent token.</small>
+            <small id="onboarding-token-hint" class="onboarding-token-hint">Use <code>b_...</code> for new bind, or <code>t_...</code> / legacy token for existing agent.</small>
           </label>
           <div id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden>
             <div class="profile-grid profile-grid-top onboarding-profile-grid">
@@ -590,9 +580,7 @@
       const agentSettingsHandle = document.getElementById("agent-settings-handle");
       const bindForm = document.getElementById("bind-form");
       const bindSubmit = document.getElementById("bind-submit");
-      const onboardingModeInput = document.getElementById("onboarding-mode-input");
-      const onboardingExistingAgentToggle = document.getElementById("onboarding-existing-agent-toggle");
-      const onboardingNewAgentToggle = document.getElementById("onboarding-new-agent-toggle");
+      const onboardingTokenInput = document.getElementById("onboarding-token-input");
       const onboardingTokenLabel = document.getElementById("onboarding-token-label");
       const onboardingTokenHint = document.getElementById("onboarding-token-hint");
       const onboardingHandleField = document.getElementById("onboarding-handle-field");
@@ -1270,7 +1258,14 @@
 
       const bound = shell?.dataset.bound === "true";
       const normalizedOnboardingMode = (value) => String(value || "").trim() === "new" ? "new" : "existing";
-      const currentOnboardingMode = () => normalizedOnboardingMode(onboardingModeInput?.value || "existing");
+      const onboardingModeFromToken = (token) => {
+        const trimmed = String(token || "").trim();
+        if (!trimmed) {
+          return "existing";
+        }
+        return trimmed.toLowerCase().startsWith("b_") ? "new" : "existing";
+      };
+      const currentOnboardingMode = () => onboardingModeFromToken(onboardingTokenInput instanceof HTMLInputElement ? onboardingTokenInput.value : "");
       const onboardingDefaults = (mode = (bound ? "existing" : currentOnboardingMode())) => {
         const isNew = String(mode || "").trim() === "new";
         return [
@@ -1306,24 +1301,13 @@
       const applyOnboardingMode = (mode) => {
         const normalizedMode = normalizedOnboardingMode(mode);
         const isNew = normalizedMode === "new";
-        if (onboardingModeInput) {
-          onboardingModeInput.value = normalizedMode;
-        }
-        if (onboardingExistingAgentToggle) {
-          onboardingExistingAgentToggle.classList.toggle("active", !isNew);
-          onboardingExistingAgentToggle.setAttribute("aria-pressed", isNew ? "false" : "true");
-        }
-        if (onboardingNewAgentToggle) {
-          onboardingNewAgentToggle.classList.toggle("active", isNew);
-          onboardingNewAgentToggle.setAttribute("aria-pressed", isNew ? "true" : "false");
-        }
         if (onboardingTokenLabel) {
-          onboardingTokenLabel.textContent = isNew ? "Bind Token" : "Agent Token";
+          onboardingTokenLabel.textContent = isNew ? "Bind Token" : "Token";
         }
         if (onboardingTokenHint) {
           onboardingTokenHint.textContent = isNew
-            ? "Redeem a one-time bind token to provision this dispatcher."
-            : "Paste the existing Molten Hub agent token.";
+            ? "Use b_... one-time bind token to provision this dispatcher."
+            : "Use t_... or legacy Molten Hub agent token.";
         }
         if (onboardingHandleField instanceof HTMLElement) {
           onboardingHandleField.hidden = !isNew;
@@ -1406,24 +1390,22 @@
         window.location.assign("/");
       };
 
-      onboardingExistingAgentToggle?.addEventListener("click", () => {
-        applyOnboardingMode("existing");
-      });
-
-      onboardingNewAgentToggle?.addEventListener("click", () => {
-        applyOnboardingMode("new");
-      });
-
       if (!bound) {
         applyOnboardingMode(currentOnboardingMode());
+        if (onboardingTokenInput instanceof HTMLInputElement) {
+          onboardingTokenInput.addEventListener("input", () => {
+            applyOnboardingMode(currentOnboardingMode());
+          });
+        }
       }
 
       if (bindForm && !bound) {
         bindForm.addEventListener("submit", async (event) => {
           event.preventDefault();
-          const mode = currentOnboardingMode();
-          const isNew = mode === "new";
           const formData = new FormData(bindForm);
+          const token = String(formData.get("bind_token") || "").trim();
+          const mode = onboardingModeFromToken(token);
+          const isNew = mode === "new";
           renderOnboarding({
             stage: "bind",
             active: true,
@@ -1442,8 +1424,8 @@
               body: JSON.stringify({
                 agent_mode: mode,
                 hub_region: String(formData.get("hub_region") || "").trim(),
-                bind_token: isNew ? String(formData.get("bind_token") || "").trim() : "",
-                agent_token: isNew ? "" : String(formData.get("bind_token") || "").trim(),
+                bind_token: isNew ? token : "",
+                agent_token: isNew ? "" : token,
                 handle: isNew ? String(formData.get("handle") || "").trim() : "",
                 display_name: isNew ? String(formData.get("display_name") || "").trim() : "",
                 emoji: isNew ? String(formData.get("emoji") || "").trim() : "",
