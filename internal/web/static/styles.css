@@ -4022,11 +4022,13 @@ body.settings-modal-open {
 
 .onboarding-form {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(280px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "region token actions"
-    "profile profile profile";
-  align-items: end;
+    "region"
+    "token"
+    "profile"
+    "actions";
+  align-items: stretch;
   gap: 18px;
 }
 
