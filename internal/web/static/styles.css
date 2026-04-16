@@ -4021,7 +4021,17 @@ body.settings-modal-open {
 }
 
 .onboarding-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(280px, 1fr) auto;
+  grid-template-areas:
+    "region token actions"
+    "profile profile profile";
+  align-items: end;
   gap: 18px;
+}
+
+.onboarding-form .runtime-toggle {
+  grid-area: region;
 }
 
 .onboarding-section {
@@ -4062,8 +4072,20 @@ body.settings-modal-open {
 }
 
 .onboarding-token-field {
+  grid-area: token;
   display: grid;
   gap: 8px;
+  max-width: 42ch;
+}
+
+#onboarding-token-input {
+  min-height: 42px;
+  height: 42px;
+  max-height: 42px;
+}
+
+#onboarding-token-hint {
+  max-width: 42ch;
 }
 
 .onboarding-token-hint {
@@ -4077,6 +4099,10 @@ body.settings-modal-open {
 
 #onboarding-profile-fields[hidden] {
   display: none !important;
+}
+
+#onboarding-profile-fields {
+  grid-area: profile;
 }
 
 .onboarding-profile-grid {
@@ -4175,8 +4201,14 @@ body.settings-modal-open {
 }
 
 .onboarding-form-actions {
+  grid-area: actions;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  align-items: flex-end;
+}
+
+#bind-submit {
+  min-inline-size: 116px;
 }
 
 .profile-shell {
@@ -4586,6 +4618,21 @@ pre {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .onboarding-form {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "region"
+      "token"
+      "profile"
+      "actions";
+    align-items: stretch;
+  }
+
+  .onboarding-token-field,
+  #onboarding-token-hint {
+    max-width: none;
+  }
+
   .onboarding-profile-grid,
   .onboarding-toggle-group {
     grid-template-columns: minmax(0, 1fr);
@@ -4623,6 +4670,14 @@ pre {
   }
 
   .profile-save-button {
+    width: 100%;
+  }
+
+  .onboarding-form-actions {
+    justify-content: stretch;
+  }
+
+  #bind-submit {
     width: 100%;
   }
 }
