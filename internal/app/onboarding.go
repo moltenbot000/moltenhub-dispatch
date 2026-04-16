@@ -90,11 +90,25 @@ func OnboardingModeFromToken(token string) string {
 func NormalizeOnboardingTokens(mode, bindToken, agentToken string) (string, string, string) {
 	bindToken = strings.TrimSpace(bindToken)
 	agentToken = strings.TrimSpace(agentToken)
+	mode = strings.ToLower(strings.TrimSpace(mode))
 
 	submittedToken := bindToken
 	if submittedToken == "" {
 		submittedToken = agentToken
 	}
+	switch mode {
+	case OnboardingModeNew:
+		if submittedToken != "" {
+			return OnboardingModeNew, submittedToken, ""
+		}
+		return OnboardingModeNew, bindToken, ""
+	case OnboardingModeExisting:
+		if submittedToken != "" {
+			return OnboardingModeExisting, "", submittedToken
+		}
+		return OnboardingModeExisting, "", agentToken
+	}
+
 	if submittedToken != "" {
 		resolvedMode := OnboardingModeFromToken(submittedToken)
 		if resolvedMode == OnboardingModeNew {
