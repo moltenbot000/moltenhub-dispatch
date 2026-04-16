@@ -3192,6 +3192,75 @@ func TestRefreshConnectedAgentsRetainsPeerCatalogSkillsWhenTalkablePeersExist(t 
 	}
 }
 
+func TestRefreshConnectedAgentsMergesPeerCatalogSkillsWithTalkablePeerProfile(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"control_plane": map[string]any{
+			"talkable_peers": []any{
+				map[string]any{
+					"agent_uuid": "self-uuid",
+					"agent_id":   "self-agent",
+					"agent_uri":  "https://hub.example/v1/agents/self-uuid",
+				},
+				map[string]any{
+					"agent_uuid":   "peer-uuid",
+					"agent_id":     "peer-agent",
+					"agent_uri":    "https://hub.example/v1/agents/peer-uuid",
+					"display_name": "Codex Beast",
+					"emoji":        "🤖",
+				},
+			},
+		},
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent_uuid": "self-uuid",
+				"agent_id":   "self-agent",
+				"uri":        "https://hub.example/v1/agents/self-uuid",
+			},
+			map[string]any{
+				"agent_uuid": "peer-uuid",
+				"agent_id":   "peer-agent",
+				"uri":        "https://hub.example/v1/agents/peer-uuid",
+				"metadata": map[string]any{
+					"skills": []map[string]any{
+						{"name": "review_openapi", "description": "Review Hub API integration behavior."},
+					},
+				},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "https://hub.example/v1/agents/self-uuid"
+		state.Session.Handle = "self-agent"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one peer agent, got %#v", agents)
+	}
+	agent := agents[0]
+	if got, want := connectedAgentDisplayName(agent), "Codex Beast"; got != want {
+		t.Fatalf("display name = %q, want %q", got, want)
+	}
+	if got, want := connectedAgentEmoji(agent), "🤖"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
+	}
+	if skills := connectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_openapi" {
+		t.Fatalf("expected merged agent to keep peer skill catalog skills, got %#v", skills)
+	}
+}
+
 func TestRefreshConnectedAgentsUsesPeerSkillCatalogFromCapabilities(t *testing.T) {
 	t.Parallel()
 

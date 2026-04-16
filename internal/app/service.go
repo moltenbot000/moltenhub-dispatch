@@ -2036,7 +2036,7 @@ func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
 func connectedAgentsFromCapabilities(capabilities map[string]any, state AppState) []ConnectedAgent {
 	entries := capabilityPeerCatalogEntries(capabilities)
 	connected := make([]ConnectedAgent, 0, len(entries))
-	seen := make(map[string]struct{}, len(entries))
+	seen := make(map[string]int, len(entries))
 	for _, entry := range entries {
 		agent := connectedAgentFromCapabilityEntry(entry)
 		if sameAgentRef(state.Session, agent.AgentUUID, agent.URI, agent.AgentID, agent.Handle) {
@@ -2046,13 +2046,108 @@ func connectedAgentsFromCapabilities(capabilities map[string]any, state AppState
 		if key == "" {
 			continue
 		}
-		if _, ok := seen[key]; ok {
+		if index, ok := seen[key]; ok {
+			connected[index] = mergeConnectedAgentEntries(connected[index], agent)
 			continue
 		}
-		seen[key] = struct{}{}
+		seen[key] = len(connected)
 		connected = append(connected, agent)
 	}
 	return connected
+}
+
+func mergeConnectedAgentEntries(primary, secondary ConnectedAgent) ConnectedAgent {
+	merged := primary
+	merged.AgentUUID = coalesceTrimmed(merged.AgentUUID, secondary.AgentUUID)
+	merged.AgentID = coalesceTrimmed(merged.AgentID, secondary.AgentID)
+	merged.URI = coalesceTrimmed(merged.URI, secondary.URI)
+	merged.Handle = coalesceTrimmed(merged.Handle, secondary.Handle)
+	merged.Status = coalesceTrimmed(merged.Status, secondary.Status)
+	merged.DisplayName = coalesceTrimmed(merged.DisplayName, secondary.DisplayName)
+	merged.Emoji = coalesceTrimmed(merged.Emoji, secondary.Emoji)
+	merged.Presence = mergeConnectedAgentPresence(merged.Presence, secondary.Presence)
+	if len(merged.AdvertisedSkills) == 0 {
+		merged.AdvertisedSkills = secondary.AdvertisedSkills
+	}
+	if len(merged.Skills) == 0 {
+		merged.Skills = secondary.Skills
+	}
+	merged.Metadata = mergeConnectedAgentMetadata(merged.Metadata, secondary.Metadata)
+	if merged.Owner == nil && secondary.Owner != nil {
+		owner := *secondary.Owner
+		merged.Owner = &owner
+	}
+	return normalizeConnectedAgent(merged)
+}
+
+func mergeConnectedAgentMetadata(primary, secondary *hub.AgentMetadata) *hub.AgentMetadata {
+	switch {
+	case primary == nil && secondary == nil:
+		return nil
+	case primary == nil:
+		metadata := *secondary
+		return &metadata
+	case secondary == nil:
+		metadata := *primary
+		return &metadata
+	}
+
+	metadata := *primary
+	metadata.AgentType = coalesceTrimmed(metadata.AgentType, secondary.AgentType)
+	metadata.DisplayName = coalesceTrimmed(metadata.DisplayName, secondary.DisplayName)
+	metadata.Emoji = coalesceTrimmed(metadata.Emoji, secondary.Emoji)
+	metadata.ProfileMarkdown = coalesceTrimmed(metadata.ProfileMarkdown, secondary.ProfileMarkdown)
+	metadata.LLM = coalesceTrimmed(metadata.LLM, secondary.LLM)
+	metadata.Harness = coalesceTrimmed(metadata.Harness, secondary.Harness)
+	if metadata.Public == nil && secondary.Public != nil {
+		value := *secondary.Public
+		metadata.Public = &value
+	}
+	if len(metadata.Activities) == 0 {
+		metadata.Activities = secondary.Activities
+	}
+	if len(metadata.AdvertisedSkills) == 0 {
+		metadata.AdvertisedSkills = secondary.AdvertisedSkills
+	}
+	if len(metadata.Skills) == 0 {
+		metadata.Skills = secondary.Skills
+	}
+	if metadata.HireMe == nil && secondary.HireMe != nil {
+		value := *secondary.HireMe
+		metadata.HireMe = &value
+	}
+	metadata.Presence = mergeConnectedAgentPresence(metadata.Presence, secondary.Presence)
+	if metadataEmpty(&metadata) {
+		return nil
+	}
+	return &metadata
+}
+
+func mergeConnectedAgentPresence(primary, secondary *hub.AgentPresence) *hub.AgentPresence {
+	switch {
+	case primary == nil && secondary == nil:
+		return nil
+	case primary == nil:
+		presence := *secondary
+		return &presence
+	case secondary == nil:
+		presence := *primary
+		return &presence
+	}
+
+	presence := *primary
+	presence.Status = coalesceTrimmed(presence.Status, secondary.Status)
+	presence.Transport = coalesceTrimmed(presence.Transport, secondary.Transport)
+	presence.SessionKey = coalesceTrimmed(presence.SessionKey, secondary.SessionKey)
+	presence.UpdatedAt = coalesceTrimmed(presence.UpdatedAt, secondary.UpdatedAt)
+	if presence.Ready == nil && secondary.Ready != nil {
+		ready := *secondary.Ready
+		presence.Ready = &ready
+	}
+	if presenceEmpty(&presence) {
+		return nil
+	}
+	return &presence
 }
 
 type agentIdentity struct {
