@@ -235,7 +235,8 @@
               <div class="runtime-event-card-header">
                 <div>
                   <h3>
-                    {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}} {{end}}
+                    {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}}
+                    {{if .TargetAgentDisplayName}} {{end}}
                     {{if .TargetAgentDisplayName}}{{.TargetAgentDisplayName}}{{else if .TargetAgentUUID}}{{.TargetAgentUUID}}{{else if .TargetAgentURI}}{{.TargetAgentURI}}{{else}}Unknown agent{{end}}
                   </h3>
                   <p class="runtime-event-card-subtitle">
@@ -252,7 +253,7 @@
                 <p><strong>Child request:</strong> {{.ChildRequestID}}</p>
                 <p><strong>Status:</strong> {{if eq .Status "sending"}}Sending{{else}}In Queue{{end}}</p>
                 {{if .TargetAgentDisplayName}}
-                <p><strong>Target agent:</strong> {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}} {{end}}{{.TargetAgentDisplayName}}</p>
+                <p><strong>Target agent:</strong> {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}} {{.TargetAgentDisplayName}}</p>
                 {{else if .TargetAgentUUID}}
                 <p><strong>Target agent:</strong> {{.TargetAgentUUID}}</p>
                 {{else if .TargetAgentURI}}
@@ -280,13 +281,28 @@
             {{range .State.RecentEvents}}
             <article class="card runtime-event-card" data-runtime-event-card>
               <div class="runtime-event-card-header">
-                <h3>{{.Title}}</h3>
+                <div>
+                  <h3>
+                    {{if .TargetAgentDisplayName}}
+                      {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}} {{.TargetAgentDisplayName}}
+                    {{else}}
+                      {{.Title}}
+                    {{end}}
+                  </h3>
+                  {{if .OriginalSkillName}}
+                  <p class="runtime-event-card-subtitle">{{.OriginalSkillName}} • {{.Title}}</p>
+                  {{else if .TargetAgentDisplayName}}
+                  <p class="runtime-event-card-subtitle">{{.Title}}</p>
+                  {{end}}
+                </div>
                 <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
               </div>
               <div class="runtime-event-card-body" data-runtime-event-body hidden>
                 <p><strong>When:</strong> {{formatTime .At}}</p>
                 <p><strong>Level:</strong> {{.Level}}</p>
                 <p>{{.Detail}}</p>
+                {{if .OriginalSkillName}}<p><strong>Skill:</strong> {{.OriginalSkillName}}</p>{{end}}
+                {{if .TargetAgentDisplayName}}<p><strong>Target agent:</strong> {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}} {{.TargetAgentDisplayName}}</p>{{else if .TargetAgentUUID}}<p><strong>Target agent:</strong> {{.TargetAgentUUID}}</p>{{else if .TargetAgentURI}}<p><strong>Target agent:</strong> {{.TargetAgentURI}}</p>{{end}}
                 {{if .TaskID}}<p><strong>Task:</strong> {{.TaskID}}</p>{{end}}
                 {{if .LogPath}}<p><strong>Log:</strong> {{.LogPath}}</p>{{end}}
               </div>
@@ -867,7 +883,7 @@
         container.appendChild(row);
       };
 
-      const createRuntimeEventCard = (titleText, bodyBuilder) => {
+      const createRuntimeEventCard = (titleText, bodyBuilder, options = null) => {
         const card = document.createElement("article");
         card.className = "card runtime-event-card";
         card.setAttribute("data-runtime-event-card", "");
@@ -875,9 +891,22 @@
         const header = document.createElement("div");
         header.className = "runtime-event-card-header";
 
+        const headerCopy = document.createElement("div");
         const title = document.createElement("h3");
         title.textContent = trimmedString(titleText) || "Runtime event";
-        header.appendChild(title);
+        headerCopy.appendChild(title);
+
+        const subtitleText = trimmedString(options && options.subtitleText);
+        if (subtitleText !== "") {
+          const subtitle = document.createElement("p");
+          subtitle.className = "runtime-event-card-subtitle";
+          subtitle.appendChild(document.createTextNode(subtitleText));
+          if (typeof (options && options.subtitleBuilder) === "function") {
+            options.subtitleBuilder(subtitle);
+          }
+          headerCopy.appendChild(subtitle);
+        }
+        header.appendChild(headerCopy);
 
         const toggle = document.createElement("button");
         toggle.type = "button";
@@ -2463,6 +2492,25 @@
         }
       };
 
+      const runtimeTargetAgentLabel = (value) => {
+        const displayName = trimmedString(value && value.target_agent_display_name);
+        if (displayName !== "") {
+          const emoji = trimmedString(value && value.target_agent_emoji) || "🤖";
+          return `${emoji} ${displayName}`.trim();
+        }
+        return trimmedString(value && value.target_agent_uuid) || trimmedString(value && value.target_agent_uri);
+      };
+
+      const pendingTaskStatusLabel = (task) => {
+        return trimmedString(task && task.status) === "sending" ? "Sending" : "In Queue";
+      };
+
+      const pendingTaskStatusClass = (task) => {
+        return trimmedString(task && task.status) === "sending"
+          ? "runtime-event-card-status runtime-event-card-status-sending"
+          : "runtime-event-card-status runtime-event-card-status-queued";
+      };
+
       const renderPendingTasks = (tasks) => {
         const nextTasks = Array.isArray(tasks) ? tasks : [];
         latestPendingTasks = nextTasks;
@@ -2478,14 +2526,26 @@
           return;
         }
         nextTasks.forEach((task) => {
-          const title = trimmedString(task && task.original_skill_name) || trimmedString(task && task.id) || "Pending task";
+          const title = runtimeTargetAgentLabel(task) || "Unknown agent";
+          const skillName = trimmedString(task && task.original_skill_name) || trimmedString(task && task.id) || "Pending task";
+          const statusLabel = pendingTaskStatusLabel(task);
           const card = createRuntimeEventCard(title, (body) => {
             appendRuntimeRow(body, "Task", task && task.id);
             appendRuntimeRow(body, "Child request", task && task.child_request_id);
-            appendRuntimeRow(body, "Target agent", trimmedString(task && task.target_agent_uuid) || trimmedString(task && task.target_agent_uri));
+            appendRuntimeRow(body, "Status", statusLabel);
+            appendRuntimeRow(body, "Skill", skillName);
+            appendRuntimeRow(body, "Target agent", runtimeTargetAgentLabel(task));
             appendRuntimeRow(body, "Repo", task && task.repo);
             appendRuntimeRow(body, "Log path", task && task.log_path);
             appendRuntimeRow(body, "Expires", formatRuntimeTimestamp(task && task.expires_at));
+          }, {
+            subtitleText: skillName,
+            subtitleBuilder: (subtitle) => {
+              const status = document.createElement("span");
+              status.className = pendingTaskStatusClass(task);
+              status.textContent = statusLabel;
+              subtitle.appendChild(status);
+            },
           });
           pendingTasksList.appendChild(card);
         });
@@ -2509,13 +2569,24 @@
           return;
         }
         nextEvents.forEach((event) => {
-          const title = trimmedString(event && event.title) || "Runtime event";
+          const eventTarget = runtimeTargetAgentLabel(event);
+          const title = eventTarget || trimmedString(event && event.title) || "Runtime event";
+          const skillName = trimmedString(event && event.original_skill_name);
+          const eventTitle = trimmedString(event && event.title);
+          let subtitle = "";
+          if (eventTarget !== "") {
+            subtitle = skillName !== "" && eventTitle !== "" ? `${skillName} • ${eventTitle}` : (skillName || eventTitle);
+          }
           const card = createRuntimeEventCard(title, (body) => {
             appendRuntimeRow(body, "When", formatRuntimeTimestamp(event && event.at));
             appendRuntimeRow(body, "Level", event && event.level);
             appendRuntimeRow(body, "", event && event.detail);
+            appendRuntimeRow(body, "Skill", skillName);
+            appendRuntimeRow(body, "Target agent", eventTarget);
             appendRuntimeRow(body, "Task", event && event.task_id);
             appendRuntimeRow(body, "Log", event && event.log_path);
+          }, {
+            subtitleText: subtitle,
           });
           recentEventsList.appendChild(card);
         });

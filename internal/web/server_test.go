@@ -1660,6 +1660,15 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `renderRecentEvents(recentEvents);`) {
 		t.Fatalf("expected status polling to rerender recent events, body=%s", body)
 	}
+	if !strings.Contains(body, `runtimeTargetAgentLabel(task)`) {
+		t.Fatalf("expected pending task rerender to resolve target-agent emoji + display label, body=%s", body)
+	}
+	if !strings.Contains(body, `task && task.original_skill_name`) {
+		t.Fatalf("expected pending task rerender to include original skill label, body=%s", body)
+	}
+	if !strings.Contains(body, `event && event.original_skill_name`) {
+		t.Fatalf("expected recent event rerender to include original skill label, body=%s", body)
+	}
 }
 
 func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing.T) {
@@ -1782,12 +1791,15 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 			Settings: app.DefaultSettings(),
 			RecentEvents: []app.RuntimeEvent{
 				{
-					Title:   "Task dispatched",
-					Level:   "info",
-					Detail:  "Queued code_for_me for moltenbot/jef/codex-beast",
-					TaskID:  "task-123",
-					LogPath: ".moltenhub/logs/task-123.log",
-					At:      time.Unix(1, 0).UTC(),
+					Title:                  "Task dispatched",
+					Level:                  "info",
+					Detail:                 "Queued code_for_me for moltenbot/jef/codex-beast",
+					TaskID:                 "task-123",
+					LogPath:                ".moltenhub/logs/task-123.log",
+					OriginalSkillName:      "run_task",
+					TargetAgentDisplayName: "Worker A",
+					TargetAgentEmoji:       "🛠",
+					At:                     time.Unix(1, 0).UTC(),
 				},
 				{
 					Title:   "Dispatch failed",
@@ -1820,6 +1832,12 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	}
 	if !strings.Contains(body, `class="runtime-event-card-body" data-runtime-event-body hidden`) {
 		t.Fatalf("expected info event body to render hidden by default, body=%s", body)
+	}
+	if !strings.Contains(body, "🛠 Worker A") {
+		t.Fatalf("expected recent event card to render target-agent emoji and display name, body=%s", body)
+	}
+	if !strings.Contains(body, "run_task • Task dispatched") {
+		t.Fatalf("expected recent event card to render skill + title subtitle, body=%s", body)
 	}
 	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
 		t.Fatalf("expected all runtime event toggles to render closed by default, body=%s", body)

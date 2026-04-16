@@ -498,7 +498,7 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 	if err := s.setPendingTaskStatus(task.ChildRequestID, task.Status); err != nil {
 		return PendingTask{}, err
 	}
-	_ = s.logEvent("info", "Task dispatched", fmt.Sprintf("Queued %s for %s", req.SkillName, connectedAgentNameOrRef(target)), task.ID, task.LogPath)
+	_ = s.logTaskEvent("info", "Task dispatched", fmt.Sprintf("Queued %s for %s", req.SkillName, connectedAgentNameOrRef(target)), task)
 	return task, nil
 }
 
@@ -923,7 +923,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 	if err := s.setPendingTaskStatus(task.ChildRequestID, PendingTaskStatusInQueue); err != nil {
 		return err
 	}
-	return s.logEvent("info", "Forwarded request", fmt.Sprintf("Forwarded %s to %s", req.SkillName, connectedAgentNameOrRef(target)), task.ID, task.LogPath)
+	return s.logTaskEvent("info", "Forwarded request", fmt.Sprintf("Forwarded %s to %s", req.SkillName, connectedAgentNameOrRef(target)), task)
 }
 
 func (s *Service) handleSkillResult(ctx context.Context, message hub.PullResponse) error {
@@ -1022,7 +1022,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		"error":  report.Error,
 		"detail": report.Detail,
 	}); err != nil {
-		return err
+		_ = s.logEvent("error", "Task failure log write failed", err.Error(), pending.ID, pending.LogPath)
 	}
 
 	failurePayload := callerFailurePayload(report, logPaths)
@@ -1274,6 +1274,22 @@ func (s *Service) logEvent(level, title, detail, taskID, logPath string) error {
 		Detail:  detail,
 		TaskID:  taskID,
 		LogPath: logPath,
+	})
+}
+
+func (s *Service) logTaskEvent(level, title, detail string, task PendingTask) error {
+	return s.store.AppendEvent(RuntimeEvent{
+		At:                     time.Now().UTC(),
+		Level:                  level,
+		Title:                  title,
+		Detail:                 detail,
+		TaskID:                 task.ID,
+		LogPath:                task.LogPath,
+		OriginalSkillName:      task.OriginalSkillName,
+		TargetAgentDisplayName: task.TargetAgentDisplayName,
+		TargetAgentEmoji:       coalesceTrimmed(task.TargetAgentEmoji, "🤖"),
+		TargetAgentUUID:        task.TargetAgentUUID,
+		TargetAgentURI:         task.TargetAgentURI,
 	})
 }
 

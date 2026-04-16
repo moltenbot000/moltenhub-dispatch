@@ -1627,6 +1627,57 @@ func TestHandleDownstreamFailureReturnsCallerPublishErrorWithoutFollowUp(t *test
 	}
 }
 
+func TestPublishFailureToCallerStillPublishesWhenTaskLogWriteFails(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	logDir := filepath.Join(service.settings.DataDir, "logs", "task-log-dir")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("create task log dir: %v", err)
+	}
+
+	err = service.publishFailureToCaller(context.Background(), service.store.Snapshot(), PendingTask{
+		ID:                "task-1",
+		ParentRequestID:   "parent-req",
+		CallerAgentUUID:   "caller-uuid",
+		CallerRequestID:   "parent-req",
+		OriginalSkillName: "run_task",
+		LogPath:           logDir,
+	}, failureFromError("Task dispatch failed before it reached a connected agent.", errors.New("downstream panic")))
+	if err != nil {
+		t.Fatalf("publish failure to caller: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one caller failure publish, got %d", len(fake.publishCalls))
+	}
+	message := fake.publishCalls[0].Message
+	if got := strings.ToLower(strings.TrimSpace(message.Status)); got != "failed" {
+		t.Fatalf("expected failed message status, got %#v", message)
+	}
+	if !strings.Contains(strings.ToLower(message.Error), "failed") {
+		t.Fatalf("expected failure message summary to clearly state failure, got %#v", message.Error)
+	}
+	payload, ok := message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected caller failure payload type: %T", message.Payload)
+	}
+	if got := payload["status"]; got != "failed" {
+		t.Fatalf("expected payload status=failed, got %#v", got)
+	}
+	if got := payload["error_detail"]; got == nil {
+		t.Fatalf("expected payload error_detail, got %#v", payload)
+	}
+}
+
 func TestDispatchFromUIFailureMarksOfflineWithoutFollowUp(t *testing.T) {
 	t.Parallel()
 
@@ -1721,6 +1772,20 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	if got := fake.publishCalls[0].Message.PayloadFormat; got != "" {
 		t.Fatalf("expected empty payload format for target-only dispatch, got %q", got)
 	}
+
+	state := service.store.Snapshot()
+	if len(state.RecentEvents) == 0 {
+		t.Fatal("expected dispatch to append recent event")
+	}
+	if got := state.RecentEvents[0].OriginalSkillName; got != "run_task" {
+		t.Fatalf("expected recent event skill name, got %#v", state.RecentEvents[0])
+	}
+	if got := state.RecentEvents[0].TargetAgentDisplayName; got != "Worker A" {
+		t.Fatalf("expected recent event target display name, got %#v", state.RecentEvents[0])
+	}
+	if got := state.RecentEvents[0].TargetAgentEmoji; got != "🛠" {
+		t.Fatalf("expected recent event target emoji, got %#v", state.RecentEvents[0])
+	}
 }
 
 func TestDispatchFromUIRequiresSelectionWhenTargetAndSkillAreBlank(t *testing.T) {
@@ -1813,6 +1878,18 @@ func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	}
 	if got := state.PendingTasks[0].TargetAgentEmoji; got != "🛠" {
 		t.Fatalf("unexpected pending task emoji: %#v", state.PendingTasks[0])
+	}
+	if len(state.RecentEvents) == 0 {
+		t.Fatal("expected forwarded dispatch event in recent activity")
+	}
+	if got := state.RecentEvents[0].OriginalSkillName; got != "run_task" {
+		t.Fatalf("expected recent event skill name, got %#v", state.RecentEvents[0])
+	}
+	if got := state.RecentEvents[0].TargetAgentDisplayName; got != "Worker A" {
+		t.Fatalf("expected recent event target display name, got %#v", state.RecentEvents[0])
+	}
+	if got := state.RecentEvents[0].TargetAgentEmoji; got != "🛠" {
+		t.Fatalf("expected recent event target emoji, got %#v", state.RecentEvents[0])
 	}
 }
 

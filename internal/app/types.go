@@ -76,12 +76,17 @@ type Skill struct {
 type ConnectedAgent = hub.HubAgent
 
 type RuntimeEvent struct {
-	At      time.Time `json:"at"`
-	Level   string    `json:"level"`
-	Title   string    `json:"title"`
-	Detail  string    `json:"detail"`
-	TaskID  string    `json:"task_id"`
-	LogPath string    `json:"log_path"`
+	At                     time.Time `json:"at"`
+	Level                  string    `json:"level"`
+	Title                  string    `json:"title"`
+	Detail                 string    `json:"detail"`
+	TaskID                 string    `json:"task_id"`
+	LogPath                string    `json:"log_path"`
+	OriginalSkillName      string    `json:"original_skill_name"`
+	TargetAgentDisplayName string    `json:"target_agent_display_name"`
+	TargetAgentEmoji       string    `json:"target_agent_emoji"`
+	TargetAgentUUID        string    `json:"target_agent_uuid"`
+	TargetAgentURI         string    `json:"target_agent_uri"`
 }
 
 type FlashMessage struct {
