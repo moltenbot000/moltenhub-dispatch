@@ -2139,6 +2139,20 @@ func TestEmojiPickerPanelStacksAboveModalBackdrop(t *testing.T) {
 	}
 }
 
+func TestOnboardingStylesForceHiddenProfileFields(t *testing.T) {
+	t.Parallel()
+
+	styles, err := os.ReadFile("static/styles.css")
+	if err != nil {
+		t.Fatalf("read styles.css: %v", err)
+	}
+
+	content := string(styles)
+	if !strings.Contains(content, "#onboarding-profile-fields[hidden] {\n  display: none !important;\n}") {
+		t.Fatalf("expected onboarding profile fields hidden override to defeat .stack display grid")
+	}
+}
+
 func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing.T) {
 	t.Parallel()
 
@@ -2176,8 +2190,8 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `<legend>Region</legend>`) {
 		t.Fatalf("expected onboarding region legend to use concise label, body=%s", body)
 	}
-	if !strings.Contains(body, `id="onboarding-profile-fields"`) {
-		t.Fatalf("expected onboarding profile fields wrapper for mode toggling, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden`) {
+		t.Fatalf("expected onboarding profile fields to stay hidden in existing-agent mode, body=%s", body)
 	}
 	if !strings.Contains(body, `id="onboarding-steps"`) {
 		t.Fatalf("expected onboarding steps container, body=%s", body)
