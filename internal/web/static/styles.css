@@ -4425,34 +4425,46 @@ body.settings-modal-open {
 .connected-agent-presence {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   border: 1px solid transparent;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
 .connected-agent-presence-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 14%, transparent);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .connected-agent-presence.is-online {
   color: var(--good);
   background: color-mix(in srgb, var(--good) 10%, transparent);
-  border-color: color-mix(in srgb, var(--good) 28%, transparent);
+  border-color: color-mix(in srgb, var(--good) 34%, transparent);
 }
 
 .connected-agent-presence.is-offline {
-  color: var(--surface-label);
-  background: color-mix(in srgb, var(--surface-label) 10%, transparent);
-  border-color: color-mix(in srgb, var(--surface-label) 28%, transparent);
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 34%, transparent);
+}
+
+.connected-agent-card-button:hover .connected-agent-presence,
+.connected-agent-presence:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.connected-agent-card-button:hover .connected-agent-presence-dot,
+.connected-agent-presence:hover .connected-agent-presence-dot {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .connected-agent-selection-badge {

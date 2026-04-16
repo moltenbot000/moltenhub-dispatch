@@ -2666,8 +2666,17 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, ">dispatcher<") {
 		t.Fatalf("expected agent id secondary label on connected agent cards, body=%s", body)
 	}
-	if !strings.Contains(body, "Offline") {
-		t.Fatalf("expected presence badge on connected agent cards, body=%s", body)
+	if !strings.Contains(body, `class="connected-agent-presence is-offline"`) {
+		t.Fatalf("expected offline presence indicator on connected agent cards, body=%s", body)
+	}
+	if !strings.Contains(body, `class="connected-agent-presence-dot"`) {
+		t.Fatalf("expected dot-only presence marker on connected agent cards, body=%s", body)
+	}
+	if !strings.Contains(body, `title="Offline"`) {
+		t.Fatalf("expected offline presence tooltip on connected agent cards, body=%s", body)
+	}
+	if strings.Contains(body, ">Offline<") {
+		t.Fatalf("did not expect textual offline badge label on connected agent cards, body=%s", body)
 	}
 	if strings.Contains(body, `class="connected-agent-skills"`) {
 		t.Fatalf("did not expect connected agent skill list on cards, body=%s", body)
@@ -2858,8 +2867,14 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	if !strings.Contains(body, "🧪") {
 		t.Fatalf("expected hub emoji to render on the agent card, body=%s", body)
 	}
-	if !strings.Contains(body, ">Online<") {
-		t.Fatalf("expected hub presence badge to render online status, body=%s", body)
+	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
+		t.Fatalf("expected hub presence indicator to render online status, body=%s", body)
+	}
+	if !strings.Contains(body, `title="Online"`) {
+		t.Fatalf("expected hub presence indicator tooltip to render online status, body=%s", body)
+	}
+	if strings.Contains(body, ">Online<") {
+		t.Fatalf("did not expect textual online badge label on hub agent card, body=%s", body)
 	}
 	if strings.Contains(body, ">review_openapi<") || strings.Contains(body, ">run_task<") {
 		t.Fatalf("did not expect hub advertised skills to render on the agent card, body=%s", body)
@@ -2913,8 +2928,14 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	if !strings.Contains(body, "🧪") {
 		t.Fatalf("expected root hub emoji to render on the agent card, body=%s", body)
 	}
-	if !strings.Contains(body, ">Online<") {
-		t.Fatalf("expected root hub presence badge to render online status, body=%s", body)
+	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
+		t.Fatalf("expected root hub presence indicator to render online status, body=%s", body)
+	}
+	if !strings.Contains(body, `title="Online"`) {
+		t.Fatalf("expected root hub presence indicator tooltip to render online status, body=%s", body)
+	}
+	if strings.Contains(body, ">Online<") {
+		t.Fatalf("did not expect textual online badge label on root hub agent card, body=%s", body)
 	}
 	if strings.Contains(body, ">review_openapi<") || strings.Contains(body, ">review_failure_logs<") {
 		t.Fatalf("did not expect root hub skills to render on the agent card, body=%s", body)

@@ -1555,7 +1555,7 @@ func callerFailurePayload(report failureReport, logPaths []string) map[string]an
 	if failureDetailIsEmpty(detail) {
 		detail = report.Error
 	}
-	payload := failureFields(report, explicitFailureMessage(report.Message), detail)
+	payload := failureFields(report, callerFailureError(report), detail)
 	payload["ok"] = false
 	payload["failure"] = true
 	payload["error_details"] = detail
@@ -2089,7 +2089,7 @@ func existingAgentIdentityFromCapabilities(capabilities map[string]any) agentIde
 		AgentUUID:       firstCapabilityString(sources, "agent_uuid", "uuid"),
 		AgentURI:        firstCapabilityString(sources, "agent_uri", "uri"),
 		Handle:          firstCapabilityString(sources, "handle", "agent_id", "id"),
-		DisplayName:     firstCapabilityString(sources, "display_name", "name"),
+		DisplayName:     firstCapabilityString(sources, "display_name", "displayName", "name"),
 		Emoji:           capabilityEmoji(sources),
 		ProfileMarkdown: firstCapabilityString(sources, "profile_markdown", "profile", "bio", "description"),
 	}
@@ -2327,7 +2327,7 @@ func connectedAgentFromCapabilityEntry(entry map[string]any) ConnectedAgent {
 func connectedAgentMetadataFromCapabilityEntry(entry map[string]any, sources []map[string]any) *hub.AgentMetadata {
 	metadata := &hub.AgentMetadata{
 		AgentType:       firstCapabilityString(sources, "agent_type"),
-		DisplayName:     firstCapabilityString(sources, "display_name"),
+		DisplayName:     firstCapabilityString(sources, "display_name", "displayName", "name"),
 		Emoji:           capabilityEmoji(sources),
 		ProfileMarkdown: firstCapabilityString(sources, "profile_markdown", "profile", "bio"),
 		LLM:             firstCapabilityString(sources, "llm"),

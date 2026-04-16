@@ -183,9 +183,13 @@
                     {{if $secondaryLabel}}<p class="connected-agent-secondary">{{$secondaryLabel}}</p>{{end}}
                   </div>
                   <div class="connected-agent-card-meta">
-                    <span class="connected-agent-presence {{if eq $presenceStatus "online"}}is-online{{else}}is-offline{{end}}">
+                    <span
+                      class="connected-agent-presence {{if eq $presenceStatus "online"}}is-online{{else}}is-offline{{end}}"
+                      title="{{$presenceLabel}}"
+                      aria-label="{{$presenceLabel}}"
+                      role="img"
+                    >
                       <span class="connected-agent-presence-dot" aria-hidden="true"></span>
-                      <span>{{$presenceLabel}}</span>
                     </span>
                     <span class="connected-agent-selection-badge" aria-hidden="true">Selected</span>
                   </div>
@@ -2253,16 +2257,16 @@
         const presence = document.createElement("span");
         const presenceStatus = connectedAgentPresenceStatus(agent);
         presence.className = `connected-agent-presence ${presenceStatus === "online" ? "is-online" : "is-offline"}`;
+        const presenceLabel = presenceStatus === "online" ? "Online" : "Offline";
+        presence.title = presenceLabel;
+        presence.setAttribute("aria-label", presenceLabel);
+        presence.setAttribute("role", "img");
 
         const presenceDot = document.createElement("span");
         presenceDot.className = "connected-agent-presence-dot";
         presenceDot.setAttribute("aria-hidden", "true");
 
-        const presenceText = document.createElement("span");
-        presenceText.textContent = presenceStatus === "online" ? "Online" : "Offline";
-
         presence.appendChild(presenceDot);
-        presence.appendChild(presenceText);
         meta.appendChild(presence);
 
         if (selectable) {

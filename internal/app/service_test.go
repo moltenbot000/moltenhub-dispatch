@@ -1203,7 +1203,7 @@ func TestHandleDownstreamFailureSendsDetailedFailureWithoutFollowUp(t *testing.T
 	if got := failurePayload["failure"]; got != true {
 		t.Fatalf("expected caller failure marker, got %#v", got)
 	}
-	if got := failurePayload["message"]; got != "Task failed while dispatching to a connected agent." {
+	if got := failurePayload["message"]; got != "Task failed while dispatching to a connected agent. Error: task execution failed" {
 		t.Fatalf("unexpected caller failure message: %#v", got)
 	}
 	if got := failurePayload["retryable"]; got != true {
@@ -1411,7 +1411,7 @@ func TestHandleDownstreamPlaintextRunnerFailureReturnsErrorDetailsWithoutFollowU
 	if got := failurePayload["status"]; got != "failed" {
 		t.Fatalf("unexpected caller failure status: %#v", got)
 	}
-	if got := failurePayload["message"]; got != "Task failed while dispatching to a connected agent." {
+	if got := failurePayload["message"]; got != "Task failed while dispatching to a connected agent. Error: error connecting to api.github.com" {
 		t.Fatalf("unexpected caller failure message: %#v", got)
 	}
 	if got := failurePayload["error"]; got != "error connecting to api.github.com" {
@@ -2154,7 +2154,7 @@ func TestCallerFailurePayloadIncludesExplicitFailureDetails(t *testing.T) {
 	if payload["status"] != "failed" {
 		t.Fatalf("expected failed status, got %#v", payload["status"])
 	}
-	if payload["message"] != "Task failed: downstream worker returned a non-zero exit code" {
+	if payload["message"] != "Task failed: downstream worker returned a non-zero exit code. Error: panic: boom" {
 		t.Fatalf("unexpected failure message: %#v", payload["message"])
 	}
 	if payload["ok"] != false {
@@ -3207,6 +3207,55 @@ func TestRefreshConnectedAgentsAcceptsHubProfileFieldsAtAgentRoot(t *testing.T) 
 	}
 	if skills := connectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
 		t.Fatalf("expected root-level skills from capabilities response, got %#v", skills)
+	}
+}
+
+func TestRefreshConnectedAgentsAcceptsDisplayNameAliasesFromPeerCatalog(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	fake.capabilitiesResponse = map[string]any{
+		"peer_skill_catalog": []any{
+			map[string]any{
+				"agent_uuid": "self-uuid",
+				"agent_id":   "self-agent",
+				"uri":        "molten://agent/self",
+			},
+			map[string]any{
+				"agent_uuid":  "peer-uuid",
+				"agent_id":    "peer-agent",
+				"uri":         "molten://agent/peer",
+				"displayName": "Peer Agent",
+				"emoji":       "🧪",
+				"skills": []map[string]any{
+					{"name": "review_openapi", "description": "Review Hub API integration behavior."},
+				},
+			},
+		},
+	}
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Session.AgentUUID = "self-uuid"
+		state.Session.AgentURI = "molten://agent/self"
+		state.Session.Handle = "self-agent"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	agents, err := service.RefreshConnectedAgents(context.Background())
+	if err != nil {
+		t.Fatalf("refresh connected agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one connected agent, got %#v", agents)
+	}
+	if got, want := connectedAgentDisplayName(agents[0]), "Peer Agent"; got != want {
+		t.Fatalf("display name = %q, want %q", got, want)
+	}
+	if got, want := connectedAgentEmoji(agents[0]), "🧪"; got != want {
+		t.Fatalf("emoji = %q, want %q", got, want)
 	}
 }
 
