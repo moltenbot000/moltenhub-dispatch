@@ -2295,16 +2295,15 @@ func capabilityPeerCatalogEntries(capabilities map[string]any) []map[string]any 
 			continue
 		}
 		seen[ref] = struct{}{}
-		if peers := capabilityTalkablePeerEntries(root, "control_plane", "controlPlane"); len(peers) > 0 {
-			entries = append(entries, peers...)
-			continue
-		}
-		if peers := capabilityTalkablePeerEntries(root, "communication"); len(peers) > 0 {
-			entries = append(entries, peers...)
-			continue
-		}
 		for _, key := range []string{"peer_skill_catalog", "peerSkillCatalog"} {
 			entries = append(entries, mapsFromAny(root[key])...)
+		}
+		peers := capabilityTalkablePeerEntries(root, "control_plane", "controlPlane")
+		if len(peers) == 0 {
+			peers = capabilityTalkablePeerEntries(root, "communication")
+		}
+		if len(peers) > 0 {
+			entries = append(entries, peers...)
 		}
 	}
 	return entries
