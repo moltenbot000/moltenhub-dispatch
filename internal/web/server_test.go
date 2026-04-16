@@ -2071,6 +2071,12 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `name="hub_region"`) {
 		t.Fatalf("expected runtime region selector in onboarding modal, body=%s", body)
 	}
+	if !strings.Contains(body, `<legend>Region</legend>`) {
+		t.Fatalf("expected onboarding region legend to use concise label, body=%s", body)
+	}
+	if !strings.Contains(body, `id="onboarding-profile-fields"`) {
+		t.Fatalf("expected onboarding profile fields wrapper for mode toggling, body=%s", body)
+	}
 	if !strings.Contains(body, `id="onboarding-steps"`) {
 		t.Fatalf("expected onboarding steps container, body=%s", body)
 	}

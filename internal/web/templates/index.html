@@ -477,13 +477,14 @@
             </div>
           </div>
           <fieldset class="runtime-toggle onboarding-section">
-            <legend>Hub Runtime Region</legend>
+            <legend>Region</legend>
             <div class="runtime-toggle-options">
               {{range .RuntimeOptions}}
               <label class="runtime-option">
                 <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
                 <span>
-                  <strong>{{.Label}} ({{.Description}})</strong>
+                  <strong>{{.Label}}</strong>
+                  <small>{{.Description}}</small>
                 </span>
               </label>
               {{end}}
@@ -494,43 +495,45 @@
             <input id="onboarding-token-input" name="bind_token" value="{{.ProfileForm.BindToken}}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
             <small id="onboarding-token-hint" class="onboarding-token-hint">Paste the existing Molten Hub agent token.</small>
           </label>
-          <div class="profile-grid profile-grid-top onboarding-profile-grid">
-            <label id="onboarding-handle-field" hidden>Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="codex-beast"></label>
-            <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
-            <fieldset class="emoji-fieldset">
-              <legend>Emoji</legend>
-              <div class="hub-emoji-picker" data-hub-emoji-picker>
-                <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
-                <button
-                  type="button"
-                  class="hub-emoji-picker-toggle"
-                  data-hub-emoji-toggle
-                  aria-haspopup="dialog"
-                  aria-expanded="false"
-                >
-                  <span class="hub-emoji-picker-toggle-content">
-                    <span class="hub-emoji-picker-toggle-chip">
-                      <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
+          <div id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden>
+            <div class="profile-grid profile-grid-top onboarding-profile-grid">
+              <label id="onboarding-handle-field" hidden>Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="codex-beast"></label>
+              <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
+              <fieldset class="emoji-fieldset">
+                <legend>Emoji</legend>
+                <div class="hub-emoji-picker" data-hub-emoji-picker>
+                  <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
+                  <button
+                    type="button"
+                    class="hub-emoji-picker-toggle"
+                    data-hub-emoji-toggle
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                  >
+                    <span class="hub-emoji-picker-toggle-content">
+                      <span class="hub-emoji-picker-toggle-chip">
+                        <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
+                      </span>
+                      <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
                     </span>
-                    <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
-                  </span>
-                  <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                      <path d="m6 9 6 6 6-6"></path>
-                    </svg>
-                  </span>
-                </button>
-                <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
-                  <div class="hub-emoji-picker-panel-header">
-                    <p class="hub-emoji-picker-label">Pick one emoji</p>
-                    <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
+                    <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6"></path>
+                      </svg>
+                    </span>
+                  </button>
+                  <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
+                    <div class="hub-emoji-picker-panel-header">
+                      <p class="hub-emoji-picker-label">Pick one emoji</p>
+                      <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
+                    </div>
+                    <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
                   </div>
-                  <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
                 </div>
-              </div>
-            </fieldset>
+              </fieldset>
+            </div>
+            <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           </div>
-          <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           <div class="onboarding-form-actions">
             <button type="submit" id="bind-submit">Connect</button>
           </div>
@@ -593,6 +596,7 @@
       const onboardingTokenLabel = document.getElementById("onboarding-token-label");
       const onboardingTokenHint = document.getElementById("onboarding-token-hint");
       const onboardingHandleField = document.getElementById("onboarding-handle-field");
+      const onboardingProfileFields = document.getElementById("onboarding-profile-fields");
       const onboardingSteps = document.getElementById("onboarding-steps");
       const onboardingMessage = document.getElementById("onboarding-message");
       const flash = document.querySelector(".flash[data-auto-dismiss-seconds]");
@@ -1324,6 +1328,9 @@
         if (onboardingHandleField instanceof HTMLElement) {
           onboardingHandleField.hidden = !isNew;
         }
+        if (onboardingProfileFields instanceof HTMLElement) {
+          onboardingProfileFields.hidden = !isNew;
+        }
         if (bindSubmit) {
           bindSubmit.textContent = isNew ? "Bind" : "Connect";
         }
@@ -1438,9 +1445,9 @@
                 bind_token: isNew ? String(formData.get("bind_token") || "").trim() : "",
                 agent_token: isNew ? "" : String(formData.get("bind_token") || "").trim(),
                 handle: isNew ? String(formData.get("handle") || "").trim() : "",
-                display_name: String(formData.get("display_name") || "").trim(),
-                emoji: String(formData.get("emoji") || "").trim(),
-                profile_markdown: String(formData.get("profile_markdown") || "").trim(),
+                display_name: isNew ? String(formData.get("display_name") || "").trim() : "",
+                emoji: isNew ? String(formData.get("emoji") || "").trim() : "",
+                profile_markdown: isNew ? String(formData.get("profile_markdown") || "").trim() : "",
               }),
             });
             let body = null;
