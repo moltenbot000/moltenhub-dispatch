@@ -486,7 +486,7 @@
           </fieldset>
           <label id="onboarding-token-field" class="onboarding-token-field">
             <span id="onboarding-token-label">Token</span>
-            <input id="onboarding-token-input" name="bind_token" value="{{.ProfileForm.BindToken}}" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
+            <input id="onboarding-token-input" type="password" name="bind_token" value="{{.ProfileForm.BindToken}}" required minlength="45" maxlength="45" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token">
             <small id="onboarding-token-hint" class="onboarding-token-hint">Use <code>b_...</code> for new bind, or <code>t_...</code> / legacy token for existing agent.</small>
           </label>
           <div id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden>

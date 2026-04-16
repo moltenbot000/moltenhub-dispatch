@@ -4077,7 +4077,7 @@ body.settings-modal-open {
   grid-area: token;
   display: grid;
   gap: 8px;
-  max-width: 42ch;
+  max-width: 45ch;
 }
 
 #onboarding-token-input {
@@ -4087,7 +4087,7 @@ body.settings-modal-open {
 }
 
 #onboarding-token-hint {
-  max-width: 42ch;
+  max-width: 45ch;
 }
 
 .onboarding-token-hint {
