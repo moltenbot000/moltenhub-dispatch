@@ -292,29 +292,40 @@ func TestHandleBindPassesSubmittedProfileToService(t *testing.T) {
 	}
 }
 
-func TestHandleBindInfersModeFromTokenPrefix(t *testing.T) {
+func TestHandleBindUsesSubmittedAgentMode(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name           string
+		mode           string
 		token          string
 		wantMode       string
 		wantBindToken  string
 		wantAgentToken string
 	}{
 		{
-			name:           "b prefix uses bind flow",
-			token:          "b_bind-123",
+			name:           "new mode routes token to bind flow",
+			mode:           "new",
+			token:          "bind-123",
 			wantMode:       app.OnboardingModeNew,
-			wantBindToken:  "b_bind-123",
+			wantBindToken:  "bind-123",
 			wantAgentToken: "",
 		},
 		{
-			name:           "legacy token uses existing flow",
+			name:           "existing mode routes token to existing flow",
+			mode:           "existing",
 			token:          "agent-123",
 			wantMode:       app.OnboardingModeExisting,
 			wantBindToken:  "",
 			wantAgentToken: "agent-123",
+		},
+		{
+			name:           "fallback still supports prefixed token when mode omitted",
+			mode:           "",
+			token:          "b_bind-123",
+			wantMode:       app.OnboardingModeNew,
+			wantBindToken:  "b_bind-123",
+			wantAgentToken: "",
 		},
 	}
 
@@ -329,7 +340,7 @@ func TestHandleBindInfersModeFromTokenPrefix(t *testing.T) {
 				t.Fatalf("new server: %v", err)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/bind", strings.NewReader("bind_token="+url.QueryEscape(test.token)+"&handle=codex-beast&display_name=Dispatch+Agent"))
+			req := httptest.NewRequest(http.MethodPost, "/bind", strings.NewReader("agent_mode="+url.QueryEscape(test.mode)+"&bind_token="+url.QueryEscape(test.token)+"&handle=codex-beast&display_name=Dispatch+Agent"))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			rec := httptest.NewRecorder()
 
@@ -398,7 +409,7 @@ func TestHandleOnboardingAPIReturnsSuccess(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/onboarding", strings.NewReader(`{"bind_token":"b_bind-123","handle":"dispatch-agent"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/onboarding", strings.NewReader(`{"agent_mode":"new","bind_token":"bind-123","handle":"dispatch-agent"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -427,8 +438,8 @@ func TestHandleOnboardingAPIReturnsSuccess(t *testing.T) {
 	if got := stub.lastBindProfile.AgentMode; got != app.OnboardingModeNew {
 		t.Fatalf("agent mode = %q, want %q", got, app.OnboardingModeNew)
 	}
-	if got := stub.lastBindProfile.BindToken; got != "b_bind-123" {
-		t.Fatalf("bind token = %q, want %q", got, "b_bind-123")
+	if got := stub.lastBindProfile.BindToken; got != "bind-123" {
+		t.Fatalf("bind token = %q, want %q", got, "bind-123")
 	}
 	if got := stub.lastBindProfile.AgentToken; got != "" {
 		t.Fatalf("agent token = %q, want empty", got)
@@ -444,7 +455,7 @@ func TestHandleOnboardingAPIReturnsSuccess(t *testing.T) {
 	}
 }
 
-func TestHandleOnboardingAPIInfersExistingAgentFlowFromToken(t *testing.T) {
+func TestHandleOnboardingAPIUsesExistingAgentFlowWhenModeExisting(t *testing.T) {
 	t.Parallel()
 
 	stub := &stubService{state: app.AppState{Settings: app.DefaultSettings()}}
@@ -453,7 +464,7 @@ func TestHandleOnboardingAPIInfersExistingAgentFlowFromToken(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/onboarding", strings.NewReader(`{"bind_token":"t_agent-123","display_name":"Dispatch Agent"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/onboarding", strings.NewReader(`{"agent_mode":"existing","agent_token":"agent-123","display_name":"Dispatch Agent"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -465,8 +476,8 @@ func TestHandleOnboardingAPIInfersExistingAgentFlowFromToken(t *testing.T) {
 	if got := stub.lastBindProfile.AgentMode; got != app.OnboardingModeExisting {
 		t.Fatalf("agent mode = %q, want %q", got, app.OnboardingModeExisting)
 	}
-	if got := stub.lastBindProfile.AgentToken; got != "t_agent-123" {
-		t.Fatalf("agent token = %q, want %q", got, "t_agent-123")
+	if got := stub.lastBindProfile.AgentToken; got != "agent-123" {
+		t.Fatalf("agent token = %q, want %q", got, "agent-123")
 	}
 	if got := stub.lastBindProfile.BindToken; got != "" {
 		t.Fatalf("bind token = %q, want empty", got)
@@ -485,7 +496,7 @@ func TestHandleOnboardingAPIUsesExistingFlowForLegacyToken(t *testing.T) {
 		t.Fatalf("new server: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/onboarding", strings.NewReader(`{"bind_token":"agent-legacy-123","display_name":"Dispatch Agent"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/onboarding", strings.NewReader(`{"agent_mode":"existing","bind_token":"agent-legacy-123","display_name":"Dispatch Agent"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -2181,8 +2192,8 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) {
 		t.Fatalf("expected onboarding modal for unbound session, body=%s", body)
 	}
-	if strings.Contains(body, `id="onboarding-existing-agent-toggle"`) || strings.Contains(body, `id="onboarding-new-agent-toggle"`) {
-		t.Fatalf("did not expect existing/new agent mode toggles in onboarding modal, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-existing-agent-toggle"`) || !strings.Contains(body, `id="onboarding-new-agent-toggle"`) {
+		t.Fatalf("expected existing/new agent mode toggles in onboarding modal, body=%s", body)
 	}
 	if !strings.Contains(body, `name="hub_region"`) {
 		t.Fatalf("expected runtime region selector in onboarding modal, body=%s", body)
@@ -2208,23 +2219,20 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, "Persist the agent profile in Molten Hub.") {
 		t.Fatalf("expected unbound onboarding profile detail to match hub flow, body=%s", body)
 	}
-	if strings.Contains(body, `id="onboarding-mode-field"`) {
-		t.Fatalf("did not expect onboarding mode field once token prefixes drive flow, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-mode-field" type="hidden" name="agent_mode" value="existing"`) {
+		t.Fatalf("expected onboarding mode field in onboarding modal, body=%s", body)
 	}
 	if !strings.Contains(body, `id="onboarding-token-label"`) {
 		t.Fatalf("expected redesigned onboarding form fields, body=%s", body)
 	}
-	if !strings.Contains(body, `id="onboarding-token-input" type="password"`) {
-		t.Fatalf("expected onboarding token input to render as secret field, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-token-input" type="text"`) {
+		t.Fatalf("expected onboarding token input to render as text field, body=%s", body)
 	}
-	if !strings.Contains(body, `minlength="45" maxlength="45"`) {
-		t.Fatalf("expected onboarding token input length constraints to match hub token format, body=%s", body)
+	if !strings.Contains(body, "Existing agents use an agent token. New agents use a bind token") {
+		t.Fatalf("expected onboarding summary to describe explicit mode behavior, body=%s", body)
 	}
-	if !strings.Contains(body, "Token prefix sets flow:") {
-		t.Fatalf("expected onboarding summary to explain token prefix behavior, body=%s", body)
-	}
-	if !strings.Contains(body, "Use b_... one-time bind token to provision this dispatcher.") {
-		t.Fatalf("expected onboarding token hint for bind prefix, body=%s", body)
+	if !strings.Contains(body, "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.") {
+		t.Fatalf("expected onboarding token hint for existing-agent mode, body=%s", body)
 	}
 }
 

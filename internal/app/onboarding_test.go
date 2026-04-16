@@ -165,11 +165,27 @@ func TestNormalizeOnboardingTokens(t *testing.T) {
 			wantAgentToken: "",
 		},
 		{
+			name:           "explicit new mode keeps non-prefixed token in bind flow",
+			mode:           "new",
+			bindToken:      "agent-legacy",
+			wantMode:       OnboardingModeNew,
+			wantBindToken:  "agent-legacy",
+			wantAgentToken: "",
+		},
+		{
 			name:           "bind token prefix t_ routes to existing flow",
 			bindToken:      "t_123",
 			wantMode:       OnboardingModeExisting,
 			wantBindToken:  "",
 			wantAgentToken: "t_123",
+		},
+		{
+			name:           "explicit existing mode keeps prefixed token in existing flow",
+			mode:           "existing",
+			bindToken:      "b_123",
+			wantMode:       OnboardingModeExisting,
+			wantBindToken:  "",
+			wantAgentToken: "b_123",
 		},
 		{
 			name:           "legacy bind token routes to existing flow",
