@@ -174,8 +174,15 @@ func (s *Server) handleBind(w http.ResponseWriter, r *http.Request) {
 		s.redirectWithMessage(w, r, "error", err.Error())
 		return
 	}
+	mode, bindToken, agentToken := app.NormalizeOnboardingTokens(
+		r.FormValue("agent_mode"),
+		r.FormValue("bind_token"),
+		r.FormValue("agent_token"),
+	)
 	if err := s.service.BindAndRegister(r.Context(), app.BindProfile{
-		BindToken:       strings.TrimSpace(r.FormValue("bind_token")),
+		AgentMode:       mode,
+		AgentToken:      agentToken,
+		BindToken:       bindToken,
 		Handle:          form.Handle,
 		DisplayName:     form.DisplayName,
 		Emoji:           form.Emoji,
@@ -239,18 +246,20 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":         false,
 			"error":      "invalid onboarding request",
+			"detail":     err.Error(),
 			"onboarding": onboarding,
 			"bound":      false,
 		})
 		return
 	}
-	mode := app.NormalizeOnboardingMode(payload.AgentMode, payload.BindToken, payload.AgentToken)
+	mode, bindToken, agentToken := app.NormalizeOnboardingTokens(payload.AgentMode, payload.BindToken, payload.AgentToken)
 	if err := s.applyRuntimeSelection(payload.HubRegion); err != nil {
 		state := s.service.Snapshot()
 		onboarding := onboardingViewFromError(mode, state, app.WrapOnboardingError(app.OnboardingStepBind, err))
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":         false,
 			"error":      err.Error(),
+			"detail":     err.Error(),
 			"onboarding": onboarding,
 			"bound":      strings.TrimSpace(state.Session.AgentToken) != "",
 		})
@@ -259,8 +268,8 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 
 	err := s.service.BindAndRegister(r.Context(), app.BindProfile{
 		AgentMode:       mode,
-		AgentToken:      strings.TrimSpace(payload.AgentToken),
-		BindToken:       strings.TrimSpace(payload.BindToken),
+		AgentToken:      agentToken,
+		BindToken:       bindToken,
 		Handle:          strings.TrimSpace(payload.Handle),
 		DisplayName:     strings.TrimSpace(payload.DisplayName),
 		Emoji:           strings.TrimSpace(payload.Emoji),
@@ -275,6 +284,7 @@ func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"ok":         false,
 			"error":      err.Error(),
+			"detail":     err.Error(),
 			"onboarding": onboarding,
 			"bound":      strings.TrimSpace(state.Session.AgentToken) != "",
 		})

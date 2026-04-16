@@ -98,3 +98,121 @@ func TestNormalizeOnboardingMode(t *testing.T) {
 		})
 	}
 }
+
+func TestOnboardingModeFromToken(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		token string
+		want  string
+	}{
+		{
+			name:  "bind prefix infers new mode",
+			token: "b_token",
+			want:  OnboardingModeNew,
+		},
+		{
+			name:  "bind prefix is case insensitive",
+			token: "B_token",
+			want:  OnboardingModeNew,
+		},
+		{
+			name:  "target prefix infers existing mode",
+			token: "t_token",
+			want:  OnboardingModeExisting,
+		},
+		{
+			name:  "legacy token defaults to existing mode",
+			token: "legacy-token",
+			want:  OnboardingModeExisting,
+		},
+		{
+			name:  "empty token defaults to existing mode",
+			token: "",
+			want:  OnboardingModeExisting,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := OnboardingModeFromToken(test.token); got != test.want {
+				t.Fatalf("OnboardingModeFromToken(%q) = %q, want %q", test.token, got, test.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeOnboardingTokens(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		mode           string
+		bindToken      string
+		agentToken     string
+		wantMode       string
+		wantBindToken  string
+		wantAgentToken string
+	}{
+		{
+			name:           "bind token prefix b_ routes to new flow",
+			bindToken:      "b_123",
+			wantMode:       OnboardingModeNew,
+			wantBindToken:  "b_123",
+			wantAgentToken: "",
+		},
+		{
+			name:           "bind token prefix t_ routes to existing flow",
+			bindToken:      "t_123",
+			wantMode:       OnboardingModeExisting,
+			wantBindToken:  "",
+			wantAgentToken: "t_123",
+		},
+		{
+			name:           "legacy bind token routes to existing flow",
+			bindToken:      "legacy-token",
+			wantMode:       OnboardingModeExisting,
+			wantBindToken:  "",
+			wantAgentToken: "legacy-token",
+		},
+		{
+			name:           "agent token can drive bind-new flow",
+			agentToken:     "b_123",
+			wantMode:       OnboardingModeNew,
+			wantBindToken:  "b_123",
+			wantAgentToken: "",
+		},
+		{
+			name:           "empty tokens fallback to explicit mode",
+			mode:           "new",
+			wantMode:       OnboardingModeNew,
+			wantBindToken:  "",
+			wantAgentToken: "",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			gotMode, gotBindToken, gotAgentToken := NormalizeOnboardingTokens(test.mode, test.bindToken, test.agentToken)
+			if gotMode != test.wantMode || gotBindToken != test.wantBindToken || gotAgentToken != test.wantAgentToken {
+				t.Fatalf(
+					"NormalizeOnboardingTokens(%q, %q, %q) = (%q, %q, %q), want (%q, %q, %q)",
+					test.mode,
+					test.bindToken,
+					test.agentToken,
+					gotMode,
+					gotBindToken,
+					gotAgentToken,
+					test.wantMode,
+					test.wantBindToken,
+					test.wantAgentToken,
+				)
+			}
+		})
+	}
+}

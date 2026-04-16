@@ -79,6 +79,37 @@ func NormalizeOnboardingMode(mode, bindToken, agentToken string) string {
 	return OnboardingModeExisting
 }
 
+func OnboardingModeFromToken(token string) string {
+	token = strings.TrimSpace(token)
+	if strings.HasPrefix(strings.ToLower(token), "b_") {
+		return OnboardingModeNew
+	}
+	return OnboardingModeExisting
+}
+
+func NormalizeOnboardingTokens(mode, bindToken, agentToken string) (string, string, string) {
+	bindToken = strings.TrimSpace(bindToken)
+	agentToken = strings.TrimSpace(agentToken)
+
+	submittedToken := bindToken
+	if submittedToken == "" {
+		submittedToken = agentToken
+	}
+	if submittedToken != "" {
+		resolvedMode := OnboardingModeFromToken(submittedToken)
+		if resolvedMode == OnboardingModeNew {
+			return resolvedMode, submittedToken, ""
+		}
+		return resolvedMode, "", submittedToken
+	}
+
+	resolvedMode := NormalizeOnboardingMode(mode, bindToken, agentToken)
+	if resolvedMode == OnboardingModeNew {
+		return resolvedMode, bindToken, ""
+	}
+	return resolvedMode, "", agentToken
+}
+
 func DefaultOnboardingSteps() []OnboardingStep {
 	return DefaultOnboardingStepsForMode(OnboardingModeNew)
 }
