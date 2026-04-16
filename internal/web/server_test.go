@@ -2214,6 +2214,12 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `id="onboarding-token-label"`) {
 		t.Fatalf("expected redesigned onboarding form fields, body=%s", body)
 	}
+	if !strings.Contains(body, `id="onboarding-token-input" type="password"`) {
+		t.Fatalf("expected onboarding token input to render as secret field, body=%s", body)
+	}
+	if !strings.Contains(body, `minlength="45" maxlength="45"`) {
+		t.Fatalf("expected onboarding token input length constraints to match hub token format, body=%s", body)
+	}
 	if !strings.Contains(body, "Token prefix sets flow:") {
 		t.Fatalf("expected onboarding summary to explain token prefix behavior, body=%s", body)
 	}
