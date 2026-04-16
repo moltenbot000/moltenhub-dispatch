@@ -191,7 +191,6 @@
                     >
                       <span class="connected-agent-presence-dot" aria-hidden="true"></span>
                     </span>
-                    <span class="connected-agent-selection-badge" aria-hidden="true">Selected</span>
                   </div>
                 </div>
               </button>
@@ -2384,14 +2383,6 @@
 
         presence.appendChild(presenceDot);
         meta.appendChild(presence);
-
-        if (selectable) {
-          const badge = document.createElement("span");
-          badge.className = "connected-agent-selection-badge";
-          badge.setAttribute("aria-hidden", "true");
-          badge.textContent = "Selected";
-          meta.appendChild(badge);
-        }
 
         cardMain.appendChild(meta);
         card.appendChild(cardMain);
