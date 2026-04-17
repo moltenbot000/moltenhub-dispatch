@@ -5260,12 +5260,21 @@ legend {
 .manual-dispatch-actions {
   margin-top: 0;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 
 .manual-dispatch-actions .connected-agents-refresh-status {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.dispatch-workbench-panel {
+  position: static;
+  overflow: visible;
+}
+
+.dispatch-workbench-panel::before {
+  display: none;
 }
 
 .shell input:not([type="radio"]):not([type="checkbox"]),

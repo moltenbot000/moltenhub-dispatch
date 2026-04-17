@@ -853,6 +853,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="prompt-grid manual-dispatch-selection-grid"`) {
 		t.Fatalf("expected manual dispatch selection row to reuse studio prompt grid layout, body=%s", body)
 	}
+	if !strings.Contains(body, `class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]"`) {
+		t.Fatalf("expected manual dispatch panel header to reuse studio titlebar layout, body=%s", body)
+	}
+	if !strings.Contains(body, `class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel`) {
+		t.Fatalf("expected manual dispatch panel shell to reuse studio prompt-wrap layout, body=%s", body)
+	}
 	statusIndex := strings.Index(body, `id="dispatch-submit-status"`)
 	actionsIndex := strings.Index(body, `class="prompt-actions-end"`)
 	if statusIndex == -1 || actionsIndex == -1 || statusIndex > actionsIndex {
@@ -2005,6 +2011,9 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
+	}
+	if !strings.Contains(body, `.dispatch-workbench-panel::before {`) || !strings.Contains(body, `display: none;`) {
+		t.Fatalf("expected dispatch workbench panel to disable extra chrome so it matches the studio shell, body=%s", body)
 	}
 	if !strings.Contains(body, `#dispatch-submit-status:empty {`) {
 		t.Fatalf("expected empty dispatch submit status to collapse so the footer buttons stay flush, body=%s", body)
