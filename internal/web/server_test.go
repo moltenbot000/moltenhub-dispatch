@@ -823,13 +823,13 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, ">Manual Dispatch<") {
 		t.Fatalf("did not expect previous manual dispatch heading, body=%s", body)
 	}
-	if !strings.Contains(body, "<legend>Agents</legend>") {
+	if !strings.Contains(body, `class="prompt-label">Agents</legend>`) {
 		t.Fatalf("expected connected agent legend copy, body=%s", body)
 	}
 	if !strings.Contains(body, "Skills") {
 		t.Fatalf("expected skills field label, body=%s", body)
 	}
-	if !strings.Contains(body, "<span>Payload</span>") {
+	if !strings.Contains(body, `class="prompt-label">Payload</span>`) {
 		t.Fatalf("expected payload field label, body=%s", body)
 	}
 	if !strings.Contains(body, "Auto-select the first skill of that agent.") {
@@ -847,8 +847,14 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="manual-dispatch-actions"`) {
 		t.Fatalf("expected manual dispatch submit action wrapper, body=%s", body)
 	}
+	if !strings.Contains(body, `class="prompt-actions manual-dispatch-actions"`) {
+		t.Fatalf("expected manual dispatch actions to reuse studio prompt action layout, body=%s", body)
+	}
+	if !strings.Contains(body, `class="prompt-grid manual-dispatch-selection-grid"`) {
+		t.Fatalf("expected manual dispatch selection row to reuse studio prompt grid layout, body=%s", body)
+	}
 	statusIndex := strings.Index(body, `id="dispatch-submit-status"`)
-	actionsIndex := strings.Index(body, `class="manual-dispatch-actions"`)
+	actionsIndex := strings.Index(body, `class="prompt-actions-end"`)
 	if statusIndex == -1 || actionsIndex == -1 || statusIndex > actionsIndex {
 		t.Fatalf("expected dispatch status to render before the action row so buttons sit at the footer, body=%s", body)
 	}

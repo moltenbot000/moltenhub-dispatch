@@ -3630,9 +3630,21 @@ p,
   justify-content: flex-end;
 }
 
+.manual-dispatch-selection-grid {
+  align-items: stretch;
+}
+
 .manual-dispatch-target-fieldset {
   display: grid;
   gap: 10px;
+}
+
+.manual-dispatch-target-fieldset.prompt-field {
+  align-content: start;
+}
+
+.manual-dispatch-skill-field {
+  align-self: start;
 }
 
 .manual-dispatch-skill-hint {
@@ -5247,6 +5259,13 @@ legend {
 
 .manual-dispatch-actions {
   margin-top: 0;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.manual-dispatch-actions .connected-agents-refresh-status {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .shell input:not([type="radio"]):not([type="checkbox"]),
