@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -145,6 +146,7 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 	}
 	view := pageData{
 		State:                        state,
+		ActivityFeed:                 mergedActivityFeed(state.PendingTasks, state.RecentEvents),
 		Flash:                        flash,
 		IsError:                      isError,
 		RuntimeOptions:               app.SupportedHubRuntimes(),
@@ -757,6 +759,7 @@ func looksLikeUUID(value string) bool {
 
 type pageData struct {
 	State                        app.AppState
+	ActivityFeed                 []activityFeedItem
 	Flash                        string
 	IsError                      bool
 	RuntimeOptions               []app.HubRuntime
@@ -785,6 +788,27 @@ type statusView struct {
 	connectionView
 	PendingTasks []app.PendingTask  `json:"pending_tasks"`
 	RecentEvents []app.RuntimeEvent `json:"recent_events"`
+}
+
+type activityFeedItem struct {
+	SortAt             time.Time
+	Kind               string
+	Title              string
+	Subtitle           string
+	Status             string
+	StatusClass        string
+	WhenLabel          string
+	Detail             string
+	Level              string
+	Skill              string
+	TargetAgent        string
+	TaskID             string
+	ChildRequestID     string
+	LogPath            string
+	Repo               string
+	ExpiresAtLabel     string
+	IsPendingTask      bool
+	IsRecentEvent      bool
 }
 
 type subActionView struct {
@@ -849,6 +873,123 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 		form.Emoji = "🤖"
 	}
 	return form
+}
+
+func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []activityFeedItem {
+	items := make([]activityFeedItem, 0, len(tasks)+len(events))
+	for _, task := range tasks {
+		target := runtimeTargetAgentLabel(task.TargetAgentDisplayName, task.TargetAgentEmoji, task.TargetAgentUUID, task.TargetAgentURI)
+		skill := strings.TrimSpace(task.OriginalSkillName)
+		if skill == "" {
+			skill = strings.TrimSpace(task.ID)
+		}
+		status := pendingTaskStatusLabel(task.Status)
+		items = append(items, activityFeedItem{
+			SortAt:         task.CreatedAt,
+			Kind:           "pending_task",
+			Title:          firstNonEmpty(target, "Unknown agent"),
+			Subtitle:       skill,
+			Status:         status,
+			StatusClass:    pendingTaskStatusClass(task.Status),
+			WhenLabel:      formatTimestamp(task.CreatedAt),
+			Skill:          skill,
+			TargetAgent:    target,
+			TaskID:         strings.TrimSpace(task.ID),
+			ChildRequestID: strings.TrimSpace(task.ChildRequestID),
+			LogPath:        strings.TrimSpace(task.LogPath),
+			Repo:           strings.TrimSpace(task.Repo),
+			ExpiresAtLabel: formatTimestamp(task.ExpiresAt),
+			IsPendingTask:  true,
+		})
+	}
+	for _, event := range events {
+		target := runtimeTargetAgentLabel(event.TargetAgentDisplayName, event.TargetAgentEmoji, event.TargetAgentUUID, event.TargetAgentURI)
+		skill := strings.TrimSpace(event.OriginalSkillName)
+		title := firstNonEmpty(target, strings.TrimSpace(event.Title), "Runtime event")
+		subtitle := ""
+		if target != "" {
+			subtitle = joinNonEmpty(" • ", skill, strings.TrimSpace(event.Title))
+		}
+		items = append(items, activityFeedItem{
+			SortAt:        event.At,
+			Kind:          "recent_event",
+			Title:         title,
+			Subtitle:      subtitle,
+			WhenLabel:     formatTimestamp(event.At),
+			Detail:        strings.TrimSpace(event.Detail),
+			Level:         strings.TrimSpace(event.Level),
+			Skill:         skill,
+			TargetAgent:   target,
+			TaskID:        strings.TrimSpace(event.TaskID),
+			LogPath:       strings.TrimSpace(event.LogPath),
+			IsRecentEvent: true,
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		left := items[i].SortAt
+		right := items[j].SortAt
+		switch {
+		case left.IsZero() && right.IsZero():
+			return items[i].Kind < items[j].Kind
+		case left.IsZero():
+			return false
+		case right.IsZero():
+			return true
+		case left.Equal(right):
+			return items[i].Kind < items[j].Kind
+		default:
+			return left.After(right)
+		}
+	})
+	return items
+}
+
+func runtimeTargetAgentLabel(displayName, emoji, uuid, uri string) string {
+	displayName = strings.TrimSpace(displayName)
+	if displayName != "" {
+		return strings.TrimSpace(firstNonEmpty(strings.TrimSpace(emoji), "🤖") + " " + displayName)
+	}
+	return firstNonEmpty(strings.TrimSpace(uuid), strings.TrimSpace(uri))
+}
+
+func pendingTaskStatusLabel(status string) string {
+	if strings.TrimSpace(status) == app.PendingTaskStatusSending {
+		return "Sending"
+	}
+	return "In Queue"
+}
+
+func pendingTaskStatusClass(status string) string {
+	if strings.TrimSpace(status) == app.PendingTaskStatusSending {
+		return "runtime-event-card-status runtime-event-card-status-sending"
+	}
+	return "runtime-event-card-status runtime-event-card-status-queued"
+}
+
+func formatTimestamp(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Local().Format(time.RFC822)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func joinNonEmpty(sep string, values ...string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return strings.Join(parts, sep)
 }
 
 func connectionStatusView(appState app.AppState) connectionView {

@@ -1589,17 +1589,17 @@ func TestHandleIndexRendersPendingTasksPanelInMainUI(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 response, got %d", rec.Code)
 	}
-	if !strings.Contains(body, ">Pending Tasks<") {
-		t.Fatalf("expected pending tasks panel in main UI, body=%s", body)
+	if !strings.Contains(body, ">Recent Activity<") {
+		t.Fatalf("expected consolidated activity panel in main UI, body=%s", body)
 	}
 	if !strings.Contains(body, "Worker A") || !strings.Contains(body, "🛠") {
-		t.Fatalf("expected pending task card to render agent display name and emoji, body=%s", body)
+		t.Fatalf("expected activity card to render agent display name and emoji, body=%s", body)
 	}
 	if !strings.Contains(body, "In Queue") {
-		t.Fatalf("expected pending task status label to render in queue state, body=%s", body)
+		t.Fatalf("expected activity card to render in queue state, body=%s", body)
 	}
-	if strings.Contains(body, ">Queued Follow-Ups<") {
-		t.Fatalf("did not expect queued follow-up panel in main UI, body=%s", body)
+	if !strings.Contains(body, "Pending task") {
+		t.Fatalf("expected consolidated activity feed to label pending tasks, body=%s", body)
 	}
 }
 
@@ -1630,17 +1630,11 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 response, got %d", rec.Code)
 	}
-	if !strings.Contains(body, `id="pending-tasks-list"`) {
-		t.Fatalf("expected pending tasks list hook, body=%s", body)
+	if !strings.Contains(body, `id="activity-feed-list"`) {
+		t.Fatalf("expected activity feed list hook, body=%s", body)
 	}
-	if !strings.Contains(body, `id="pending-tasks-empty"`) {
-		t.Fatalf("expected pending tasks empty-state hook, body=%s", body)
-	}
-	if !strings.Contains(body, `id="recent-events-list"`) {
-		t.Fatalf("expected recent events list hook, body=%s", body)
-	}
-	if !strings.Contains(body, `id="recent-events-empty"`) {
-		t.Fatalf("expected recent events empty-state hook, body=%s", body)
+	if !strings.Contains(body, `id="activity-feed-empty"`) {
+		t.Fatalf("expected activity feed empty-state hook, body=%s", body)
 	}
 	if !strings.Contains(body, `id="initial-pending-tasks-data" type="application/json"`) {
 		t.Fatalf("expected initial pending-tasks bootstrap payload script, body=%s", body)
@@ -1654,20 +1648,20 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const recentEvents = Array.isArray(snapshot && snapshot.recent_events)`) {
 		t.Fatalf("expected status polling to extract recent events from /status payload, body=%s", body)
 	}
-	if !strings.Contains(body, `renderPendingTasks(pendingTasks);`) {
-		t.Fatalf("expected status polling to rerender pending tasks, body=%s", body)
+	if !strings.Contains(body, `renderActivityFeed(pendingTasks, recentEvents);`) {
+		t.Fatalf("expected status polling to rerender consolidated activity feed, body=%s", body)
 	}
-	if !strings.Contains(body, `renderRecentEvents(recentEvents);`) {
-		t.Fatalf("expected status polling to rerender recent events, body=%s", body)
+	if !strings.Contains(body, `const mergeActivityFeed = (tasks, events) => {`) {
+		t.Fatalf("expected activity feed merge helper, body=%s", body)
 	}
 	if !strings.Contains(body, `runtimeTargetAgentLabel(task)`) {
-		t.Fatalf("expected pending task rerender to resolve target-agent emoji + display label, body=%s", body)
+		t.Fatalf("expected consolidated feed to resolve pending-task target-agent label, body=%s", body)
 	}
 	if !strings.Contains(body, `task && task.original_skill_name`) {
-		t.Fatalf("expected pending task rerender to include original skill label, body=%s", body)
+		t.Fatalf("expected consolidated feed to include pending task skill label, body=%s", body)
 	}
 	if !strings.Contains(body, `event && event.original_skill_name`) {
-		t.Fatalf("expected recent event rerender to include original skill label, body=%s", body)
+		t.Fatalf("expected consolidated feed to include recent event skill label, body=%s", body)
 	}
 }
 
@@ -1837,7 +1831,7 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 		t.Fatalf("expected recent event card to render target-agent emoji and display name, body=%s", body)
 	}
 	if !strings.Contains(body, "run_task • Task dispatched") {
-		t.Fatalf("expected recent event card to render skill + title subtitle, body=%s", body)
+		t.Fatalf("expected recent event card to render skill + title subtitle in consolidated feed, body=%s", body)
 	}
 	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
 		t.Fatalf("expected all runtime event toggles to render closed by default, body=%s", body)
@@ -1890,23 +1884,74 @@ func TestHandleIndexKeepsPendingTasksClosedByDefault(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 response, got %d", rec.Code)
 	}
-	if !strings.Contains(body, ">Pending Tasks<") {
-		t.Fatalf("expected pending tasks panel, body=%s", body)
+	if !strings.Contains(body, ">Recent Activity<") {
+		t.Fatalf("expected consolidated activity panel, body=%s", body)
 	}
 	if !strings.Contains(body, `class="card runtime-event-card" data-runtime-event-card`) {
-		t.Fatalf("expected pending task cards to use collapsible card class, body=%s", body)
+		t.Fatalf("expected pending task cards to use collapsible card class in consolidated feed, body=%s", body)
 	}
 	if !strings.Contains(body, `data-runtime-event-toggle aria-expanded="false">Open</button>`) {
-		t.Fatalf("expected pending task toggle to render closed by default, body=%s", body)
+		t.Fatalf("expected pending task toggle to render closed by default in consolidated feed, body=%s", body)
 	}
 	if !strings.Contains(body, `class="runtime-event-card-body" data-runtime-event-body hidden`) {
-		t.Fatalf("expected pending task body to render hidden by default, body=%s", body)
+		t.Fatalf("expected pending task body to render hidden by default in consolidated feed, body=%s", body)
 	}
 	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true">Close</button>`) {
 		t.Fatalf("expected pending task toggles to render closed by default, body=%s", body)
 	}
 	if !strings.Contains(body, "Sending") {
 		t.Fatalf("expected pending task status label to render sending state, body=%s", body)
+	}
+}
+
+func TestHandleIndexMergesPendingTasksAndRecentEventsByTime(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			PendingTasks: []app.PendingTask{
+				{
+					ID:                     "task-newer",
+					Status:                 app.PendingTaskStatusInQueue,
+					OriginalSkillName:      "run_task",
+					TargetAgentDisplayName: "Worker A",
+					TargetAgentEmoji:       "🛠",
+					CreatedAt:              time.Unix(20, 0).UTC(),
+				},
+			},
+			RecentEvents: []app.RuntimeEvent{
+				{
+					Title:                  "Task dispatched",
+					Level:                  "info",
+					Detail:                 "older event",
+					OriginalSkillName:      "review",
+					TargetAgentDisplayName: "Worker B",
+					TargetAgentEmoji:       "🔎",
+					At:                     time.Unix(10, 0).UTC(),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	newerIndex := strings.Index(body, "🛠 Worker A")
+	olderIndex := strings.Index(body, "🔎 Worker B")
+	if newerIndex == -1 || olderIndex == -1 {
+		t.Fatalf("expected merged activity feed to render both pending task and event, body=%s", body)
+	}
+	if newerIndex > olderIndex {
+		t.Fatalf("expected consolidated activity feed to sort newer pending task before older event, body=%s", body)
 	}
 }
 

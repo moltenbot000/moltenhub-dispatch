@@ -220,96 +220,54 @@
         </article>
       </section>
 
-      <section class="grid two-up">
-        <article class="panel">
-          <div class="dispatch-panel-header">
-            <div class="dispatch-panel-header-copy">
-              <p class="eyebrow dispatch-panel-eyebrow">Queue</p>
-              <h2>Pending Tasks</h2>
-            </div>
-            <p class="dispatch-panel-copy">In-flight dispatches waiting on connected agents.</p>
-          </div>
-          <div id="pending-tasks-list" class="list" {{if not .State.PendingTasks}}hidden{{end}}>
-            {{range .State.PendingTasks}}
-            <article class="card runtime-event-card" data-runtime-event-card>
-              <div class="runtime-event-card-header">
-                <div>
-                  <h3>
-                    {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}}
-                    {{if .TargetAgentDisplayName}} {{end}}
-                    {{if .TargetAgentDisplayName}}{{.TargetAgentDisplayName}}{{else if .TargetAgentUUID}}{{.TargetAgentUUID}}{{else if .TargetAgentURI}}{{.TargetAgentURI}}{{else}}Unknown agent{{end}}
-                  </h3>
-                  <p class="runtime-event-card-subtitle">
-                    {{if .OriginalSkillName}}{{.OriginalSkillName}}{{else}}{{.ID}}{{end}}
-                    <span class="runtime-event-card-status runtime-event-card-status-{{if eq .Status "sending"}}sending{{else}}queued{{end}}">
-                      {{if eq .Status "sending"}}Sending{{else}}In Queue{{end}}
-                    </span>
-                  </p>
-                </div>
-                <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
-              </div>
-              <div class="runtime-event-card-body" data-runtime-event-body hidden>
-                <p><strong>Task:</strong> {{.ID}}</p>
-                <p><strong>Child request:</strong> {{.ChildRequestID}}</p>
-                <p><strong>Status:</strong> {{if eq .Status "sending"}}Sending{{else}}In Queue{{end}}</p>
-                {{if .TargetAgentDisplayName}}
-                <p><strong>Target agent:</strong> {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}} {{.TargetAgentDisplayName}}</p>
-                {{else if .TargetAgentUUID}}
-                <p><strong>Target agent:</strong> {{.TargetAgentUUID}}</p>
-                {{else if .TargetAgentURI}}
-                <p><strong>Target agent:</strong> {{.TargetAgentURI}}</p>
-                {{end}}
-                {{if .Repo}}<p><strong>Repo:</strong> {{.Repo}}</p>{{end}}
-                {{if .LogPath}}<p><strong>Log path:</strong> {{.LogPath}}</p>{{end}}
-                {{if .ExpiresAt.IsZero}}{{else}}<p><strong>Expires:</strong> {{.ExpiresAt}}</p>{{end}}
-              </div>
-            </article>
-            {{end}}
-          </div>
-          <p id="pending-tasks-empty" class="empty" {{if .State.PendingTasks}}hidden{{end}}>No active dispatches.</p>
-        </article>
-
+      <section class="grid">
         <article class="panel">
           <div class="dispatch-panel-header">
             <div class="dispatch-panel-header-copy">
               <p class="eyebrow dispatch-panel-eyebrow">Activity</p>
-              <h2>Recent Events</h2>
+              <h2>Recent Activity</h2>
             </div>
-            <p class="dispatch-panel-copy">Connection changes, dispatch lifecycle events, and local runtime feedback.</p>
+            <p class="dispatch-panel-copy">Pending tasks and runtime events in one time-sorted feed.</p>
           </div>
-          <div id="recent-events-list" class="list" {{if not .State.RecentEvents}}hidden{{end}}>
-            {{range .State.RecentEvents}}
+          <div id="activity-feed-list" class="list" {{if not .ActivityFeed}}hidden{{end}}>
+            {{range .ActivityFeed}}
             <article class="card runtime-event-card" data-runtime-event-card>
               <div class="runtime-event-card-header">
                 <div>
-                  <h3>
-                    {{if .TargetAgentDisplayName}}
-                      {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}} {{.TargetAgentDisplayName}}
-                    {{else}}
-                      {{.Title}}
+                  <h3>{{.Title}}</h3>
+                  {{if .Subtitle}}
+                  <p class="runtime-event-card-subtitle">
+                    {{.Subtitle}}
+                    {{if .Status}}
+                    <span class="{{.StatusClass}}">{{.Status}}</span>
                     {{end}}
-                  </h3>
-                  {{if .OriginalSkillName}}
-                  <p class="runtime-event-card-subtitle">{{.OriginalSkillName}} • {{.Title}}</p>
-                  {{else if .TargetAgentDisplayName}}
-                  <p class="runtime-event-card-subtitle">{{.Title}}</p>
+                  </p>
+                  {{else if .Status}}
+                  <p class="runtime-event-card-subtitle">
+                    <span class="{{.StatusClass}}">{{.Status}}</span>
+                  </p>
                   {{end}}
                 </div>
                 <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
               </div>
               <div class="runtime-event-card-body" data-runtime-event-body hidden>
-                <p><strong>When:</strong> {{formatTime .At}}</p>
-                <p><strong>Level:</strong> {{.Level}}</p>
-                <p>{{.Detail}}</p>
-                {{if .OriginalSkillName}}<p><strong>Skill:</strong> {{.OriginalSkillName}}</p>{{end}}
-                {{if .TargetAgentDisplayName}}<p><strong>Target agent:</strong> {{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🤖{{end}} {{.TargetAgentDisplayName}}</p>{{else if .TargetAgentUUID}}<p><strong>Target agent:</strong> {{.TargetAgentUUID}}</p>{{else if .TargetAgentURI}}<p><strong>Target agent:</strong> {{.TargetAgentURI}}</p>{{end}}
+                {{if .WhenLabel}}<p><strong>When:</strong> {{.WhenLabel}}</p>{{end}}
+                {{if .IsPendingTask}}<p><strong>Type:</strong> Pending task</p>{{else if .IsRecentEvent}}<p><strong>Type:</strong> Runtime event</p>{{end}}
+                {{if .Status}}<p><strong>Status:</strong> {{.Status}}</p>{{end}}
+                {{if .Level}}<p><strong>Level:</strong> {{.Level}}</p>{{end}}
+                {{if .Detail}}<p>{{.Detail}}</p>{{end}}
+                {{if .Skill}}<p><strong>Skill:</strong> {{.Skill}}</p>{{end}}
+                {{if .TargetAgent}}<p><strong>Target agent:</strong> {{.TargetAgent}}</p>{{end}}
                 {{if .TaskID}}<p><strong>Task:</strong> {{.TaskID}}</p>{{end}}
+                {{if .ChildRequestID}}<p><strong>Child request:</strong> {{.ChildRequestID}}</p>{{end}}
+                {{if .Repo}}<p><strong>Repo:</strong> {{.Repo}}</p>{{end}}
                 {{if .LogPath}}<p><strong>Log:</strong> {{.LogPath}}</p>{{end}}
+                {{if .ExpiresAtLabel}}<p><strong>Expires:</strong> {{.ExpiresAtLabel}}</p>{{end}}
               </div>
             </article>
             {{end}}
           </div>
-          <p id="recent-events-empty" class="empty" {{if .State.RecentEvents}}hidden{{end}}>Runtime events will appear here.</p>
+          <p id="activity-feed-empty" class="empty" {{if .ActivityFeed}}hidden{{end}}>Pending tasks and runtime events will appear here.</p>
         </article>
       </section>
     </div>
@@ -606,10 +564,8 @@
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
       const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
-      const pendingTasksList = document.getElementById("pending-tasks-list");
-      const pendingTasksEmpty = document.getElementById("pending-tasks-empty");
-      const recentEventsList = document.getElementById("recent-events-list");
-      const recentEventsEmpty = document.getElementById("recent-events-empty");
+      const activityFeedList = document.getElementById("activity-feed-list");
+      const activityFeedEmpty = document.getElementById("activity-feed-empty");
       const dispatchOverviewConnectedAgentsCount = document.getElementById("dispatch-overview-connected-agents-count");
       const dispatchOverviewPendingTasksCount = document.getElementById("dispatch-overview-pending-tasks-count");
       const dispatchOverviewRecentEventsCount = document.getElementById("dispatch-overview-recent-events-count");
@@ -2511,87 +2467,104 @@
           : "runtime-event-card-status runtime-event-card-status-queued";
       };
 
-      const renderPendingTasks = (tasks) => {
-        const nextTasks = Array.isArray(tasks) ? tasks : [];
-        latestPendingTasks = nextTasks;
-        if (!(pendingTasksList instanceof HTMLElement) || !(pendingTasksEmpty instanceof HTMLElement)) {
-          syncDispatchOverviewStats();
-          return;
-        }
-        pendingTasksList.innerHTML = "";
-        if (nextTasks.length === 0) {
-          pendingTasksList.hidden = true;
-          pendingTasksEmpty.hidden = false;
-          syncDispatchOverviewStats();
-          return;
-        }
-        nextTasks.forEach((task) => {
-          const title = runtimeTargetAgentLabel(task) || "Unknown agent";
-          const skillName = trimmedString(task && task.original_skill_name) || trimmedString(task && task.id) || "Pending task";
-          const statusLabel = pendingTaskStatusLabel(task);
-          const card = createRuntimeEventCard(title, (body) => {
-            appendRuntimeRow(body, "Task", task && task.id);
-            appendRuntimeRow(body, "Child request", task && task.child_request_id);
-            appendRuntimeRow(body, "Status", statusLabel);
-            appendRuntimeRow(body, "Skill", skillName);
-            appendRuntimeRow(body, "Target agent", runtimeTargetAgentLabel(task));
-            appendRuntimeRow(body, "Repo", task && task.repo);
-            appendRuntimeRow(body, "Log path", task && task.log_path);
-            appendRuntimeRow(body, "Expires", formatRuntimeTimestamp(task && task.expires_at));
-          }, {
-            subtitleText: skillName,
-            subtitleBuilder: (subtitle) => {
-              const status = document.createElement("span");
-              status.className = pendingTaskStatusClass(task);
-              status.textContent = statusLabel;
-              subtitle.appendChild(status);
-            },
-          });
-          pendingTasksList.appendChild(card);
-        });
-        pendingTasksEmpty.hidden = true;
-        pendingTasksList.hidden = false;
-        syncDispatchOverviewStats();
+      const activityTimestamp = (value) => {
+        const parsed = Date.parse(trimmedString(value));
+        return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
       };
 
-      const renderRecentEvents = (events) => {
-        const nextEvents = Array.isArray(events) ? events : [];
-        latestRecentEvents = nextEvents;
-        if (!(recentEventsList instanceof HTMLElement) || !(recentEventsEmpty instanceof HTMLElement)) {
-          syncDispatchOverviewStats();
-          return;
-        }
-        recentEventsList.innerHTML = "";
-        if (nextEvents.length === 0) {
-          recentEventsList.hidden = true;
-          recentEventsEmpty.hidden = false;
-          syncDispatchOverviewStats();
-          return;
-        }
-        nextEvents.forEach((event) => {
-          const eventTarget = runtimeTargetAgentLabel(event);
-          const title = eventTarget || trimmedString(event && event.title) || "Runtime event";
+      const mergeActivityFeed = (tasks, events) => {
+        const feed = [];
+        (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+          const target = runtimeTargetAgentLabel(task);
+          const skillName = trimmedString(task && task.original_skill_name) || trimmedString(task && task.id) || "Pending task";
+          feed.push({
+            kind: "pending_task",
+            sortAt: activityTimestamp(task && task.created_at),
+            title: target || "Unknown agent",
+            subtitle: skillName,
+            status: pendingTaskStatusLabel(task),
+            statusClass: pendingTaskStatusClass(task),
+            when: formatRuntimeTimestamp(task && task.created_at),
+            skill: skillName,
+            targetAgent: target,
+            taskID: trimmedString(task && task.id),
+            childRequestID: trimmedString(task && task.child_request_id),
+            repo: trimmedString(task && task.repo),
+            logPath: trimmedString(task && task.log_path),
+            expiresAt: formatRuntimeTimestamp(task && task.expires_at),
+          });
+        });
+        (Array.isArray(events) ? events : []).forEach((event) => {
+          const target = runtimeTargetAgentLabel(event);
           const skillName = trimmedString(event && event.original_skill_name);
           const eventTitle = trimmedString(event && event.title);
-          let subtitle = "";
-          if (eventTarget !== "") {
-            subtitle = skillName !== "" && eventTitle !== "" ? `${skillName} • ${eventTitle}` : (skillName || eventTitle);
-          }
-          const card = createRuntimeEventCard(title, (body) => {
-            appendRuntimeRow(body, "When", formatRuntimeTimestamp(event && event.at));
-            appendRuntimeRow(body, "Level", event && event.level);
-            appendRuntimeRow(body, "", event && event.detail);
-            appendRuntimeRow(body, "Skill", skillName);
-            appendRuntimeRow(body, "Target agent", eventTarget);
-            appendRuntimeRow(body, "Task", event && event.task_id);
-            appendRuntimeRow(body, "Log", event && event.log_path);
-          }, {
-            subtitleText: subtitle,
+          feed.push({
+            kind: "recent_event",
+            sortAt: activityTimestamp(event && event.at),
+            title: target || eventTitle || "Runtime event",
+            subtitle: target !== "" ? (skillName && eventTitle ? `${skillName} • ${eventTitle}` : (skillName || eventTitle)) : "",
+            when: formatRuntimeTimestamp(event && event.at),
+            level: trimmedString(event && event.level),
+            detail: trimmedString(event && event.detail),
+            skill: skillName,
+            targetAgent: target,
+            taskID: trimmedString(event && event.task_id),
+            logPath: trimmedString(event && event.log_path),
           });
-          recentEventsList.appendChild(card);
         });
-        recentEventsEmpty.hidden = true;
-        recentEventsList.hidden = false;
+        feed.sort((left, right) => {
+          if (left.sortAt === right.sortAt) {
+            return String(left.kind).localeCompare(String(right.kind));
+          }
+          return right.sortAt - left.sortAt;
+        });
+        return feed;
+      };
+
+      const renderActivityFeed = (tasks, events) => {
+        const nextTasks = Array.isArray(tasks) ? tasks : [];
+        const nextEvents = Array.isArray(events) ? events : [];
+        latestPendingTasks = nextTasks;
+        latestRecentEvents = nextEvents;
+        if (!(activityFeedList instanceof HTMLElement) || !(activityFeedEmpty instanceof HTMLElement)) {
+          syncDispatchOverviewStats();
+          return;
+        }
+        const feed = mergeActivityFeed(nextTasks, nextEvents);
+        activityFeedList.innerHTML = "";
+        if (feed.length === 0) {
+          activityFeedList.hidden = true;
+          activityFeedEmpty.hidden = false;
+          syncDispatchOverviewStats();
+          return;
+        }
+        feed.forEach((item) => {
+          const card = createRuntimeEventCard(item.title, (body) => {
+            appendRuntimeRow(body, "When", item.when);
+            appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
+            appendRuntimeRow(body, "Status", item.status);
+            appendRuntimeRow(body, "Level", item.level);
+            appendRuntimeRow(body, "", item.detail);
+            appendRuntimeRow(body, "Skill", item.skill);
+            appendRuntimeRow(body, "Target agent", item.targetAgent);
+            appendRuntimeRow(body, "Task", item.taskID);
+            appendRuntimeRow(body, "Child request", item.childRequestID);
+            appendRuntimeRow(body, "Repo", item.repo);
+            appendRuntimeRow(body, "Log", item.logPath);
+            appendRuntimeRow(body, "Expires", item.expiresAt);
+          }, {
+            subtitleText: item.subtitle,
+            subtitleBuilder: item.status ? (subtitle) => {
+              const status = document.createElement("span");
+              status.className = item.statusClass;
+              status.textContent = item.status;
+              subtitle.appendChild(status);
+            } : null,
+          });
+          activityFeedList.appendChild(card);
+        });
+        activityFeedEmpty.hidden = true;
+        activityFeedList.hidden = false;
         syncDispatchOverviewStats();
       };
 
@@ -2822,8 +2795,7 @@
           const recentEvents = Array.isArray(snapshot && snapshot.recent_events)
             ? snapshot.recent_events
             : [];
-          renderPendingTasks(pendingTasks);
-          renderRecentEvents(recentEvents);
+          renderActivityFeed(pendingTasks, recentEvents);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh hub status.";
           setLocalConnection();
@@ -2952,8 +2924,7 @@
         skillNameSelect.addEventListener("change", updateSkillNameOptions);
       }
       initRuntimeEventCards();
-      renderPendingTasks(parseInitialPendingTasks());
-      renderRecentEvents(parseInitialRecentEvents());
+      renderActivityFeed(parseInitialPendingTasks(), parseInitialRecentEvents());
       renderConnectedAgents(parseInitialConnectedAgents());
 
       setConnectedAgentsRefreshProgress(0);
