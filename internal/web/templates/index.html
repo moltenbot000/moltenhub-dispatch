@@ -2511,6 +2511,16 @@
           : "runtime-event-card-status runtime-event-card-status-queued";
       };
 
+      const focusPendingTasks = () => {
+        const panel = pendingTasksList instanceof HTMLElement
+          ? pendingTasksList.closest(".panel")
+          : (pendingTasksEmpty instanceof HTMLElement ? pendingTasksEmpty.closest(".panel") : null);
+        if (!(panel instanceof HTMLElement)) {
+          return;
+        }
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+
       const renderPendingTasks = (tasks) => {
         const nextTasks = Array.isArray(tasks) ? tasks : [];
         latestPendingTasks = nextTasks;
@@ -2936,6 +2946,15 @@
               skillPayloadFormatInput.value = "";
             }
             setSkillPayloadValidationMessage("");
+            const pendingTask = body && typeof body.pending_task === "object" ? body.pending_task : null;
+            if (pendingTask) {
+              const taskID = trimmedString(pendingTask.task_id) || trimmedString(pendingTask.id);
+              const nextPendingTasks = latestPendingTasks.filter((task) => {
+                return trimmedString(task && task.id) !== taskID;
+              });
+              renderPendingTasks([pendingTask, ...nextPendingTasks]);
+              focusPendingTasks();
+            }
             const taskID = trimmedString(body && body.task_id);
             const successMessage = taskID ? `In Queue: ${taskID}` : "In Queue.";
             setDispatchSubmitStatus(successMessage);

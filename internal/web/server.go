@@ -383,9 +383,10 @@ func (s *Server) handleDispatchAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":      true,
-		"task_id": task.ID,
-		"message": "Dispatched task " + task.ID,
+		"ok":           true,
+		"task_id":      task.ID,
+		"message":      "Dispatched task " + task.ID,
+		"pending_task": task,
 	})
 }
 

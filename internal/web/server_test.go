@@ -939,6 +939,15 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `await fetch("/api/dispatch"`) {
 		t.Fatalf("expected manual dispatch async API submit hook, body=%s", body)
 	}
+	if !strings.Contains(body, `const pendingTask = body && typeof body.pending_task === "object" ? body.pending_task : null;`) {
+		t.Fatalf("expected async dispatch success to read pending_task response payload, body=%s", body)
+	}
+	if !strings.Contains(body, `renderPendingTasks([pendingTask, ...nextPendingTasks]);`) {
+		t.Fatalf("expected async dispatch success to prepend pending task into current work list, body=%s", body)
+	}
+	if !strings.Contains(body, `focusPendingTasks();`) {
+		t.Fatalf("expected async dispatch success to focus pending tasks panel, body=%s", body)
+	}
 	if !strings.Contains(body, app.DispatchSelectionRequiredMessage) {
 		t.Fatalf("expected client-side empty-target dispatch guard, body=%s", body)
 	}
@@ -1095,9 +1104,10 @@ func TestHandleDispatchAPIAcceptsMinimalTargetOnlyForm(t *testing.T) {
 	}
 
 	var body struct {
-		OK      bool   `json:"ok"`
-		TaskID  string `json:"task_id"`
-		Message string `json:"message"`
+		OK          bool            `json:"ok"`
+		TaskID      string          `json:"task_id"`
+		Message     string          `json:"message"`
+		PendingTask app.PendingTask `json:"pending_task"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -1110,6 +1120,9 @@ func TestHandleDispatchAPIAcceptsMinimalTargetOnlyForm(t *testing.T) {
 	}
 	if body.Message != "Dispatched task task-1" {
 		t.Fatalf("unexpected response message: %#v", body)
+	}
+	if body.PendingTask.ID != "task-1" {
+		t.Fatalf("expected pending_task payload, got %#v", body)
 	}
 	if got := stub.lastDispatchReq.TargetAgentRef; got != "worker-a" {
 		t.Fatalf("unexpected target agent ref: %#v", stub.lastDispatchReq)
