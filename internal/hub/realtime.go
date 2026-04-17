@@ -13,6 +13,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+var websocketHeartbeatInterval = 15 * time.Second
+
 type RealtimeSession interface {
 	Receive(ctx context.Context) (PullResponse, error)
 	Ack(ctx context.Context, deliveryID string) error
@@ -73,6 +75,7 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 		return nil, fmt.Errorf("unexpected websocket handshake message type %q", first.Type)
 	}
 	session.bindContext(ctx)
+	session.startHeartbeat(ctx)
 	return session, nil
 }
 
@@ -211,6 +214,49 @@ func (s *websocketSession) bindContext(ctx context.Context) {
 		case <-s.closed:
 		}
 	}()
+}
+
+func (s *websocketSession) startHeartbeat(ctx context.Context) {
+	interval := websocketHeartbeatInterval
+	if s == nil || interval <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.closed:
+				return
+			case <-ticker.C:
+				if err := s.writePing(ctx, []byte("hb")); err != nil {
+					_ = s.Close()
+					return
+				}
+			}
+		}
+	}()
+}
+
+func (s *websocketSession) writePing(ctx context.Context, payload []byte) error {
+	if err := s.applyDeadline(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	previousType := s.conn.PayloadType
+	s.conn.PayloadType = websocket.PingFrame
+	defer func() {
+		s.conn.PayloadType = previousType
+	}()
+
+	if _, err := s.conn.Write(payload); err != nil {
+		return fmt.Errorf("send websocket ping: %w", err)
+	}
+	return nil
 }
 
 func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {

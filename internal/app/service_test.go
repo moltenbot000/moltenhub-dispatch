@@ -3002,13 +3002,15 @@ func TestRunHubLoopMarksPresenceWebsocketWhenRealtimeConnects(t *testing.T) {
 	sawWebsocketPresence := false
 	deadline := time.After(2 * time.Second)
 	for {
-		if len(fake.updateMetadataCalls) > 0 {
-			presence, _ := fake.updateMetadataCalls[len(fake.updateMetadataCalls)-1].Metadata["presence"].(map[string]any)
+		for _, call := range fake.updateMetadataCalls {
+			presence, _ := call.Metadata["presence"].(map[string]any)
 			if presence["transport"] == ConnectionTransportWebSocket {
 				sawWebsocketPresence = true
 			}
 			if sawWebsocketPresence && presence["transport"] == ConnectionTransportHTTPLong {
-				break
+				cancel()
+				<-done
+				return
 			}
 		}
 		select {
@@ -3019,9 +3021,6 @@ func TestRunHubLoopMarksPresenceWebsocketWhenRealtimeConnects(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-
-	cancel()
-	<-done
 }
 
 func TestHandleInboundMessageAcceptsKindWhenTypeIsOmitted(t *testing.T) {
