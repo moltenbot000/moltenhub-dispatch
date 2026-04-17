@@ -149,72 +149,74 @@
 
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
       <section class="grid manual-dispatch-grid">
-        <article class="panel form-surface dispatch-workbench-panel">
-          <div class="dispatch-panel-header">
-            <div class="dispatch-panel-header-copy">
-              <p class="eyebrow dispatch-panel-eyebrow">Dispatch</p>
-              <h2>Send work to a connected agent</h2>
+        <article class="panel form-surface dispatch-workbench-panel prompt-wrap brand-login-card-shell">
+          <div class="panel-header prompt-titlebar">
+            <div class="panel-header-copy dispatch-panel-header-copy">
+              <span class="panel-section-title">Dispatch</span>
+              <p class="panel-section-copy">Send work to connected agent. Auto-load first skill. Paste markdown or JSON payload.</p>
             </div>
           </div>
-          <form id="manual-dispatch-form" method="post" action="/dispatch" class="stack">
-            <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
-            <fieldset class="manual-dispatch-target-fieldset">
-              <legend>Agents</legend>
-              <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid">
-              {{range .State.ConnectedAgents}}
-              {{$displayName := connectedAgentDisplayName .}}
-              {{$presenceStatus := connectedAgentPresenceStatus .}}
-              {{$presenceLabel := connectedAgentPresenceLabel .}}
-              <button
-                type="button"
-                class="connected-agent-card connected-agent-card-button"
-                data-connected-agent-target-ref="{{if .AgentID}}{{.AgentID}}{{else if .Handle}}{{.Handle}}{{else if .URI}}{{.URI}}{{else if .AgentUUID}}{{.AgentUUID}}{{end}}"
-                data-connected-agent-refs="{{if .AgentID}}{{.AgentID}}{{end}}{{if .Handle}}{{if .AgentID}}&#10;{{end}}{{.Handle}}{{end}}{{if .URI}}{{if or .AgentID .Handle}}&#10;{{end}}{{.URI}}{{end}}{{if .AgentUUID}}{{if or .AgentID .Handle .URI}}&#10;{{end}}{{.AgentUUID}}{{end}}"
-                data-connected-agent-display="{{$displayName}}"
-                aria-pressed="false"
-              >
-                <div class="connected-agent-card-main">
-                  <div class="connected-agent-card-copy">
-                    <h3>
-                      <span class="connected-agent-title-emoji">{{connectedAgentEmoji .}}</span>
-                      <span>{{$displayName}}</span>
-                    </h3>
+          <form id="manual-dispatch-form" method="post" action="/dispatch" class="prompt-form">
+            <div class="prompt-compose-stack">
+              <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
+              <fieldset class="manual-dispatch-target-fieldset">
+                <legend class="prompt-label">Agents</legend>
+                <div id="manual-dispatch-targets" class="list connected-agents-list connected-agents-list-selectable manual-dispatch-targets-grid">
+                {{range .State.ConnectedAgents}}
+                {{$displayName := connectedAgentDisplayName .}}
+                {{$presenceStatus := connectedAgentPresenceStatus .}}
+                {{$presenceLabel := connectedAgentPresenceLabel .}}
+                <button
+                  type="button"
+                  class="connected-agent-card connected-agent-card-button"
+                  data-connected-agent-target-ref="{{if .AgentID}}{{.AgentID}}{{else if .Handle}}{{.Handle}}{{else if .URI}}{{.URI}}{{else if .AgentUUID}}{{.AgentUUID}}{{end}}"
+                  data-connected-agent-refs="{{if .AgentID}}{{.AgentID}}{{end}}{{if .Handle}}{{if .AgentID}}&#10;{{end}}{{.Handle}}{{end}}{{if .URI}}{{if or .AgentID .Handle}}&#10;{{end}}{{.URI}}{{end}}{{if .AgentUUID}}{{if or .AgentID .Handle .URI}}&#10;{{end}}{{.AgentUUID}}{{end}}"
+                  data-connected-agent-display="{{$displayName}}"
+                  aria-pressed="false"
+                >
+                  <div class="connected-agent-card-main">
+                    <div class="connected-agent-card-copy">
+                      <h3>
+                        <span class="connected-agent-title-emoji">{{connectedAgentEmoji .}}</span>
+                        <span>{{$displayName}}</span>
+                      </h3>
+                    </div>
+                    <div class="connected-agent-card-meta">
+                      <span
+                        class="connected-agent-presence {{if eq $presenceStatus "online"}}is-online{{else}}is-offline{{end}}"
+                        title="{{$presenceLabel}}"
+                        aria-label="{{$presenceLabel}}"
+                        role="img"
+                      >
+                        <span class="connected-agent-presence-dot" aria-hidden="true"></span>
+                      </span>
+                    </div>
                   </div>
-                  <div class="connected-agent-card-meta">
-                    <span
-                      class="connected-agent-presence {{if eq $presenceStatus "online"}}is-online{{else}}is-offline{{end}}"
-                      title="{{$presenceLabel}}"
-                      aria-label="{{$presenceLabel}}"
-                      role="img"
-                    >
-                      <span class="connected-agent-presence-dot" aria-hidden="true"></span>
-                    </span>
-                  </div>
+                </button>
+                {{end}}
                 </div>
-              </button>
-              {{end}}
+              </fieldset>
+              <label class="prompt-field">
+                <span class="prompt-label">Skills</span>
+                <select id="skill-name-select" class="prompt-control" name="skill_name" aria-describedby="skill-name-hint" disabled>
+                  <option value="">Select an agent first</option>
+                </select>
+              </label>
+              <p id="skill-name-hint" class="manual-dispatch-skill-hint">Auto-select the first skill of that agent.</p>
+              <label id="skill-payload-field" class="prompt-field" hidden>
+                <span class="manual-dispatch-payload-label-row">
+                  <span class="prompt-label">Payload</span>
+                </span>
+                <textarea id="skill-payload-input" class="prompt-text" name="payload" rows="4" data-default-placeholder="Describe the task or paste a JSON payload." placeholder="Describe the task or paste a JSON payload." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
+                <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Markdown and JSON are both supported.</span>
+                <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
+              </label>
+              <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
+              <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
+              <div class="manual-dispatch-actions">
+                <button id="dispatch-task-clear" type="button" class="prompt-action-button prompt-action-clear">Clear</button>
+                <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">Dispatch</button>
               </div>
-            </fieldset>
-            <label>
-              Skills
-              <select id="skill-name-select" name="skill_name" aria-describedby="skill-name-hint" disabled>
-                <option value="">Select an agent first</option>
-              </select>
-            </label>
-            <p id="skill-name-hint" class="manual-dispatch-skill-hint">Auto-select the first skill of that agent.</p>
-            <label id="skill-payload-field" hidden>
-              <span class="manual-dispatch-payload-label-row">
-                <span>Payload</span>
-              </span>
-              <textarea id="skill-payload-input" name="payload" rows="4" data-default-placeholder="Describe the task or paste a JSON payload." placeholder="Describe the task or paste a JSON payload." aria-describedby="skill-payload-hint skill-payload-validation" disabled></textarea>
-              <span id="skill-payload-hint" class="manual-dispatch-payload-hint">Markdown and JSON are both supported.</span>
-              <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
-            </label>
-            <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
-            <p id="dispatch-submit-status" class="connected-agents-refresh-status" aria-live="polite"></p>
-            <div class="manual-dispatch-actions">
-              <button id="dispatch-task-clear" type="button" class="prompt-action-button prompt-action-clear">Clear</button>
-              <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">Dispatch</button>
             </div>
           </form>
         </article>

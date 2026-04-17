@@ -746,6 +746,18 @@ body .right-col.prompt-collapsed.task-list-hidden {
   text-transform: uppercase;
 }
 
+.panel-section-copy {
+  margin: 0;
+  max-width: min(62ch, 100%);
+  color: var(--text-soft);
+  font-family: "Sora", "Instrument Sans", sans-serif;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.5;
+  text-transform: none;
+}
+
 .prompt-wrap.prompt-collapsed {
   min-height: var(--hub-studio-collapsed-height);
   max-height: none;
