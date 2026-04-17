@@ -2914,7 +2914,7 @@ func TestEnsurePresenceOnlineResyncsWhenTransportChanges(t *testing.T) {
 	}
 }
 
-func TestRunHubLoopRetriesWebsocketBeforeHTTPLongPollAfterRealtimeDisconnect(t *testing.T) {
+func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -2943,22 +2943,33 @@ func TestRunHubLoopRetriesWebsocketBeforeHTTPLongPollAfterRealtimeDisconnect(t *
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if fake.connectCalls >= 2 {
+		if fake.pullCalls > 0 {
 			break
 		}
 		select {
 		case <-deadline:
 			cancel()
 			<-done
-			t.Fatalf("expected websocket reconnect before HTTP fallback; connect_calls=%d pull_calls=%d", fake.connectCalls, fake.pullCalls)
+			t.Fatalf("expected HTTP fallback after realtime disconnect; connect_calls=%d pull_calls=%d", fake.connectCalls, fake.pullCalls)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
 
 	cancel()
 	<-done
-	if fake.pullCalls != 0 {
-		t.Fatalf("expected clean websocket disconnect to retry websocket without HTTP fallback, got %d pulls", fake.pullCalls)
+	if fake.connectCalls != 1 {
+		t.Fatalf("expected one websocket connect attempt before HTTP fallback, got %d", fake.connectCalls)
+	}
+	if fake.pullCalls == 0 {
+		t.Fatalf("expected clean websocket disconnect to fall back to HTTP polling")
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusConnected {
+		t.Fatalf("expected connected status after realtime disconnect fallback, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportHTTPLong {
+		t.Fatalf("expected http long-poll transport after realtime disconnect fallback, got %#v", state.Connection)
 	}
 }
 

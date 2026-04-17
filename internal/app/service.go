@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -2919,18 +2918,18 @@ func shouldFallbackToLongPoll(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
 	text := strings.ToLower(strings.TrimSpace(err.Error()))
 	for _, marker := range []string{
 		"use of closed network connection",
+		"websocket session closed",
 		"connection reset by peer",
 		"broken pipe",
-		"websocket session closed",
 	} {
 		if strings.Contains(text, marker) {
-			return false
+			return true
 		}
 	}
 	return true
