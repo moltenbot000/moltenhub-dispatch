@@ -823,13 +823,13 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, ">Manual Dispatch<") {
 		t.Fatalf("did not expect previous manual dispatch heading, body=%s", body)
 	}
-	if !strings.Contains(body, "<legend>Agents</legend>") {
+	if !strings.Contains(body, `class="prompt-label">Agents</legend>`) {
 		t.Fatalf("expected connected agent legend copy, body=%s", body)
 	}
 	if !strings.Contains(body, "Skills") {
 		t.Fatalf("expected skills field label, body=%s", body)
 	}
-	if !strings.Contains(body, "<span>Payload</span>") {
+	if !strings.Contains(body, `class="prompt-label">Payload</span>`) {
 		t.Fatalf("expected payload field label, body=%s", body)
 	}
 	if !strings.Contains(body, "Auto-select the first skill of that agent.") {
@@ -844,11 +844,23 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="manual-dispatch-form"`) {
 		t.Fatalf("expected manual dispatch form id for async submit handling, body=%s", body)
 	}
-	if !strings.Contains(body, `class="manual-dispatch-actions"`) {
+	if !strings.Contains(body, `manual-dispatch-actions`) {
 		t.Fatalf("expected manual dispatch submit action wrapper, body=%s", body)
 	}
+	if !strings.Contains(body, `class="prompt-actions manual-dispatch-actions"`) {
+		t.Fatalf("expected manual dispatch actions to reuse studio prompt action layout, body=%s", body)
+	}
+	if !strings.Contains(body, `class="prompt-grid manual-dispatch-selection-grid"`) {
+		t.Fatalf("expected manual dispatch selection row to reuse studio prompt grid layout, body=%s", body)
+	}
+	if !strings.Contains(body, `class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]"`) {
+		t.Fatalf("expected manual dispatch panel header to reuse studio titlebar layout, body=%s", body)
+	}
+	if !strings.Contains(body, `class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel`) {
+		t.Fatalf("expected manual dispatch panel shell to reuse studio prompt-wrap layout, body=%s", body)
+	}
 	statusIndex := strings.Index(body, `id="dispatch-submit-status"`)
-	actionsIndex := strings.Index(body, `class="manual-dispatch-actions"`)
+	actionsIndex := strings.Index(body, `class="prompt-actions-end"`)
 	if statusIndex == -1 || actionsIndex == -1 || statusIndex > actionsIndex {
 		t.Fatalf("expected dispatch status to render before the action row so buttons sit at the footer, body=%s", body)
 	}
@@ -861,10 +873,10 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, `name="log_paths"`) {
 		t.Fatalf("did not expect manual dispatch log paths field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="skill-payload-field" hidden`) {
+	if !strings.Contains(body, `id="skill-payload-field"`) || (!strings.Contains(body, `id="skill-payload-field" hidden`) && !strings.Contains(body, `id="skill-payload-field" class="prompt-field" hidden`)) {
 		t.Fatalf("expected hidden manual dispatch payload field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
+	if !strings.Contains(body, `id="skill-payload-input"`) || !strings.Contains(body, `name="payload"`) {
 		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
 	}
 	if !strings.Contains(body, `placeholder="Describe the task or paste a JSON payload."`) {
@@ -933,7 +945,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch";`) {
 		t.Fatalf("expected dispatch submit reset label to stay aligned with the rendered button copy, body=%s", body)
 	}
-	if !strings.Contains(body, `id="dispatch-submit-status" class="connected-agents-refresh-status"`) {
+	if !strings.Contains(body, `id="dispatch-submit-status"`) || !strings.Contains(body, `connected-agents-refresh-status`) {
 		t.Fatalf("expected inline dispatch status region for async dispatch feedback, body=%s", body)
 	}
 	if !strings.Contains(body, `await fetch("/api/dispatch"`) {
@@ -1999,6 +2011,9 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
+	}
+	if !strings.Contains(body, `.dispatch-workbench-panel::before {`) || !strings.Contains(body, `display: none;`) {
+		t.Fatalf("expected dispatch workbench panel to disable extra chrome so it matches the studio shell, body=%s", body)
 	}
 	if !strings.Contains(body, `#dispatch-submit-status:empty {`) {
 		t.Fatalf("expected empty dispatch submit status to collapse so the footer buttons stay flush, body=%s", body)
