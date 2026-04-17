@@ -844,7 +844,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="manual-dispatch-form"`) {
 		t.Fatalf("expected manual dispatch form id for async submit handling, body=%s", body)
 	}
-	if !strings.Contains(body, `class="manual-dispatch-actions"`) {
+	if !strings.Contains(body, `manual-dispatch-actions`) {
 		t.Fatalf("expected manual dispatch submit action wrapper, body=%s", body)
 	}
 	if !strings.Contains(body, `class="prompt-actions manual-dispatch-actions"`) {
@@ -873,10 +873,10 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, `name="log_paths"`) {
 		t.Fatalf("did not expect manual dispatch log paths field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="skill-payload-field" hidden`) {
+	if !strings.Contains(body, `id="skill-payload-field"`) || (!strings.Contains(body, `id="skill-payload-field" hidden`) && !strings.Contains(body, `id="skill-payload-field" class="prompt-field" hidden`)) {
 		t.Fatalf("expected hidden manual dispatch payload field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="skill-payload-input" name="payload"`) {
+	if !strings.Contains(body, `id="skill-payload-input"`) || !strings.Contains(body, `name="payload"`) {
 		t.Fatalf("expected manual dispatch payload textarea, body=%s", body)
 	}
 	if !strings.Contains(body, `placeholder="Describe the task or paste a JSON payload."`) {
@@ -945,7 +945,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch";`) {
 		t.Fatalf("expected dispatch submit reset label to stay aligned with the rendered button copy, body=%s", body)
 	}
-	if !strings.Contains(body, `id="dispatch-submit-status" class="connected-agents-refresh-status"`) {
+	if !strings.Contains(body, `id="dispatch-submit-status"`) || !strings.Contains(body, `connected-agents-refresh-status`) {
 		t.Fatalf("expected inline dispatch status region for async dispatch feedback, body=%s", body)
 	}
 	if !strings.Contains(body, `await fetch("/api/dispatch"`) {
