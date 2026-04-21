@@ -1672,6 +1672,18 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const mergeActivityFeed = (tasks, events) => {`) {
 		t.Fatalf("expected activity feed merge helper, body=%s", body)
 	}
+	if !strings.Contains(body, `let activityFeedExpandedKeys = new Set();`) {
+		t.Fatalf("expected activity feed expanded-state cache, body=%s", body)
+	}
+	if !strings.Contains(body, `const activityFeedItemKey = (item) => {`) {
+		t.Fatalf("expected activity feed stable-key helper, body=%s", body)
+	}
+	if !strings.Contains(body, `const expanded = activityFeedExpandedKeys.has(activityKey);`) {
+		t.Fatalf("expected activity feed refresh to reuse expanded cards, body=%s", body)
+	}
+	if !strings.Contains(body, `activityFeedExpandedKeys = nextExpandedKeys;`) {
+		t.Fatalf("expected activity feed refresh to persist open-card state, body=%s", body)
+	}
 	if !strings.Contains(body, `runtimeTargetAgentLabel(task)`) {
 		t.Fatalf("expected consolidated feed to resolve pending-task target-agent label, body=%s", body)
 	}
