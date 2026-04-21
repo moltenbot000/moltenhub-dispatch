@@ -793,13 +793,27 @@
         if (!(toggle instanceof HTMLButtonElement) || !(body instanceof HTMLElement)) {
           return;
         }
-        toggle.addEventListener("click", () => {
-          const expanded = toggle.getAttribute("aria-expanded") === "true";
-          const nextExpanded = !expanded;
+        const setExpanded = (expanded) => {
+          const nextExpanded = Boolean(expanded);
           toggle.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
           toggle.textContent = nextExpanded ? "Close" : "Open";
           body.hidden = !nextExpanded;
+        };
+        toggle.addEventListener("click", () => {
+          const expanded = toggle.getAttribute("aria-expanded") === "true";
+          const nextExpanded = !expanded;
+          setExpanded(nextExpanded);
+          const activityKey = trimmedString(card.dataset.runtimeEventKey);
+          if (activityKey === "") {
+            return;
+          }
+          if (nextExpanded) {
+            activityFeedExpandedKeys.add(activityKey);
+            return;
+          }
+          activityFeedExpandedKeys.delete(activityKey);
         });
+        setExpanded(toggle.getAttribute("aria-expanded") === "true");
       };
 
       const initRuntimeEventCards = () => {
@@ -852,6 +866,10 @@
         const card = document.createElement("article");
         card.className = "card runtime-event-card";
         card.setAttribute("data-runtime-event-card", "");
+        const activityKey = trimmedString(options && options.activityKey);
+        if (activityKey !== "") {
+          card.dataset.runtimeEventKey = activityKey;
+        }
 
         const header = document.createElement("div");
         header.className = "runtime-event-card-header";
@@ -877,14 +895,14 @@
         toggle.type = "button";
         toggle.className = "runtime-event-card-toggle";
         toggle.setAttribute("data-runtime-event-toggle", "");
-        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-expanded", Boolean(options && options.expanded) ? "true" : "false");
         toggle.textContent = "Open";
         header.appendChild(toggle);
 
         const body = document.createElement("div");
         body.className = "runtime-event-card-body";
         body.setAttribute("data-runtime-event-body", "");
-        body.hidden = true;
+        body.hidden = !Boolean(options && options.expanded);
         if (typeof bodyBuilder === "function") {
           bodyBuilder(body);
         }
@@ -1613,6 +1631,7 @@
       let latestConnectedAgents = [];
       let latestPendingTasks = [];
       let latestRecentEvents = [];
+      let activityFeedExpandedKeys = new Set();
       let dispatchOverviewDismissTimer = 0;
       let dispatchOverviewDismissedThisSession = false;
 
@@ -2481,6 +2500,32 @@
         return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
       };
 
+      const activityFeedItemKey = (item) => {
+        const kind = trimmedString(item && item.kind) || "activity";
+        const taskID = trimmedString(item && item.taskID);
+        const childRequestID = trimmedString(item && item.childRequestID);
+        const sortAt = Number.isFinite(item && item.sortAt) ? item.sortAt : Number.NEGATIVE_INFINITY;
+        if (kind === "pending_task") {
+          if (taskID !== "") {
+            return `${kind}:task:${taskID}`;
+          }
+          if (childRequestID !== "") {
+            return `${kind}:child:${childRequestID}`;
+          }
+        } else if (kind === "recent_event" && (taskID !== "" || childRequestID !== "")) {
+          return `${kind}:task:${taskID}:child:${childRequestID}:at:${String(sortAt)}:${trimmedString(item && item.title)}`;
+        }
+        const labelSignature = [
+          trimmedString(item && item.title),
+          trimmedString(item && item.subtitle),
+          trimmedString(item && item.skill),
+          trimmedString(item && item.targetAgent),
+          trimmedString(item && item.logPath),
+          String(sortAt),
+        ];
+        return `${kind}:snapshot:${labelSignature.join("|")}`;
+      };
+
       const mergeActivityFeed = (tasks, events) => {
         const feed = [];
         (Array.isArray(tasks) ? tasks : []).forEach((task) => {
@@ -2542,12 +2587,16 @@
         const feed = mergeActivityFeed(nextTasks, nextEvents);
         activityFeedList.innerHTML = "";
         if (feed.length === 0) {
+          activityFeedExpandedKeys = new Set();
           activityFeedList.hidden = true;
           activityFeedEmpty.hidden = false;
           syncDispatchOverviewStats();
           return;
         }
+        const nextExpandedKeys = new Set();
         feed.forEach((item) => {
+          const activityKey = activityFeedItemKey(item);
+          const expanded = activityFeedExpandedKeys.has(activityKey);
           const card = createRuntimeEventCard(item.title, (body) => {
             appendRuntimeRow(body, "When", item.when);
             appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
@@ -2569,9 +2618,15 @@
               status.textContent = item.status;
               subtitle.appendChild(status);
             } : null,
+            activityKey,
+            expanded,
           });
+          if (expanded) {
+            nextExpandedKeys.add(activityKey);
+          }
           activityFeedList.appendChild(card);
         });
+        activityFeedExpandedKeys = nextExpandedKeys;
         activityFeedEmpty.hidden = true;
         activityFeedList.hidden = false;
         syncDispatchOverviewStats();
