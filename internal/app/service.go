@@ -1088,8 +1088,8 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 		ParentRequestID:        req.RequestID,
 		ChildRequestID:         childRequestID,
 		OriginalSkillName:      req.SkillName,
-		TargetAgentDisplayName: connectedAgentDisplayName(target),
-		TargetAgentEmoji:       coalesceTrimmed(connectedAgentEmoji(target), "🙂"),
+		TargetAgentDisplayName: ConnectedAgentDisplayName(target),
+		TargetAgentEmoji:       coalesceTrimmed(ConnectedAgentEmoji(target), "🙂"),
 		TargetAgentUUID:        target.AgentUUID,
 		TargetAgentURI:         target.URI,
 		CallerAgentUUID:        callerAgentUUID,
@@ -1192,7 +1192,7 @@ func resolveDispatchSkillName(target ConnectedAgent, skillName string) (string, 
 	}
 
 	var inferred string
-	for _, skill := range connectedAgentSkills(target) {
+	for _, skill := range ConnectedAgentSkills(target) {
 		name := strings.TrimSpace(skill.Name)
 		if name == "" {
 			continue
@@ -1880,24 +1880,35 @@ func failureLogPaths(pending PendingTask) []string {
 
 func connectedAgentNameOrRef(agent ConnectedAgent) string {
 	return coalesceTrimmed(
-		connectedAgentDisplayName(agent),
+		ConnectedAgentDisplayName(agent),
 		connectedAgentSecondaryRef(agent),
 	)
 }
 
-func connectedAgentDisplayName(agent ConnectedAgent) string {
-	metadata := connectedAgentMetadata(agent)
-	if metadata != nil && strings.TrimSpace(metadata.DisplayName) != "" {
-		return strings.TrimSpace(metadata.DisplayName)
+func ConnectedAgentLabelCandidates(agent ConnectedAgent) []string {
+	metadataDisplayName := ""
+	if metadata := connectedAgentMetadata(agent); metadata != nil {
+		metadataDisplayName = metadata.DisplayName
 	}
-	return coalesceTrimmed(agent.DisplayName, agent.Handle, agent.AgentID, agent.URI, agent.AgentUUID, "Unknown agent")
+	return []string{
+		metadataDisplayName,
+		agent.DisplayName,
+		agent.Handle,
+		agent.AgentID,
+		agent.URI,
+		agent.AgentUUID,
+	}
+}
+
+func ConnectedAgentDisplayName(agent ConnectedAgent) string {
+	return coalesceTrimmed(append(ConnectedAgentLabelCandidates(agent), "Unknown agent")...)
 }
 
 func connectedAgentSecondaryRef(agent ConnectedAgent) string {
 	return coalesceTrimmed(agent.AgentID, agent.URI, agent.Handle, agent.AgentUUID)
 }
 
-func connectedAgentEmoji(agent ConnectedAgent) string {
+func ConnectedAgentEmoji(agent ConnectedAgent) string {
 	metadata := connectedAgentMetadata(agent)
 	if metadata != nil && strings.TrimSpace(metadata.Emoji) != "" {
 		return strings.TrimSpace(metadata.Emoji)
@@ -1905,7 +1916,7 @@ func connectedAgentEmoji(agent ConnectedAgent) string {
 	return strings.TrimSpace(agent.Emoji)
 }
 
-func connectedAgentPresenceStatus(agent ConnectedAgent) string {
+func ConnectedAgentPresenceStatus(agent ConnectedAgent) string {
 	metadata := connectedAgentMetadata(agent)
 	if metadata != nil && metadata.Presence != nil && strings.EqualFold(strings.TrimSpace(metadata.Presence.Status), "online") {
 		return "online"
@@ -1924,7 +1935,7 @@ func connectedAgentSupportsSkill(agent ConnectedAgent, skillName string) bool {
 	if skillName == "" {
 		return false
 	}
-	for _, skill := range connectedAgentSkills(agent) {
+	for _, skill := range ConnectedAgentSkills(agent) {
 		if strings.EqualFold(skill.Name, skillName) {
 			return true
 		}
@@ -1932,7 +1943,7 @@ func connectedAgentSupportsSkill(agent ConnectedAgent, skillName string) bool {
 	return false
 }
 
-func connectedAgentSkills(agent ConnectedAgent) []Skill {
+func ConnectedAgentSkills(agent ConnectedAgent) []Skill {
 	metadata := connectedAgentMetadata(agent)
 	if metadata != nil {
 		for _, raw := range []any{metadata.Skills, metadata.AdvertisedSkills} {
@@ -2528,7 +2539,7 @@ func connectedAgentMetadataFromCapabilityEntry(entry map[string]any, sources []m
 		Presence:        connectedAgentPresenceFromCapabilitySources(sources),
 	}
 	if skills := capabilitySkills(entry, nestedMap(entry, "metadata"), nestedMap(entry, "agent")); len(skills) > 0 {
-		metadata.AdvertisedSkills = skillMetadataFromSkills(skills)
+		metadata.AdvertisedSkills = SkillsToMetadata(skills)
 	}
 	if metadataEmpty(metadata) {
 		return nil
@@ -2594,7 +2605,7 @@ func normalizeCapabilityPresenceStatus(status string) string {
 	}
 }
 
-func skillMetadataFromSkills(skills []Skill) []map[string]any {
+func SkillsToMetadata(skills []Skill) []map[string]any {
 	if len(skills) == 0 {
 		return nil
 	}

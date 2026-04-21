@@ -347,7 +347,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		Handle:    strings.TrimSpace(r.FormValue("id")),
 		Metadata: &hub.AgentMetadata{
 			DisplayName: strings.TrimSpace(r.FormValue("name")),
-			Skills:      skillsToMetadata(parseSkills(strings.TrimSpace(r.FormValue("skills")))),
+			Skills:      app.SkillsToMetadata(parseSkills(strings.TrimSpace(r.FormValue("skills")))),
 		},
 	}
 	if err := s.service.AddConnectedAgent(agent); err != nil {
@@ -583,37 +583,8 @@ func parseSkills(raw string) []app.Skill {
 	return skills
 }
 
-func skillsToMetadata(skills []app.Skill) []map[string]any {
-	if len(skills) == 0 {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(skills))
-	for _, skill := range skills {
-		name := strings.TrimSpace(skill.Name)
-		if name == "" {
-			continue
-		}
-		entry := map[string]any{"name": name}
-		if description := strings.TrimSpace(skill.Description); description != "" {
-			entry["description"] = description
-		}
-		out = append(out, entry)
-	}
-	return out
-}
-
 func connectedAgentDisplayName(agent app.ConnectedAgent) string {
-	displayName := ""
-	if agent.Metadata != nil {
-		displayName = agent.Metadata.DisplayName
-	}
-	for _, candidate := range []string{
-		displayName,
-		agent.DisplayName,
-		agent.Handle,
-		agent.AgentID,
-		agent.URI,
-	} {
+	for _, candidate := range app.ConnectedAgentLabelCandidates(agent) {
 		if label := visibleAgentLabel(candidate); label != "" {
 			return label
 		}
@@ -622,16 +593,7 @@ func connectedAgentDisplayName(agent app.ConnectedAgent) string {
 }
 
 func connectedAgentPresenceStatus(agent app.ConnectedAgent) string {
-	if agent.Metadata != nil && agent.Metadata.Presence != nil && strings.EqualFold(strings.TrimSpace(agent.Metadata.Presence.Status), "online") {
-		return "online"
-	}
-	if agent.Presence != nil && strings.EqualFold(strings.TrimSpace(agent.Presence.Status), "online") {
-		return "online"
-	}
-	if strings.EqualFold(strings.TrimSpace(agent.Status), "online") {
-		return "online"
-	}
-	return "offline"
+	return app.ConnectedAgentPresenceStatus(agent)
 }
 
 func connectedAgentPresenceLabel(agent app.ConnectedAgent) string {
@@ -642,107 +604,38 @@ func connectedAgentPresenceLabel(agent app.ConnectedAgent) string {
 }
 
 func connectedAgentEmoji(agent app.ConnectedAgent) string {
-	if agent.Metadata != nil {
-		if emoji := strings.TrimSpace(agent.Metadata.Emoji); emoji != "" {
-			return emoji
-		}
-	}
-	if emoji := strings.TrimSpace(agent.Emoji); emoji != "" {
+	if emoji := strings.TrimSpace(app.ConnectedAgentEmoji(agent)); emoji != "" {
 		return emoji
 	}
 	return "🤖"
 }
 
 func connectedAgentSkills(agent app.ConnectedAgent) []app.Skill {
-	rawSkills := make([]any, 0, 4)
-	if agent.Metadata != nil {
-		rawSkills = append(rawSkills, agent.Metadata.Skills, agent.Metadata.AdvertisedSkills)
-	}
-	rawSkills = append(rawSkills, agent.Skills, agent.AdvertisedSkills)
-	for _, raw := range rawSkills {
-		if skills := skillSliceFromAny(raw); len(skills) > 0 {
-			return skills
-		}
-	}
-	return nil
+	return dedupeSkills(app.ConnectedAgentSkills(agent))
 }
 
-func skillSliceFromAny(value any) []app.Skill {
-	switch typed := value.(type) {
-	case []app.Skill:
-		out := make([]app.Skill, 0, len(typed))
-		seen := make(map[string]struct{}, len(typed))
-		for _, entry := range typed {
-			name := strings.TrimSpace(entry.Name)
-			if name == "" {
-				continue
-			}
-			key := strings.ToLower(name)
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			out = append(out, app.Skill{
-				Name:        name,
-				Description: strings.TrimSpace(entry.Description),
-			})
-		}
-		return out
-	case []map[string]any:
-		out := make([]app.Skill, 0, len(typed))
-		seen := make(map[string]struct{}, len(typed))
-		for _, entry := range typed {
-			name := strings.TrimSpace(support.StringFromMap(entry, "name"))
-			if name == "" {
-				continue
-			}
-			key := strings.ToLower(name)
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-			out = append(out, app.Skill{
-				Name:        name,
-				Description: strings.TrimSpace(support.StringFromMap(entry, "description")),
-			})
-		}
-		return out
-	case []any:
-		out := make([]app.Skill, 0, len(typed))
-		seen := make(map[string]struct{}, len(typed))
-		for _, entry := range typed {
-			switch item := entry.(type) {
-			case string:
-				name := strings.TrimSpace(item)
-				if name == "" {
-					continue
-				}
-				key := strings.ToLower(name)
-				if _, ok := seen[key]; ok {
-					continue
-				}
-				seen[key] = struct{}{}
-				out = append(out, app.Skill{Name: name})
-			case map[string]any:
-				name := strings.TrimSpace(support.StringFromMap(item, "name"))
-				if name == "" {
-					continue
-				}
-				key := strings.ToLower(name)
-				if _, ok := seen[key]; ok {
-					continue
-				}
-				seen[key] = struct{}{}
-				out = append(out, app.Skill{
-					Name:        name,
-					Description: strings.TrimSpace(support.StringFromMap(item, "description")),
-				})
-			}
-		}
-		return out
-	default:
+func dedupeSkills(skills []app.Skill) []app.Skill {
+	if len(skills) == 0 {
 		return nil
 	}
+	out := make([]app.Skill, 0, len(skills))
+	seen := make(map[string]struct{}, len(skills))
+	for _, skill := range skills {
+		name := strings.TrimSpace(skill.Name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, app.Skill{
+			Name:        name,
+			Description: strings.TrimSpace(skill.Description),
+		})
+	}
+	return out
 }
 
 func visibleAgentLabel(value string) string {
@@ -791,24 +684,24 @@ type statusView struct {
 }
 
 type activityFeedItem struct {
-	SortAt             time.Time
-	Kind               string
-	Title              string
-	Subtitle           string
-	Status             string
-	StatusClass        string
-	WhenLabel          string
-	Detail             string
-	Level              string
-	Skill              string
-	TargetAgent        string
-	TaskID             string
-	ChildRequestID     string
-	LogPath            string
-	Repo               string
-	ExpiresAtLabel     string
-	IsPendingTask      bool
-	IsRecentEvent      bool
+	SortAt         time.Time
+	Kind           string
+	Title          string
+	Subtitle       string
+	Status         string
+	StatusClass    string
+	WhenLabel      string
+	Detail         string
+	Level          string
+	Skill          string
+	TargetAgent    string
+	TaskID         string
+	ChildRequestID string
+	LogPath        string
+	Repo           string
+	ExpiresAtLabel string
+	IsPendingTask  bool
+	IsRecentEvent  bool
 }
 
 type subActionView struct {
@@ -887,7 +780,7 @@ func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []ac
 		items = append(items, activityFeedItem{
 			SortAt:         task.CreatedAt,
 			Kind:           "pending_task",
-			Title:          firstNonEmpty(target, "Unknown agent"),
+			Title:          support.FirstNonEmptyString(target, "Unknown agent"),
 			Subtitle:       skill,
 			Status:         status,
 			StatusClass:    pendingTaskStatusClass(task.Status),
@@ -905,7 +798,7 @@ func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []ac
 	for _, event := range events {
 		target := runtimeTargetAgentLabel(event.TargetAgentDisplayName, event.TargetAgentEmoji, event.TargetAgentUUID, event.TargetAgentURI)
 		skill := strings.TrimSpace(event.OriginalSkillName)
-		title := firstNonEmpty(target, strings.TrimSpace(event.Title), "Runtime event")
+		title := support.FirstNonEmptyString(target, strings.TrimSpace(event.Title), "Runtime event")
 		subtitle := ""
 		if target != "" {
 			subtitle = joinNonEmpty(" • ", skill, strings.TrimSpace(event.Title))
@@ -947,9 +840,9 @@ func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []ac
 func runtimeTargetAgentLabel(displayName, emoji, uuid, uri string) string {
 	displayName = strings.TrimSpace(displayName)
 	if displayName != "" {
-		return strings.TrimSpace(firstNonEmpty(strings.TrimSpace(emoji), "🤖") + " " + displayName)
+		return strings.TrimSpace(support.FirstNonEmptyString(strings.TrimSpace(emoji), "🤖") + " " + displayName)
 	}
-	return firstNonEmpty(strings.TrimSpace(uuid), strings.TrimSpace(uri))
+	return support.FirstNonEmptyString(strings.TrimSpace(uuid), strings.TrimSpace(uri))
 }
 
 func pendingTaskStatusLabel(status string) string {
@@ -971,15 +864,6 @@ func formatTimestamp(value time.Time) string {
 		return ""
 	}
 	return value.Local().Format(time.RFC822)
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }
 
 func joinNonEmpty(sep string, values ...string) string {

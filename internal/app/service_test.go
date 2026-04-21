@@ -3238,10 +3238,10 @@ func TestRefreshConnectedAgentsUsesControlPlaneTalkablePeers(t *testing.T) {
 	if got, want := agent.URI, "https://hub.example/v1/agents/peer-uuid"; got != want {
 		t.Fatalf("agent uri = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentDisplayName(agent), "Codex Beast"; got != want {
+	if got, want := ConnectedAgentDisplayName(agent), "Codex Beast"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentEmoji(agent), "🤖"; got != want {
+	if got, want := ConnectedAgentEmoji(agent), "🤖"; got != want {
 		t.Fatalf("emoji = %q, want %q", got, want)
 	}
 }
@@ -3295,10 +3295,10 @@ func TestRefreshConnectedAgentsFallsBackToCommunicationTalkablePeers(t *testing.
 	if got, want := agent.URI, "https://hub.example/v1/agents/peer-uuid"; got != want {
 		t.Fatalf("agent uri = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentDisplayName(agent), "Peer Without ID"; got != want {
+	if got, want := ConnectedAgentDisplayName(agent), "Peer Without ID"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentEmoji(agent), "🛰️"; got != want {
+	if got, want := ConnectedAgentEmoji(agent), "🛰️"; got != want {
 		t.Fatalf("emoji = %q, want %q", got, want)
 	}
 }
@@ -3358,7 +3358,7 @@ func TestRefreshConnectedAgentsRetainsPeerCatalogSkillsWhenTalkablePeersExist(t 
 	if len(agents) != 1 {
 		t.Fatalf("expected one peer agent, got %#v", agents)
 	}
-	if skills := connectedAgentSkills(agents[0]); len(skills) != 1 || skills[0].Name != "review_openapi" {
+	if skills := ConnectedAgentSkills(agents[0]); len(skills) != 1 || skills[0].Name != "review_openapi" {
 		t.Fatalf("expected peer skill catalog skills to survive talkable peer fallback, got %#v", skills)
 	}
 }
@@ -3421,13 +3421,13 @@ func TestRefreshConnectedAgentsMergesPeerCatalogSkillsWithTalkablePeerProfile(t 
 		t.Fatalf("expected one peer agent, got %#v", agents)
 	}
 	agent := agents[0]
-	if got, want := connectedAgentDisplayName(agent), "Codex Beast"; got != want {
+	if got, want := ConnectedAgentDisplayName(agent), "Codex Beast"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentEmoji(agent), "🤖"; got != want {
+	if got, want := ConnectedAgentEmoji(agent), "🤖"; got != want {
 		t.Fatalf("emoji = %q, want %q", got, want)
 	}
-	if skills := connectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_openapi" {
+	if skills := ConnectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_openapi" {
 		t.Fatalf("expected merged agent to keep peer skill catalog skills, got %#v", skills)
 	}
 }
@@ -3490,16 +3490,16 @@ func TestRefreshConnectedAgentsUsesPeerSkillCatalogFromCapabilities(t *testing.T
 	if got, want := agent.AgentID, "peer-agent"; got != want {
 		t.Fatalf("agent id = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentDisplayName(agent), "Peer Agent"; got != want {
+	if got, want := ConnectedAgentDisplayName(agent), "Peer Agent"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentEmoji(agent), "🛠"; got != want {
+	if got, want := ConnectedAgentEmoji(agent), "🛠"; got != want {
 		t.Fatalf("emoji = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentPresenceStatus(agent), "online"; got != want {
+	if got, want := ConnectedAgentPresenceStatus(agent), "online"; got != want {
 		t.Fatalf("presence = %q, want %q", got, want)
 	}
-	skills := connectedAgentSkills(agent)
+	skills := ConnectedAgentSkills(agent)
 	if len(skills) != 1 || skills[0].Name != "review_failure_logs" {
 		t.Fatalf("expected skills from hub metadata, got %#v", skills)
 	}
@@ -3562,10 +3562,10 @@ func TestRefreshConnectedAgentsAcceptsPeerCatalogSkillFields(t *testing.T) {
 	if len(agents) != 2 {
 		t.Fatalf("expected two peer agents, got %#v", agents)
 	}
-	if skills := connectedAgentSkills(agents[0]); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
+	if skills := ConnectedAgentSkills(agents[0]); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
 		t.Fatalf("expected metadata.advertised_skills fallback, got %#v", skills)
 	}
-	if skills := connectedAgentSkills(agents[1]); len(skills) != 1 || skills[0].Name != "review_openapi" {
+	if skills := ConnectedAgentSkills(agents[1]); len(skills) != 1 || skills[0].Name != "review_openapi" {
 		t.Fatalf("expected agent.advertised_skills fallback, got %#v", skills)
 	}
 }
@@ -3621,16 +3621,16 @@ func TestRefreshConnectedAgentsAcceptsHubProfileFieldsAtAgentRoot(t *testing.T) 
 	if agent.Metadata == nil {
 		t.Fatalf("expected metadata synthesized from root capability fields, got %#v", agent)
 	}
-	if got, want := connectedAgentDisplayName(agent), "Peer Agent"; got != want {
+	if got, want := ConnectedAgentDisplayName(agent), "Peer Agent"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentEmoji(agent), "🛠"; got != want {
+	if got, want := ConnectedAgentEmoji(agent), "🛠"; got != want {
 		t.Fatalf("emoji = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentPresenceStatus(agent), "online"; got != want {
+	if got, want := ConnectedAgentPresenceStatus(agent), "online"; got != want {
 		t.Fatalf("presence = %q, want %q", got, want)
 	}
-	if skills := connectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
+	if skills := ConnectedAgentSkills(agent); len(skills) != 1 || skills[0].Name != "review_failure_logs" {
 		t.Fatalf("expected root-level skills from capabilities response, got %#v", skills)
 	}
 }
@@ -3676,10 +3676,10 @@ func TestRefreshConnectedAgentsAcceptsDisplayNameAliasesFromPeerCatalog(t *testi
 	if len(agents) != 1 {
 		t.Fatalf("expected one connected agent, got %#v", agents)
 	}
-	if got, want := connectedAgentDisplayName(agents[0]), "Peer Agent"; got != want {
+	if got, want := ConnectedAgentDisplayName(agents[0]), "Peer Agent"; got != want {
 		t.Fatalf("display name = %q, want %q", got, want)
 	}
-	if got, want := connectedAgentEmoji(agents[0]), "🧪"; got != want {
+	if got, want := ConnectedAgentEmoji(agents[0]), "🧪"; got != want {
 		t.Fatalf("emoji = %q, want %q", got, want)
 	}
 }

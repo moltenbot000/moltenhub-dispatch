@@ -165,7 +165,7 @@ func FindConnectedAgent(agents []ConnectedAgent, ref string) (ConnectedAgent, bo
 			strings.EqualFold(agent.AgentID, ref) ||
 			strings.EqualFold(agent.Handle, ref) ||
 			strings.EqualFold(agent.URI, ref) ||
-			strings.EqualFold(connectedAgentDisplayName(agent), ref) {
+			strings.EqualFold(ConnectedAgentDisplayName(agent), ref) {
 			return agent, true
 		}
 	}
