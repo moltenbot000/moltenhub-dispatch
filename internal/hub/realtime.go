@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,7 +14,11 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var websocketHeartbeatInterval = 15 * time.Second
+var (
+	websocketHeartbeatInterval = 15 * time.Second
+	websocketDialTimeout       = 8 * time.Second
+	websocketHandshakeTimeout  = 8 * time.Second
+)
 
 type RealtimeSession interface {
 	Receive(ctx context.Context) (PullResponse, error)
@@ -42,6 +47,10 @@ type realtimeEnvelope struct {
 }
 
 func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	wsURL, err := websocketURL(c.baseURL, c.openClawWebsocketEndpoint(), sessionKey)
 	if err != nil {
 		return nil, err
@@ -50,6 +59,9 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 	config, err := websocket.NewConfig(wsURL, httpOriginFor(wsURL))
 	if err != nil {
 		return nil, fmt.Errorf("create websocket config: %w", err)
+	}
+	if timeout := boundedTimeout(ctx, websocketDialTimeout); timeout > 0 {
+		config.Dialer = &net.Dialer{Timeout: timeout}
 	}
 	config.Header = http.Header{
 		"Authorization": []string{"Bearer " + token},
@@ -65,7 +77,9 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 		conn:   conn,
 		closed: make(chan struct{}),
 	}
-	first, err := session.readEnvelope(ctx)
+	handshakeCtx, cancelHandshake := context.WithTimeout(ctx, boundedTimeout(ctx, websocketHandshakeTimeout))
+	defer cancelHandshake()
+	first, err := session.readEnvelope(handshakeCtx)
 	if err != nil {
 		_ = session.Close()
 		return nil, err
@@ -77,6 +91,25 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 	session.bindContext(ctx)
 	session.startHeartbeat(ctx)
 	return session, nil
+}
+
+func boundedTimeout(ctx context.Context, fallback time.Duration) time.Duration {
+	if fallback <= 0 {
+		return 0
+	}
+	if ctx == nil {
+		return fallback
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		switch {
+		case remaining <= 0:
+			return time.Millisecond
+		case remaining < fallback:
+			return remaining
+		}
+	}
+	return fallback
 }
 
 func (c *Client) openClawWebsocketEndpoint() string {

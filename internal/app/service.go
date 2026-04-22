@@ -28,6 +28,7 @@ const (
 	hubPingRetryInterval  = 12 * time.Second
 	hubPingRequestTimeout = 6 * time.Second
 	wsFallbackWindow      = 30 * time.Second
+	wsUpgradeRetryWindow  = 5 * time.Second
 )
 
 var advertisedSkills = []Skill{
@@ -63,6 +64,7 @@ type Service struct {
 	hubPingRetryDelay   time.Duration
 	hubPingCheckTimeout time.Duration
 	wsFallbackWindow    time.Duration
+	wsUpgradeRetryDelay time.Duration
 	presenceSynced      bool
 	presenceTransport   string
 }
@@ -92,6 +94,7 @@ func NewService(store *Store, hubClient HubClient) *Service {
 		hubPingRetryDelay:   hubPingRetryInterval,
 		hubPingCheckTimeout: hubPingRequestTimeout,
 		wsFallbackWindow:    wsFallbackWindow,
+		wsUpgradeRetryDelay: wsUpgradeRetryWindow,
 	}
 	service.configureHubClient(snapshot)
 	return service
@@ -554,32 +557,21 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 			continue
 		}
 		if realtime, ok := s.hub.(realtimeHubClient); ok {
-			session, err := realtime.ConnectOpenClaw(ctx, state.Session.AgentToken, state.Settings.SessionKey)
+			fallback, err := s.runRealtimeCycle(ctx, realtime, state.Session.AgentToken, state.Settings.SessionKey)
 			if err == nil {
-				if err := s.ensurePresenceOnline(ctx, ConnectionTransportWebSocket); err != nil {
-					_ = session.Close()
-					if ctx.Err() != nil {
-						return
-					}
-					if isUnauthorizedHubError(err) {
-						return
-					}
-					if !sleepWithContext(ctx, s.pollInterval()) {
-						return
-					}
-					continue
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			if isUnauthorizedHubError(err) {
+				return
+			}
+			if !fallback {
+				if !sleepWithContext(ctx, s.pollInterval()) {
+					return
 				}
-				s.noteHubInteraction(nil, ConnectionTransportWebSocket)
-				err = s.consumeRealtimeSession(ctx, session)
-				if err == nil || ctx.Err() != nil {
-					continue
-				}
-				if !shouldFallbackToLongPoll(err) {
-					if !sleepWithContext(ctx, s.pollInterval()) {
-						return
-					}
-					continue
-				}
+				continue
 			}
 			s.noteRealtimeFallback(err)
 			if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTPLong); err != nil {
@@ -594,7 +586,7 @@ func (s *Service) RunHubLoop(ctx context.Context) {
 				}
 				continue
 			}
-			if err := s.runHTTPFallbackWindow(ctx); err != nil {
+			if err := s.runHTTPFallbackWindow(ctx, realtime); err != nil {
 				return
 			}
 			continue
@@ -642,12 +634,39 @@ func (s *Service) pollOnceWithTimeout(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (s *Service) runHTTPFallbackWindow(ctx context.Context) error {
+func (s *Service) runRealtimeCycle(ctx context.Context, realtime realtimeHubClient, token, sessionKey string) (bool, error) {
+	session, err := realtime.ConnectOpenClaw(ctx, token, sessionKey)
+	if err != nil {
+		return true, err
+	}
+
+	if err := s.ensurePresenceOnline(ctx, ConnectionTransportWebSocket); err != nil {
+		_ = session.Close()
+		return true, err
+	}
+
+	s.noteHubInteraction(nil, ConnectionTransportWebSocket)
+	err = s.consumeRealtimeSession(ctx, session)
+	if err == nil || ctx.Err() != nil {
+		return false, err
+	}
+	if shouldFallbackToLongPoll(err) {
+		return true, err
+	}
+	return false, err
+}
+
+func (s *Service) runHTTPFallbackWindow(ctx context.Context, realtime realtimeHubClient) error {
 	window := s.wsFallbackWindow
 	if window <= 0 {
 		window = wsFallbackWindow
 	}
 	deadline := time.Now().Add(window)
+	wsRetryDelay := s.wsUpgradeRetryDelay
+	if wsRetryDelay <= 0 {
+		wsRetryDelay = wsUpgradeRetryWindow
+	}
+	nextWSAttempt := time.Now().Add(wsRetryDelay)
 
 	for {
 		if ctx.Err() != nil {
@@ -661,6 +680,34 @@ func (s *Service) runHTTPFallbackWindow(ctx context.Context) error {
 				return ctx.Err()
 			}
 			continue
+		}
+		if realtime != nil && !time.Now().Before(nextWSAttempt) {
+			state := s.store.Snapshot()
+			token := strings.TrimSpace(state.Session.AgentToken)
+			if token == "" {
+				return nil
+			}
+			fallback, err := s.runRealtimeCycle(ctx, realtime, token, state.Settings.SessionKey)
+			if err == nil || ctx.Err() != nil {
+				return err
+			}
+			if isUnauthorizedHubError(err) {
+				return err
+			}
+			if fallback {
+				s.noteRealtimeFallback(err)
+				if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTPLong); err != nil {
+					if isUnauthorizedHubError(err) {
+						return err
+					}
+					if !sleepWithContext(ctx, s.pollInterval()) {
+						return ctx.Err()
+					}
+					nextWSAttempt = time.Now().Add(wsRetryDelay)
+					continue
+				}
+			}
+			nextWSAttempt = time.Now().Add(wsRetryDelay)
 		}
 		if time.Now().After(deadline) {
 			return nil

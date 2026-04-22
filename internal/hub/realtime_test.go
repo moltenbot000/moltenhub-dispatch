@@ -46,6 +46,38 @@ func TestWebsocketURLIncludesSessionKeyAliases(t *testing.T) {
 	}
 }
 
+func TestBoundedTimeoutUsesFallbackWithoutDeadline(t *testing.T) {
+	t.Parallel()
+
+	got := boundedTimeout(context.Background(), 3*time.Second)
+	if got != 3*time.Second {
+		t.Fatalf("boundedTimeout() = %v, want %v", got, 3*time.Second)
+	}
+}
+
+func TestBoundedTimeoutUsesSoonerContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	got := boundedTimeout(ctx, 2*time.Second)
+	if got > 50*time.Millisecond || got <= 0 {
+		t.Fatalf("boundedTimeout() = %v, want value in (0, 50ms]", got)
+	}
+}
+
+func TestBoundedTimeoutClampsExpiredDeadline(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	if got := boundedTimeout(ctx, 2*time.Second); got != time.Millisecond {
+		t.Fatalf("boundedTimeout() = %v, want %v", got, time.Millisecond)
+	}
+}
+
 func TestWebsocketURLSupportsAbsoluteEndpointOverride(t *testing.T) {
 	t.Parallel()
 

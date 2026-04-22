@@ -3048,6 +3048,60 @@ func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T)
 	}
 }
 
+func TestRunHubLoopRetriesWebsocketUpgradeDuringHTTPFallbackWindow(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	service.wsFallbackWindow = 250 * time.Millisecond
+	service.wsUpgradeRetryDelay = 20 * time.Millisecond
+	fake.connectErr = errors.New("websocket unavailable")
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+	fake.pullOK = false
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.PollInterval = 10 * time.Millisecond
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunHubLoop(ctx)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if fake.connectCalls >= 2 && fake.pullCalls > 0 {
+			break
+		}
+		select {
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatalf("expected websocket upgrade retries during HTTP fallback; connect_calls=%d pull_calls=%d", fake.connectCalls, fake.pullCalls)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-done
+
+	if fake.connectCalls < 2 {
+		t.Fatalf("expected at least two websocket connect attempts during fallback window, got %d", fake.connectCalls)
+	}
+	if fake.pullCalls == 0 {
+		t.Fatalf("expected HTTP long-poll fallback to continue while websocket retries were in progress, got %d pulls", fake.pullCalls)
+	}
+}
+
 func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	t.Parallel()
 
