@@ -185,6 +185,22 @@
   box-sizing: border-box;
 }
 
+.lucide,
+[data-lucide] {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
+.lucide {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--lucide-stroke-width, 1.8);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
 html,
 body {
   min-height: 100%;
@@ -890,7 +906,9 @@ body .right-col.prompt-collapsed.task-list-hidden {
   background: var(--glass-icon-bg);
 }
 
-.prompt-mode-link-icon svg {
+.prompt-mode-link-icon svg,
+.prompt-mode-link-icon .lucide,
+.prompt-mode-link-icon [data-lucide] {
   display: block;
   width: 15px;
   height: 15px;
@@ -1016,7 +1034,9 @@ body .right-col.prompt-collapsed.task-list-hidden {
     transform 180ms ease;
 }
 
-.hub-profile-button svg {
+.hub-profile-button svg,
+.hub-profile-button .lucide,
+.hub-profile-button [data-lucide] {
   width: 15px;
   height: 15px;
   display: block;
@@ -2678,7 +2698,9 @@ select.prompt-control {
   transition: transform 180ms ease;
 }
 
-.hub-emoji-picker-toggle-caret svg {
+.hub-emoji-picker-toggle-caret svg,
+.hub-emoji-picker-toggle-caret .lucide,
+.hub-emoji-picker-toggle-caret [data-lucide] {
   width: 14px;
   height: 14px;
   display: block;
@@ -2999,7 +3021,9 @@ select.prompt-control {
   box-shadow: var(--glass-icon-shadow);
 }
 
-.theme-toggle.theme-toggle-dock .theme-toggle-icon svg {
+.theme-toggle.theme-toggle-dock .theme-toggle-icon svg,
+.theme-toggle.theme-toggle-dock .theme-toggle-icon .lucide,
+.theme-toggle.theme-toggle-dock .theme-toggle-icon [data-lucide] {
   display: block;
   width: 15px;
   height: 15px;
@@ -3632,8 +3656,9 @@ p,
 
 .manual-dispatch-actions {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: flex-end;
 }
 
@@ -3675,10 +3700,14 @@ p,
 }
 
 .manual-dispatch-payload-validation {
-  min-height: 1.3em;
+  min-height: 0;
   color: var(--meta);
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.manual-dispatch-payload-validation:empty {
+  display: none;
 }
 
 .manual-dispatch-payload-validation.is-error {
@@ -4338,7 +4367,9 @@ body.settings-modal-open {
   border-radius: 999px;
 }
 
-.connected-agents-refresh-icon-button svg {
+.connected-agents-refresh-icon-button svg,
+.connected-agents-refresh-icon-button .lucide,
+.connected-agents-refresh-icon-button [data-lucide] {
   width: 18px;
   height: 18px;
   fill: none;
@@ -4376,7 +4407,7 @@ body.settings-modal-open {
 }
 
 #dispatch-submit-status:empty {
-  display: none;
+  visibility: hidden;
 }
 
 .connected-agents-refresh-status.is-error {
@@ -4491,21 +4522,18 @@ body.settings-modal-open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border-radius: 999px;
   border: 1px solid transparent;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
-.connected-agent-presence-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 14%, transparent);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+.connected-agent-presence-icon {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.18s ease, filter 0.18s ease;
 }
 
 .connected-agent-presence.is-online {
@@ -4526,10 +4554,10 @@ body.settings-modal-open {
   box-shadow: 0 6px 14px color-mix(in srgb, currentColor 24%, transparent);
 }
 
-.connected-agent-card-button:hover .connected-agent-presence-dot,
-.connected-agent-presence:hover .connected-agent-presence-dot {
+.connected-agent-card-button:hover .connected-agent-presence-icon,
+.connected-agent-presence:hover .connected-agent-presence-icon {
   transform: scale(1.08);
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 34%, transparent));
 }
 
 .connected-agent-selection-badge {
@@ -4563,21 +4591,48 @@ body.settings-modal-open {
   font-size: 0.92rem;
 }
 
+.runtime-event-card {
+  padding: 8px 10px;
+}
+
 .runtime-event-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
 }
 
 .runtime-event-card-header h3 {
   margin: 0;
+  line-height: 1.2;
+}
+
+.runtime-event-card-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.runtime-event-card-title-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--meta);
+}
+
+.runtime-event-card-title-icon-sending {
+  color: var(--running);
+}
+
+.runtime-event-card-title-icon-queued {
+  color: var(--accent);
 }
 
 .runtime-event-card-subtitle {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   color: var(--muted);
   font-size: 0.75rem;
+  line-height: 1.2;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -4609,15 +4664,27 @@ body.settings-modal-open {
 }
 
 .runtime-event-card-toggle {
-  padding: 6px 10px;
+  width: 25px;
+  min-width: 25px;
+  height: 25px;
+  padding: 0;
   border: 1px solid color-mix(in srgb, var(--running) 28%, var(--border));
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-glass-strong) 88%, rgba(10, 132, 255, 0.08));
   color: var(--running);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.runtime-event-card-toggle-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.runtime-event-card-toggle.is-expanded .runtime-event-card-toggle-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .runtime-event-card-toggle:hover,
@@ -4628,6 +4695,11 @@ body.settings-modal-open {
 
 .runtime-event-card-body[hidden] {
   display: none;
+}
+
+.runtime-event-card-body p {
+  margin-top: 3px;
+  line-height: 1.25;
 }
 
 .card p {
@@ -5249,13 +5321,47 @@ legend {
 
 .manual-dispatch-actions {
   margin-top: 0;
-  align-items: center;
+  align-items: stretch;
   justify-content: flex-end;
 }
 
 .manual-dispatch-actions .connected-agents-refresh-status {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+}
+
+#skill-payload-field {
+  gap: 4px;
+}
+
+#dispatch-task-clear {
+  width: 38px;
+  min-width: 38px;
+  min-inline-size: 38px;
+  min-height: 38px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+#dispatch-task-clear .dispatch-task-clear-icon {
+  width: 14px;
+  height: 14px;
+}
+
+#dispatch-task-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+#dispatch-task-submit .dispatch-task-submit-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .dispatch-workbench-panel {
@@ -5490,8 +5596,8 @@ html.night .runtime-option:focus-within {
 }
 
 .runtime-event-card-header {
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 6px;
 }
 
 .runtime-event-card-toggle {

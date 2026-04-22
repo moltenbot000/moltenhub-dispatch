@@ -191,7 +191,7 @@
                           aria-label="{{$presenceLabel}}"
                           role="img"
                         >
-                          <span class="connected-agent-presence-dot" aria-hidden="true"></span>
+                          <i data-lucide="{{if eq $presenceStatus "online"}}circle-check{{else}}circle-x{{end}}" class="connected-agent-presence-icon" aria-hidden="true"></i>
                         </span>
                       </div>
                     </div>
@@ -219,8 +219,20 @@
               <div class="prompt-actions manual-dispatch-actions">
                 <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
                 <div class="prompt-actions-end">
-                  <button id="dispatch-task-clear" type="button" class="prompt-action-button prompt-action-clear">Clear</button>
-                  <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">Dispatch</button>
+                  <button
+                    id="dispatch-task-clear"
+                    type="button"
+                    class="prompt-action-button prompt-action-clear"
+                    aria-label="Clear payload"
+                    title="Clear payload"
+                  >
+                    <i data-lucide="x" class="dispatch-task-clear-icon" aria-hidden="true"></i>
+                    <span class="sr-only">Clear payload</span>
+                  </button>
+                  <button id="dispatch-task-submit" type="submit" class="dispatch-task-button prompt-action-button">
+                    <i data-lucide="send" class="dispatch-task-submit-icon" aria-hidden="true"></i>
+                    <span data-dispatch-submit-label>Dispatch</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -256,7 +268,16 @@
                     </p>
                     {{end}}
                   </div>
-                  <button type="button" class="runtime-event-card-toggle" data-runtime-event-toggle aria-expanded="false">Open</button>
+                  <button
+                    type="button"
+                    class="runtime-event-card-toggle"
+                    data-runtime-event-toggle
+                    aria-expanded="false"
+                    aria-label="Open details"
+                    title="Open details"
+                  >
+                    <i data-lucide="maximize-2" class="runtime-event-card-toggle-icon" aria-hidden="true"></i>
+                  </button>
                 </div>
                 <div class="runtime-event-card-body" data-runtime-event-body hidden>
                   {{if .WhenLabel}}<p><strong>When:</strong> {{.WhenLabel}}</p>{{end}}
@@ -309,9 +330,7 @@
         {{if not .State.Session.AgentToken}}hidden{{end}}>
         <span class="prompt-mode-link-shell" aria-hidden="true"></span>
         <span class="prompt-mode-link-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M10.2 2.4h3.6l.4 2a8 8 0 0 1 1.7.7l1.8-1 2.5 2.5-1 1.8a8 8 0 0 1 .7 1.7l2 .4v3.6l-2 .4a8 8 0 0 1-.7 1.7l1 1.8-2.5 2.5-1.8-1a8 8 0 0 1-1.7.7l-.4 2h-3.6l-.4-2a8 8 0 0 1-1.7-.7l-1.8 1-2.5-2.5 1-1.8a8 8 0 0 1-.7-1.7l-2-.4v-3.6l2-.4a8 8 0 0 1 .7-1.7l-1-1.8L6.3 4l1.8 1a8 8 0 0 1 1.7-.7l.4-2Zm1.8 6a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"></path>
-          </svg>
+          <i data-lucide="settings" aria-hidden="true"></i>
         </span>
         <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
         <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
@@ -371,9 +390,7 @@
                   <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
                 </span>
                 <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <path d="m6 9 6 6 6-6"></path>
-                  </svg>
+                  <i data-lucide="chevron-down" aria-hidden="true"></i>
                 </span>
               </button>
               <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
@@ -413,10 +430,7 @@
                 aria-label="Refresh connected agents"
                 title="Refresh connected agents"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M20 11a8 8 0 1 0 2.1 5.4"></path>
-                  <path d="M20 4v7h-7"></path>
-                </svg>
+                <i data-lucide="refresh-cw" aria-hidden="true"></i>
               </button>
             </div>
             <button type="submit" class="profile-save-button">Save</button>
@@ -511,9 +525,7 @@
                       <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
                     </span>
                     <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                        <path d="m6 9 6 6 6-6"></path>
-                      </svg>
+                      <i data-lucide="chevron-down" aria-hidden="true"></i>
                     </span>
                   </button>
                   <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
@@ -536,6 +548,7 @@
     </section>
   </div>
   {{end}}
+  <script src="/static/lucide.min.js"></script>
   <script id="initial-connected-agents-data" type="application/json">{{toJSON .State.ConnectedAgents}}</script>
   <script id="initial-pending-tasks-data" type="application/json">{{toJSON .State.PendingTasks}}</script>
   <script id="initial-recent-events-data" type="application/json">{{toJSON .State.RecentEvents}}</script>
@@ -619,6 +632,46 @@
       const DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_TICK_MS = 250;
+      const LUCIDE_ICON_ATTR = "data-lucide";
+
+      const lucideAvailable = () => {
+        return typeof window.lucide === "object"
+          && window.lucide !== null
+          && typeof window.lucide.createIcons === "function";
+      };
+
+      const createLucideIconPlaceholder = (name, classNames = []) => {
+        const iconName = trimmedString(name);
+        if (iconName === "") {
+          return null;
+        }
+        const node = document.createElement("i");
+        node.setAttribute(LUCIDE_ICON_ATTR, iconName);
+        node.setAttribute("aria-hidden", "true");
+        const classes = Array.isArray(classNames) ? classNames : [classNames];
+        const normalized = classes
+          .map((entry) => trimmedString(entry))
+          .filter((entry, index, values) => entry !== "" && values.indexOf(entry) === index);
+        if (normalized.length > 0) {
+          node.className = normalized.join(" ");
+        }
+        return node;
+      };
+
+      const hydrateLucideIcons = (root = document) => {
+        if (!lucideAvailable()) {
+          return;
+        }
+        const target = root || document;
+        if (target !== document && !(target instanceof Element) && !(target instanceof DocumentFragment)) {
+          return;
+        }
+        window.lucide.createIcons({
+          root: target,
+          icons: window.lucide.icons,
+          nameAttr: LUCIDE_ICON_ATTR,
+        });
+      };
 
       if (flash) {
         const configuredSeconds = Number.parseFloat(flash.dataset.autoDismissSeconds || "");
@@ -764,9 +817,9 @@
       };
 
       const THEME_ICONS = {
-        light: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
-        dark: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a8 8 0 1 0 9 9 6 6 0 0 1-9-9z"/></svg>',
-        night: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>',
+        light: "sun",
+        dark: "moon",
+        night: "star",
       };
 
       const syncThemeToggle = (theme) => {
@@ -776,12 +829,40 @@
         const currentTheme = THEME_MODES.includes(theme) ? theme : DEFAULT_THEME_MODE;
         const currentLabel = themeLabel(currentTheme);
         themeToggleLabel.textContent = currentLabel;
-        themeToggleIcon.innerHTML = THEME_ICONS[currentTheme] || "";
+        themeToggleIcon.replaceChildren();
+        const iconName = THEME_ICONS[currentTheme];
+        const icon = createLucideIconPlaceholder(iconName, "theme-toggle-glyph");
+        if (icon) {
+          themeToggleIcon.appendChild(icon);
+          hydrateLucideIcons(themeToggleIcon);
+        }
         if (themeToggleTooltip) {
           themeToggleTooltip.textContent = currentLabel;
         }
         themeToggleButton.title = currentLabel;
         themeToggleButton.setAttribute("aria-label", `Switch theme. Currently: ${currentLabel}`);
+      };
+
+      const syncRuntimeEventToggleButton = (toggle, expanded) => {
+        if (!(toggle instanceof HTMLButtonElement)) {
+          return;
+        }
+        const nextExpanded = Boolean(expanded);
+        const actionLabel = nextExpanded ? "Minimize details" : "Open details";
+        toggle.setAttribute("aria-label", actionLabel);
+        toggle.title = actionLabel;
+        toggle.classList.toggle("is-expanded", nextExpanded);
+        toggle.replaceChildren();
+        const icon = createLucideIconPlaceholder(
+          nextExpanded ? "minimize-2" : "maximize-2",
+          "runtime-event-card-toggle-icon"
+        );
+        if (icon) {
+          toggle.appendChild(icon);
+          hydrateLucideIcons(toggle);
+          return;
+        }
+        toggle.textContent = nextExpanded ? "Minimize" : "Open";
       };
 
       const bindRuntimeEventCard = (card) => {
@@ -796,7 +877,7 @@
         const setExpanded = (expanded) => {
           const nextExpanded = Boolean(expanded);
           toggle.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
-          toggle.textContent = nextExpanded ? "Close" : "Open";
+          syncRuntimeEventToggleButton(toggle, nextExpanded);
           body.hidden = !nextExpanded;
         };
         toggle.addEventListener("click", () => {
@@ -877,7 +958,22 @@
         const headerCopy = document.createElement("div");
         const title = document.createElement("h3");
         title.textContent = trimmedString(titleText) || "Runtime event";
-        headerCopy.appendChild(title);
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "runtime-event-card-title-row";
+        const iconName = trimmedString(options && options.iconName);
+        const iconClass = trimmedString(options && options.iconClass);
+        const titleIcon = createLucideIconPlaceholder(
+          iconName,
+          iconClass === ""
+            ? ["runtime-event-card-title-icon"]
+            : ["runtime-event-card-title-icon", iconClass]
+        );
+        if (titleIcon) {
+          titleRow.appendChild(titleIcon);
+        }
+        titleRow.appendChild(title);
+        headerCopy.appendChild(titleRow);
 
         const subtitleText = trimmedString(options && options.subtitleText);
         if (subtitleText !== "") {
@@ -895,8 +991,9 @@
         toggle.type = "button";
         toggle.className = "runtime-event-card-toggle";
         toggle.setAttribute("data-runtime-event-toggle", "");
-        toggle.setAttribute("aria-expanded", Boolean(options && options.expanded) ? "true" : "false");
-        toggle.textContent = "Open";
+        const startsExpanded = Boolean(options && options.expanded);
+        toggle.setAttribute("aria-expanded", startsExpanded ? "true" : "false");
+        syncRuntimeEventToggleButton(toggle, startsExpanded);
         header.appendChild(toggle);
 
         const body = document.createElement("div");
@@ -1338,6 +1435,7 @@
         setEmojiValue(input.value);
       };
 
+      hydrateLucideIcons(document);
       initAppearanceControls();
       trackInitialPageView();
       initSnowfallBackground();
@@ -1868,6 +1966,11 @@
           return;
         }
         dispatchTaskSubmit.disabled = busy;
+        const dispatchLabel = dispatchTaskSubmit.querySelector("[data-dispatch-submit-label]");
+        if (dispatchLabel instanceof HTMLElement) {
+          dispatchLabel.textContent = busy ? "Dispatching..." : "Dispatch";
+          return;
+        }
         dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch";
       };
 
@@ -2389,11 +2492,13 @@
         presence.setAttribute("aria-label", presenceLabel);
         presence.setAttribute("role", "img");
 
-        const presenceDot = document.createElement("span");
-        presenceDot.className = "connected-agent-presence-dot";
-        presenceDot.setAttribute("aria-hidden", "true");
-
-        presence.appendChild(presenceDot);
+        const presenceIcon = createLucideIconPlaceholder(
+          presenceStatus === "online" ? "circle-check" : "circle-x",
+          "connected-agent-presence-icon"
+        );
+        if (presenceIcon) {
+          presence.appendChild(presenceIcon);
+        }
         meta.appendChild(presence);
 
         cardMain.appendChild(meta);
@@ -2495,6 +2600,24 @@
           : "runtime-event-card-status runtime-event-card-status-queued";
       };
 
+      const pendingTaskIconName = (task) => {
+        return trimmedString(task && task.status) === "sending" ? "send" : "clock-3";
+      };
+
+      const recentEventIconName = (event) => {
+        const level = trimmedString(event && event.level).toLowerCase();
+        if (level === "error" || level === "fatal") {
+          return "circle-x";
+        }
+        if (level === "warn" || level === "warning") {
+          return "circle-alert";
+        }
+        if (level === "ok" || level === "success") {
+          return "circle-check";
+        }
+        return "activity";
+      };
+
       const activityTimestamp = (value) => {
         const parsed = Date.parse(trimmedString(value));
         return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
@@ -2538,6 +2661,10 @@
             subtitle: skillName,
             status: pendingTaskStatusLabel(task),
             statusClass: pendingTaskStatusClass(task),
+            iconName: pendingTaskIconName(task),
+            iconClass: trimmedString(task && task.status) === "sending"
+              ? "runtime-event-card-title-icon-sending"
+              : "runtime-event-card-title-icon-queued",
             when: formatRuntimeTimestamp(task && task.created_at),
             skill: skillName,
             targetAgent: target,
@@ -2560,6 +2687,7 @@
             when: formatRuntimeTimestamp(event && event.at),
             level: trimmedString(event && event.level),
             detail: trimmedString(event && event.detail),
+            iconName: recentEventIconName(event),
             skill: skillName,
             targetAgent: target,
             taskID: trimmedString(event && event.task_id),
@@ -2618,6 +2746,8 @@
               status.textContent = item.status;
               subtitle.appendChild(status);
             } : null,
+            iconName: item.iconName,
+            iconClass: item.iconClass,
             activityKey,
             expanded,
           });
@@ -2629,6 +2759,7 @@
         activityFeedExpandedKeys = nextExpandedKeys;
         activityFeedEmpty.hidden = true;
         activityFeedList.hidden = false;
+        hydrateLucideIcons(activityFeedList);
         syncDispatchOverviewStats();
       };
 
@@ -2654,6 +2785,8 @@
             connectedAgentsList.hidden = false;
           }
         }
+        hydrateLucideIcons(manualDispatchTargets);
+        hydrateLucideIcons(connectedAgentsList);
         if (shouldPollConnectedAgents()) {
           scheduleConnectedAgentsAutoRefresh();
           return;
