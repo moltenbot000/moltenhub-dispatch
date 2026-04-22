@@ -4591,6 +4591,54 @@ body.settings-modal-open {
   font-size: 0.92rem;
 }
 
+.activity-feed-list {
+  gap: 14px;
+}
+
+.activity-feed-lane {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-feed-lane-label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--meta);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.activity-feed-lane-order {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.activity-feed-lane-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-bottom: 4px;
+}
+
+.activity-feed-lane-track .runtime-event-card {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
 .runtime-event-card {
   padding: 8px 10px;
 }
@@ -5645,6 +5693,10 @@ pre {
   .shell {
     width: 100%;
     padding-inline: 12px;
+  }
+
+  .activity-feed-lane-track {
+    grid-auto-columns: minmax(80vw, 1fr);
   }
 
   .page-header,
