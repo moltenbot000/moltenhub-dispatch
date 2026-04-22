@@ -1663,6 +1663,9 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `id="activity-feed-list"`) {
 		t.Fatalf("expected activity feed list hook, body=%s", body)
 	}
+	if !strings.Contains(body, `id="activity-feed-list" class="list activity-feed-list"`) {
+		t.Fatalf("expected activity feed list to include lane layout class, body=%s", body)
+	}
 	if !strings.Contains(body, `id="activity-feed-empty"`) {
 		t.Fatalf("expected activity feed empty-state hook, body=%s", body)
 	}
@@ -1683,6 +1686,21 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	}
 	if !strings.Contains(body, `const mergeActivityFeed = (tasks, events) => {`) {
 		t.Fatalf("expected activity feed merge helper, body=%s", body)
+	}
+	if !strings.Contains(body, `const activityFeedLaneKey = (item) => {`) {
+		t.Fatalf("expected activity feed lane grouping key helper, body=%s", body)
+	}
+	if !strings.Contains(body, `const groupActivityFeedLanes = (feed) => {`) {
+		t.Fatalf("expected activity feed lane grouping helper, body=%s", body)
+	}
+	if !strings.Contains(body, `return leftSortAt - rightSortAt;`) {
+		t.Fatalf("expected grouped activity cards to keep oldest events on the left, body=%s", body)
+	}
+	if !strings.Contains(body, `laneTrack.className = "activity-feed-lane-track";`) {
+		t.Fatalf("expected grouped activity renderer to build horizontal lane tracks, body=%s", body)
+	}
+	if !strings.Contains(body, `laneOrder.textContent = "Oldest -> newest";`) {
+		t.Fatalf("expected grouped activity renderer to annotate left-to-right ordering, body=%s", body)
 	}
 	if !strings.Contains(body, `let activityFeedExpandedKeys = new Set();`) {
 		t.Fatalf("expected activity feed expanded-state cache, body=%s", body)
@@ -2065,6 +2083,15 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.runtime-event-card-header {`) {
 		t.Fatalf("expected runtime event card header layout styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.activity-feed-lane-track {`) {
+		t.Fatalf("expected activity feed lane track styles, body=%s", body)
+	}
+	if !strings.Contains(body, `grid-auto-flow: column;`) {
+		t.Fatalf("expected activity feed lanes to stack cards horizontally, body=%s", body)
+	}
+	if !strings.Contains(body, `overflow-x: auto;`) {
+		t.Fatalf("expected horizontal activity lanes to support scrolling, body=%s", body)
 	}
 	if !strings.Contains(body, `.runtime-event-card-toggle {`) {
 		t.Fatalf("expected runtime event toggle button styles, body=%s", body)

@@ -249,7 +249,7 @@
             </div>
           </div>
           <div class="dispatch-panel-body">
-            <div id="activity-feed-list" class="list" {{if not .ActivityFeed}}hidden{{end}}>
+            <div id="activity-feed-list" class="list activity-feed-list" {{if not .ActivityFeed}}hidden{{end}}>
               {{range .ActivityFeed}}
               <article class="card runtime-event-card" data-runtime-event-card>
                 <div class="runtime-event-card-header">
@@ -2703,6 +2703,96 @@
         return feed;
       };
 
+      const activityFeedLaneKey = (item) => {
+        const taskID = trimmedString(item && item.taskID);
+        if (taskID !== "") {
+          return `task:${taskID}`;
+        }
+        const childRequestID = trimmedString(item && item.childRequestID);
+        if (childRequestID !== "") {
+          return `child:${childRequestID}`;
+        }
+        return `item:${activityFeedItemKey(item)}`;
+      };
+
+      const groupActivityFeedLanes = (feed) => {
+        const lanesByKey = new Map();
+        (Array.isArray(feed) ? feed : []).forEach((item) => {
+          const laneKey = activityFeedLaneKey(item);
+          let lane = lanesByKey.get(laneKey);
+          if (!lane) {
+            lane = {
+              key: laneKey,
+              sortAt: Number.NEGATIVE_INFINITY,
+              targetAgent: "",
+              taskID: "",
+              childRequestID: "",
+              fallbackTitle: "",
+              items: [],
+            };
+            lanesByKey.set(laneKey, lane);
+          }
+          lane.items.push(item);
+          const itemSortAt = Number.isFinite(item && item.sortAt) ? item.sortAt : Number.NEGATIVE_INFINITY;
+          if (itemSortAt > lane.sortAt) {
+            lane.sortAt = itemSortAt;
+          }
+          if (lane.targetAgent === "") {
+            lane.targetAgent = trimmedString(item && item.targetAgent);
+          }
+          if (lane.taskID === "") {
+            lane.taskID = trimmedString(item && item.taskID);
+          }
+          if (lane.childRequestID === "") {
+            lane.childRequestID = trimmedString(item && item.childRequestID);
+          }
+          if (lane.fallbackTitle === "") {
+            lane.fallbackTitle = trimmedString(item && item.title);
+          }
+        });
+        const lanes = Array.from(lanesByKey.values());
+        lanes.forEach((lane) => {
+          lane.items.sort((left, right) => {
+            const leftSortAt = Number.isFinite(left && left.sortAt) ? left.sortAt : Number.NEGATIVE_INFINITY;
+            const rightSortAt = Number.isFinite(right && right.sortAt) ? right.sortAt : Number.NEGATIVE_INFINITY;
+            if (leftSortAt === rightSortAt) {
+              return String(left.kind).localeCompare(String(right.kind));
+            }
+            return leftSortAt - rightSortAt;
+          });
+        });
+        lanes.sort((left, right) => {
+          if (left.sortAt === right.sortAt) {
+            return String(left.key).localeCompare(String(right.key));
+          }
+          return right.sortAt - left.sortAt;
+        });
+        return lanes;
+      };
+
+      const activityFeedLaneLabel = (lane) => {
+        const targetAgent = trimmedString(lane && lane.targetAgent);
+        const taskID = trimmedString(lane && lane.taskID);
+        const childRequestID = trimmedString(lane && lane.childRequestID);
+        const fallbackTitle = trimmedString(lane && lane.fallbackTitle);
+        if (targetAgent !== "" && taskID !== "") {
+          return `${targetAgent} • ${taskID}`;
+        }
+        if (taskID !== "") {
+          return taskID;
+        }
+        if (targetAgent !== "") {
+          return targetAgent;
+        }
+        if (childRequestID !== "") {
+          return `Child request ${childRequestID}`;
+        }
+        if (fallbackTitle !== "") {
+          return fallbackTitle;
+        }
+        return "Runtime activity";
+      };
+
       const renderActivityFeed = (tasks, events) => {
         const nextTasks = Array.isArray(tasks) ? tasks : [];
         const nextEvents = Array.isArray(events) ? events : [];
@@ -2721,40 +2811,57 @@
           syncDispatchOverviewStats();
           return;
         }
+        const lanes = groupActivityFeedLanes(feed);
         const nextExpandedKeys = new Set();
-        feed.forEach((item) => {
-          const activityKey = activityFeedItemKey(item);
-          const expanded = activityFeedExpandedKeys.has(activityKey);
-          const card = createRuntimeEventCard(item.title, (body) => {
-            appendRuntimeRow(body, "When", item.when);
-            appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
-            appendRuntimeRow(body, "Status", item.status);
-            appendRuntimeRow(body, "Level", item.level);
-            appendRuntimeRow(body, "", item.detail);
-            appendRuntimeRow(body, "Skill", item.skill);
-            appendRuntimeRow(body, "Target agent", item.targetAgent);
-            appendRuntimeRow(body, "Task", item.taskID);
-            appendRuntimeRow(body, "Child request", item.childRequestID);
-            appendRuntimeRow(body, "Repo", item.repo);
-            appendRuntimeRow(body, "Log", item.logPath);
-            appendRuntimeRow(body, "Expires", item.expiresAt);
-          }, {
-            subtitleText: item.subtitle,
-            subtitleBuilder: item.status ? (subtitle) => {
-              const status = document.createElement("span");
-              status.className = item.statusClass;
-              status.textContent = item.status;
-              subtitle.appendChild(status);
-            } : null,
-            iconName: item.iconName,
-            iconClass: item.iconClass,
-            activityKey,
-            expanded,
+        lanes.forEach((lane) => {
+          const laneElement = document.createElement("section");
+          laneElement.className = "activity-feed-lane";
+          const laneLabel = document.createElement("p");
+          laneLabel.className = "activity-feed-lane-label";
+          laneLabel.textContent = activityFeedLaneLabel(lane);
+          const laneOrder = document.createElement("span");
+          laneOrder.className = "activity-feed-lane-order";
+          laneOrder.textContent = "Oldest -> newest";
+          laneLabel.appendChild(laneOrder);
+          laneElement.appendChild(laneLabel);
+          const laneTrack = document.createElement("div");
+          laneTrack.className = "activity-feed-lane-track";
+          lane.items.forEach((item) => {
+            const activityKey = activityFeedItemKey(item);
+            const expanded = activityFeedExpandedKeys.has(activityKey);
+            const card = createRuntimeEventCard(item.title, (body) => {
+              appendRuntimeRow(body, "When", item.when);
+              appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
+              appendRuntimeRow(body, "Status", item.status);
+              appendRuntimeRow(body, "Level", item.level);
+              appendRuntimeRow(body, "", item.detail);
+              appendRuntimeRow(body, "Skill", item.skill);
+              appendRuntimeRow(body, "Target agent", item.targetAgent);
+              appendRuntimeRow(body, "Task", item.taskID);
+              appendRuntimeRow(body, "Child request", item.childRequestID);
+              appendRuntimeRow(body, "Repo", item.repo);
+              appendRuntimeRow(body, "Log", item.logPath);
+              appendRuntimeRow(body, "Expires", item.expiresAt);
+            }, {
+              subtitleText: item.subtitle,
+              subtitleBuilder: item.status ? (subtitle) => {
+                const status = document.createElement("span");
+                status.className = item.statusClass;
+                status.textContent = item.status;
+                subtitle.appendChild(status);
+              } : null,
+              iconName: item.iconName,
+              iconClass: item.iconClass,
+              activityKey,
+              expanded,
+            });
+            if (expanded) {
+              nextExpandedKeys.add(activityKey);
+            }
+            laneTrack.appendChild(card);
           });
-          if (expanded) {
-            nextExpandedKeys.add(activityKey);
-          }
-          activityFeedList.appendChild(card);
+          laneElement.appendChild(laneTrack);
+          activityFeedList.appendChild(laneElement);
         });
         activityFeedExpandedKeys = nextExpandedKeys;
         activityFeedEmpty.hidden = true;
