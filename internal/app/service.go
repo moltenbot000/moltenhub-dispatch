@@ -1621,7 +1621,9 @@ func callerFailurePayload(report failureReport, logPaths []string) map[string]an
 	payload["error_details"] = detail
 	payload["log_paths"] = logPaths
 	payload["Failure"] = summary
+	payload["Failure:"] = summary
 	payload["Error details"] = detail
+	payload["Error details:"] = detail
 	return payload
 }
 

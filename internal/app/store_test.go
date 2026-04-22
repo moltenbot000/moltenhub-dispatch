@@ -1,8 +1,10 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -125,11 +127,87 @@ func TestNewStoreNormalizesLegacySessionAliases(t *testing.T) {
 	if got, want := state.Session.BindToken, "legacy-agent-token"; got != want {
 		t.Fatalf("bind_token = %q, want %q", got, want)
 	}
-	if got, want := state.Session.APIBase, "https://na.hub.molten.bot/v1"; got != want {
-		t.Fatalf("api_base = %q, want %q", got, want)
+	if got := state.Session.APIBase; got != "" {
+		t.Fatalf("expected api_base to stay in-memory-only, got %q", got)
 	}
-	if got, want := state.Session.BaseURL, "https://na.hub.molten.bot/v1"; got != want {
-		t.Fatalf("base_url = %q, want %q", got, want)
+	if got := state.Session.BaseURL; got != "" {
+		t.Fatalf("expected base_url to stay in-memory-only, got %q", got)
+	}
+}
+
+func TestStorePersistsOnlyHubURLAndAgentToken(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.Update(func(state *AppState) error {
+		state.Settings.HubRegion = HubRegionEU
+		state.Settings.HubURL = "https://eu.hub.molten.bot"
+		state.Session.AgentToken = "agent-token"
+		state.Session.MetadataURL = "https://runtime.eu.hub.molten.bot/profile"
+		state.Session.APIBase = "https://runtime.eu.hub.molten.bot"
+		state.Connection.Error = "temporary disconnect"
+		state.PendingTasks = []PendingTask{{ID: "task-1"}}
+		state.RecentEvents = []RuntimeEvent{{Title: "Task failed"}}
+		return nil
+	}); err != nil {
+		t.Fatalf("update store: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+
+	var persisted map[string]any
+	if err := json.Unmarshal(raw, &persisted); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+
+	settings, ok := persisted["settings"].(map[string]any)
+	if !ok {
+		t.Fatalf("settings payload missing: %#v", persisted)
+	}
+	if got, want := settings["hub_url"], "https://eu.hub.molten.bot"; got != want {
+		t.Fatalf("hub_url = %#v, want %q", got, want)
+	}
+	if _, ok := settings["hub_region"]; ok {
+		t.Fatalf("did not expect hub_region in persisted config: %#v", settings)
+	}
+
+	session, ok := persisted["session"].(map[string]any)
+	if !ok {
+		t.Fatalf("session payload missing: %#v", persisted)
+	}
+	if got, want := session["agent_token"], "agent-token"; got != want {
+		t.Fatalf("agent_token = %#v, want %q", got, want)
+	}
+	if _, ok := session["bind_token"]; ok {
+		t.Fatalf("did not expect bind_token alias in persisted config: %#v", session)
+	}
+
+	for _, forbidden := range []string{
+		"connection",
+		"pending_tasks",
+		"recent_events",
+		"connected_agents",
+		"flash",
+		"listen_addr",
+		"data_dir",
+		"task_timeout",
+		"poll_interval",
+		"metadata_url",
+		"api_base",
+		"base_url",
+	} {
+		if strings.Contains(string(raw), "\""+forbidden+"\"") {
+			t.Fatalf("did not expect %q in persisted config: %s", forbidden, string(raw))
+		}
 	}
 }
 

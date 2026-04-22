@@ -25,6 +25,21 @@ type Store struct {
 	state AppState
 }
 
+type persistedConfig struct {
+	Settings persistedSettings `json:"settings,omitempty"`
+	Session  persistedSession  `json:"session,omitempty"`
+}
+
+type persistedSettings struct {
+	HubURL    string `json:"hub_url,omitempty"`
+	HubRegion string `json:"hub_region,omitempty"`
+}
+
+type persistedSession struct {
+	AgentToken string `json:"agent_token,omitempty"`
+	BindToken  string `json:"bind_token,omitempty"`
+}
+
 func DefaultSettings() Settings {
 	runtime, err := ResolveHubRuntime("", envOrDefault("MOLTENHUB_URL", DefaultHubRuntime().HubURL))
 	if err != nil {
@@ -102,9 +117,11 @@ func NewStore(path string, defaults Settings) (*Store, error) {
 		return store, nil
 	}
 
-	if err := json.Unmarshal(data, &store.state); err != nil {
+	var persisted persistedConfig
+	if err := json.Unmarshal(data, &persisted); err != nil {
 		return nil, fmt.Errorf("decode store: %w", err)
 	}
+	applyPersistedConfig(&store.state, persisted)
 
 	mergeDefaultSettings(&store.state.Settings, defaults)
 	normalizeStateAliases(&store.state)
@@ -135,7 +152,7 @@ func (s *Store) Update(fn func(*AppState) error) error {
 }
 
 func (s *Store) saveLocked() error {
-	data, err := json.MarshalIndent(s.state, "", "  ")
+	data, err := json.MarshalIndent(persistedConfigFromState(s.state), "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode store: %w", err)
 	}
@@ -344,4 +361,30 @@ func envValue(key string) (string, bool) {
 		return "", false
 	}
 	return value, true
+}
+
+func applyPersistedConfig(state *AppState, persisted persistedConfig) {
+	if state == nil {
+		return
+	}
+
+	if runtime, err := ResolveHubRuntime(persisted.Settings.HubRegion, persisted.Settings.HubURL); err == nil {
+		state.Settings.HubRegion = runtime.ID
+		state.Settings.HubURL = runtime.HubURL
+	}
+
+	token := coalesceTrimmed(persisted.Session.AgentToken, persisted.Session.BindToken)
+	state.Session.AgentToken = token
+	state.Session.BindToken = token
+}
+
+func persistedConfigFromState(state AppState) persistedConfig {
+	return persistedConfig{
+		Settings: persistedSettings{
+			HubURL: normalizeHubRuntimeURL(state.Settings.HubURL),
+		},
+		Session: persistedSession{
+			AgentToken: coalesceTrimmed(state.Session.AgentToken, state.Session.BindToken),
+		},
+	}
 }

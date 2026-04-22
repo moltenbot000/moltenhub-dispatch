@@ -974,11 +974,11 @@ func TestUpdateAgentProfileUsesPersistedSessionRoutingAfterRestart(t *testing.T)
 	if !strings.Contains(string(configData), "\"agent_token\": \"agent-token\"") {
 		t.Fatalf("expected persisted agent token in config.json, got %s", string(configData))
 	}
-	if !strings.Contains(string(configData), "\"bind_token\": \"agent-token\"") {
-		t.Fatalf("expected persisted bind token alias in config.json, got %s", string(configData))
+	if strings.Contains(string(configData), "\"bind_token\"") {
+		t.Fatalf("did not expect persisted bind_token alias in config.json, got %s", string(configData))
 	}
-	if !strings.Contains(string(configData), "\"base_url\": \"https://runtime.na.hub.molten.bot\"") {
-		t.Fatalf("expected persisted base_url alias in config.json, got %s", string(configData))
+	if strings.Contains(string(configData), "\"base_url\"") {
+		t.Fatalf("did not expect persisted base_url in config.json, got %s", string(configData))
 	}
 }
 
@@ -2413,6 +2413,9 @@ func TestCallerFailurePayloadIncludesExplicitFailureDetails(t *testing.T) {
 	if got := payload["Failure"]; got != "Task failed: downstream worker returned a non-zero exit code. Error: panic: boom" {
 		t.Fatalf("unexpected Failure field payload: %#v", got)
 	}
+	if got := payload["Failure:"]; got != "Task failed: downstream worker returned a non-zero exit code. Error: panic: boom" {
+		t.Fatalf("unexpected Failure: field payload: %#v", got)
+	}
 	detail, ok := payload["error_details"].(map[string]any)
 	if !ok {
 		t.Fatalf("unexpected error_details type: %T", payload["error_details"])
@@ -2426,6 +2429,13 @@ func TestCallerFailurePayloadIncludesExplicitFailureDetails(t *testing.T) {
 	}
 	if errorDetailsField["stderr"] != "stacktrace" || errorDetailsField["exit_code"] != 1 {
 		t.Fatalf("unexpected Error details field payload: %#v", errorDetailsField)
+	}
+	errorDetailsWithColon, ok := payload["Error details:"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected Error details: field type: %T", payload["Error details:"])
+	}
+	if errorDetailsWithColon["stderr"] != "stacktrace" || errorDetailsWithColon["exit_code"] != 1 {
+		t.Fatalf("unexpected Error details: field payload: %#v", errorDetailsWithColon)
 	}
 }
 
