@@ -42,7 +42,7 @@ type realtimeEnvelope struct {
 }
 
 func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
-	wsURL, err := websocketURL(c.baseURL, "/openclaw/messages/ws", sessionKey)
+	wsURL, err := websocketURL(c.baseURL, c.openClawWebsocketEndpoint(), sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +77,13 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 	session.bindContext(ctx)
 	session.startHeartbeat(ctx)
 	return session, nil
+}
+
+func (c *Client) openClawWebsocketEndpoint() string {
+	if endpoint := websocketEndpointFromPull(c.endpoints.OpenClawPullURL); endpoint != "" {
+		return endpoint
+	}
+	return "/openclaw/messages/ws"
 }
 
 func (s *websocketSession) Receive(ctx context.Context) (PullResponse, error) {
@@ -260,21 +267,39 @@ func (s *websocketSession) writePing(ctx context.Context, payload []byte) error 
 }
 
 func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {
-	u, err := url.Parse(baseURL)
+	base, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("parse base URL: %w", err)
 	}
 
-	switch u.Scheme {
+	endpointURL, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil {
+		return "", fmt.Errorf("parse websocket endpoint: %w", err)
+	}
+
+	u := base
+	if strings.TrimSpace(endpointURL.Scheme) != "" {
+		u = endpointURL
+	} else {
+		u.Path = joinURLPath(base.Path, endpointURL.Path)
+		u.RawPath = ""
+		u.RawQuery = endpointURL.RawQuery
+		u.Fragment = endpointURL.Fragment
+	}
+
+	switch strings.ToLower(strings.TrimSpace(u.Scheme)) {
 	case "https":
 		u.Scheme = "wss"
 	case "http":
 		u.Scheme = "ws"
+	case "wss", "ws":
 	default:
 		return "", fmt.Errorf("unsupported websocket base URL scheme %q", u.Scheme)
 	}
+	if strings.TrimSpace(u.Host) == "" {
+		return "", fmt.Errorf("websocket URL host is required")
+	}
 
-	u.Path = joinURLPath(u.Path, endpoint)
 	query := u.Query()
 	if strings.TrimSpace(sessionKey) != "" {
 		query.Set("session_key", strings.TrimSpace(sessionKey))
@@ -282,6 +307,34 @@ func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {
 	}
 	u.RawQuery = query.Encode()
 	return u.String(), nil
+}
+
+func websocketEndpointFromPull(pullURL string) string {
+	pullURL = strings.TrimSpace(pullURL)
+	if pullURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(pullURL)
+	if err != nil {
+		return ""
+	}
+
+	trimmedPath := strings.TrimRight(parsed.Path, "/")
+	switch {
+	case strings.HasSuffix(trimmedPath, "/messages/pull"):
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages/pull") + "/messages/ws"
+	case strings.HasSuffix(trimmedPath, "/messages_pull"):
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages_pull") + "/messages_ws"
+	case strings.HasSuffix(trimmedPath, "/pull"):
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/pull") + "/ws"
+	default:
+		return ""
+	}
+
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
 }
 
 func httpOriginFor(wsURL string) string {
