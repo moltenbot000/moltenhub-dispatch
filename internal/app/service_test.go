@@ -3083,6 +3083,54 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) 
 	}
 }
 
+func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeSessionCanceled(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	fake.connectSession = &fakeRealtimeSession{receiveErr: context.Canceled}
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+	fake.pullOK = false
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.PollInterval = 10 * time.Millisecond
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunHubLoop(ctx)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if fake.pullCalls > 0 {
+			break
+		}
+		select {
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatalf("expected HTTP fallback after realtime canceled session; connect_calls=%d pull_calls=%d", fake.connectCalls, fake.pullCalls)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-done
+	if fake.pullCalls == 0 {
+		t.Fatal("expected realtime canceled session to trigger HTTP fallback polling")
+	}
+}
+
 func TestRunHubLoopMarksPresenceWebsocketWhenRealtimeConnects(t *testing.T) {
 	t.Parallel()
 

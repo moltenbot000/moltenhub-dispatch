@@ -282,13 +282,13 @@ func (c *Client) PullOpenClaw(ctx context.Context, token string, timeout time.Du
 }
 
 func (c *Client) AckOpenClaw(ctx context.Context, token, deliveryID string) error {
-	return c.doJSON(ctx, http.MethodPost, "/v1/openclaw/messages/ack", token, map[string]string{
+	return c.doJSON(ctx, http.MethodPost, c.openClawDeliveryEndpoint("ack"), token, map[string]string{
 		"delivery_id": deliveryID,
 	}, nil)
 }
 
 func (c *Client) NackOpenClaw(ctx context.Context, token, deliveryID string) error {
-	return c.doJSON(ctx, http.MethodPost, "/v1/openclaw/messages/nack", token, map[string]string{
+	return c.doJSON(ctx, http.MethodPost, c.openClawDeliveryEndpoint("nack"), token, map[string]string{
 		"delivery_id": deliveryID,
 	}, nil)
 }
@@ -337,6 +337,48 @@ func (c *Client) runtimeEndpoint(override, fallback string) string {
 		return override
 	}
 	return fallback
+}
+
+func (c *Client) openClawDeliveryEndpoint(action string) string {
+	action = strings.ToLower(strings.TrimSpace(action))
+	switch action {
+	case "ack", "nack":
+	default:
+		return ""
+	}
+
+	if endpoint := deliveryEndpointFromPull(c.endpoints.OpenClawPullURL, action); endpoint != "" {
+		return endpoint
+	}
+	return "/v1/openclaw/messages/" + action
+}
+
+func deliveryEndpointFromPull(pullURL, action string) string {
+	pullURL = strings.TrimSpace(pullURL)
+	if pullURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(pullURL)
+	if err != nil {
+		return ""
+	}
+
+	trimmedPath := strings.TrimRight(parsed.Path, "/")
+	switch {
+	case strings.HasSuffix(trimmedPath, "/messages/pull"):
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages/pull") + "/messages/" + action
+	case strings.HasSuffix(trimmedPath, "/messages_pull"):
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages_pull") + "/messages_" + action
+	case strings.HasSuffix(trimmedPath, "/pull"):
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/pull") + "/" + action
+	default:
+		return ""
+	}
+
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
 }
 
 func isRouteNotFound(err error) bool {

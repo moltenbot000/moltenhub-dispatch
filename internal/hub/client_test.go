@@ -707,7 +707,7 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 					},
 				},
 			})
-		case "/v1/openclaw/messages/ack":
+		case "/runtime/openclaw/ack":
 			markCalled("ack")
 			if r.Method != http.MethodPost {
 				t.Fatalf("ack method = %s, want %s", r.Method, http.MethodPost)
@@ -720,7 +720,7 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 				t.Fatalf("ack delivery_id = %q, want delivery-ack", got)
 			}
 			w.WriteHeader(http.StatusNoContent)
-		case "/v1/openclaw/messages/nack":
+		case "/runtime/openclaw/nack":
 			markCalled("nack")
 			if r.Method != http.MethodPost {
 				t.Fatalf("nack method = %s, want %s", r.Method, http.MethodPost)
@@ -805,6 +805,54 @@ func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 		if !called[key] {
 			t.Fatalf("expected %s call", key)
 		}
+	}
+}
+
+func TestOpenClawAckNackFallbackToCanonicalRouteWhenPullEndpointIsNonDerivable(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu     sync.Mutex
+		called = map[string]bool{}
+	)
+	markCalled := func(name string) {
+		mu.Lock()
+		called[name] = true
+		mu.Unlock()
+	}
+
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/openclaw/messages/ack":
+			markCalled("ack")
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1/openclaw/messages/nack":
+			markCalled("nack")
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+
+	client := hub.NewClient(server.URL)
+	client.SetRuntimeEndpoints(hub.RuntimeEndpoints{
+		OpenClawPullURL: server.URL + "/runtime/openclaw",
+	})
+
+	if err := client.AckOpenClaw(context.Background(), "agent-token", "delivery-ack"); err != nil {
+		t.Fatalf("ack openclaw: %v", err)
+	}
+	if err := client.NackOpenClaw(context.Background(), "agent-token", "delivery-nack"); err != nil {
+		t.Fatalf("nack openclaw: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !called["ack"] {
+		t.Fatal("expected canonical ack call")
+	}
+	if !called["nack"] {
+		t.Fatal("expected canonical nack call")
 	}
 }
 

@@ -2948,9 +2948,6 @@ func shouldFallbackToLongPoll(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
 	text := strings.ToLower(strings.TrimSpace(err.Error()))
 	for _, marker := range []string{
 		"use of closed network connection",
