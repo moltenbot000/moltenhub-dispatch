@@ -201,9 +201,14 @@
                 </fieldset>
                 <label class="prompt-field prompt-field-base-branch manual-dispatch-skill-field">
                   <span class="prompt-label">Skills</span>
-                  <select id="skill-name-select" name="skill_name" class="prompt-control" aria-describedby="skill-name-hint" disabled>
-                    <option value="">Select an agent first</option>
-                  </select>
+                  <span id="skill-name-select-wrap" class="manual-dispatch-skill-select-wrap" data-has-multiple-skills="false">
+                    <select id="skill-name-select" name="skill_name" class="prompt-control" aria-describedby="skill-name-hint" disabled>
+                      <option value="">Select an agent first</option>
+                    </select>
+                    <span class="manual-dispatch-skill-select-icon" aria-hidden="true">
+                      <i data-lucide="chevron-down" aria-hidden="true"></i>
+                    </span>
+                  </span>
                 </label>
               </div>
               <p id="skill-name-hint" class="manual-dispatch-skill-hint">Auto-select the first skill of that agent.</p>
@@ -568,6 +573,7 @@
       const manualDispatchForm = document.getElementById("manual-dispatch-form");
       const manualDispatchTargets = document.getElementById("manual-dispatch-targets");
       const targetAgentRefInput = document.getElementById("target-agent-ref-input");
+      const skillNameSelectWrap = document.getElementById("skill-name-select-wrap");
       const skillNameSelect = document.getElementById("skill-name-select");
       const skillNameHint = document.getElementById("skill-name-hint");
       const skillPayloadField = document.getElementById("skill-payload-field");
@@ -2236,6 +2242,13 @@
         return "";
       };
 
+      const setSkillNameSelectChevronState = (enabled) => {
+        if (!(skillNameSelectWrap instanceof HTMLElement)) {
+          return;
+        }
+        skillNameSelectWrap.setAttribute("data-has-multiple-skills", enabled ? "true" : "false");
+      };
+
       const setSelectedSkillHint = (selectedAgent, skillEntries) => {
         if (!(skillNameHint instanceof HTMLElement)) {
           return;
@@ -2383,6 +2396,7 @@
 
       const updateSkillNameOptions = (options = {}) => {
         if (!(skillNameSelect instanceof HTMLSelectElement)) {
+          setSkillNameSelectChevronState(false);
           syncSkillPayloadField();
           return;
         }
@@ -2391,6 +2405,7 @@
         const selectedAgent = latestConnectedAgents.find((agent) => agentMatchesTargetRef(agent, selectedTargetRef));
         const previousSkill = forceFirstSkill ? "" : trimmedString(skillNameSelect.value);
         const skillEntries = connectedAgentSkillEntries(selectedAgent);
+        setSkillNameSelectChevronState(Boolean(selectedAgent) && skillEntries.length > 1);
 
         skillNameSelect.innerHTML = "";
 

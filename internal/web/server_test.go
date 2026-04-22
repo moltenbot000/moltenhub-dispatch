@@ -2075,6 +2075,12 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
 	}
+	if !strings.Contains(body, `.manual-dispatch-skill-select-wrap {`) {
+		t.Fatalf("expected manual dispatch skill-select wrapper styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.manual-dispatch-skill-select-wrap[data-has-multiple-skills="true"] .manual-dispatch-skill-select-icon {`) {
+		t.Fatalf("expected manual dispatch skill-select icon visibility toggle styles, body=%s", body)
+	}
 	if !strings.Contains(body, `.dispatch-workbench-panel::before {`) || !strings.Contains(body, `display: none;`) {
 		t.Fatalf("expected dispatch workbench panel to disable extra chrome so it matches the studio shell, body=%s", body)
 	}
@@ -3013,6 +3019,12 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="skill-name-select" name="skill_name"`) {
 		t.Fatalf("expected skill-name dropdown in manual dispatch form, body=%s", body)
+	}
+	if !strings.Contains(body, `id="skill-name-select-wrap"`) {
+		t.Fatalf("expected skill-name dropdown wrapper for conditional chevron icon, body=%s", body)
+	}
+	if !strings.Contains(body, `class="manual-dispatch-skill-select-icon"`) {
+		t.Fatalf("expected skill-name dropdown chevron icon markup, body=%s", body)
 	}
 	if strings.Contains(body, "Select a target first. Skills load from the chosen agent's Hub capabilities.") {
 		t.Fatalf("did not expect removed dispatch helper copy, body=%s", body)

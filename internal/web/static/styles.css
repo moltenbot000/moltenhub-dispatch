@@ -3679,6 +3679,49 @@ p,
   align-self: start;
 }
 
+.manual-dispatch-skill-select-wrap {
+  position: relative;
+  display: block;
+}
+
+.shell .manual-dispatch-skill-select-wrap > select.prompt-control {
+  background-image: none;
+  padding-right: 14px;
+}
+
+.shell .manual-dispatch-skill-select-wrap[data-has-multiple-skills="true"] > select.prompt-control {
+  padding-right: 36px;
+}
+
+.manual-dispatch-skill-select-icon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--surface-control-arrow);
+  pointer-events: none;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.manual-dispatch-skill-select-wrap[data-has-multiple-skills="true"] .manual-dispatch-skill-select-icon {
+  opacity: 1;
+}
+
+.manual-dispatch-skill-select-icon svg,
+.manual-dispatch-skill-select-icon .lucide,
+.manual-dispatch-skill-select-icon [data-lucide] {
+  width: 14px;
+  height: 14px;
+  display: block;
+  stroke: currentColor;
+}
+
 .manual-dispatch-skill-hint {
   margin: -2px 0 0;
   color: var(--meta);
