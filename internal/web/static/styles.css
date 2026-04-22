@@ -4517,21 +4517,18 @@ body.settings-modal-open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border-radius: 999px;
   border: 1px solid transparent;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
-.connected-agent-presence-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 14%, transparent);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+.connected-agent-presence-icon {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.18s ease, filter 0.18s ease;
 }
 
 .connected-agent-presence.is-online {
@@ -4552,10 +4549,10 @@ body.settings-modal-open {
   box-shadow: 0 6px 14px color-mix(in srgb, currentColor 24%, transparent);
 }
 
-.connected-agent-card-button:hover .connected-agent-presence-dot,
-.connected-agent-presence:hover .connected-agent-presence-dot {
+.connected-agent-card-button:hover .connected-agent-presence-icon,
+.connected-agent-presence:hover .connected-agent-presence-icon {
   transform: scale(1.08);
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 34%, transparent));
 }
 
 .connected-agent-selection-badge {

@@ -2921,8 +2921,8 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `class="connected-agent-presence is-offline"`) {
 		t.Fatalf("expected offline presence indicator on connected agent cards, body=%s", body)
 	}
-	if !strings.Contains(body, `class="connected-agent-presence-dot"`) {
-		t.Fatalf("expected dot-only presence marker on connected agent cards, body=%s", body)
+	if !strings.Contains(body, `data-lucide="circle-x"`) {
+		t.Fatalf("expected Lucide offline presence icon on connected agent cards, body=%s", body)
 	}
 	if !strings.Contains(body, `title="Offline"`) {
 		t.Fatalf("expected offline presence tooltip on connected agent cards, body=%s", body)
@@ -3122,6 +3122,9 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
 		t.Fatalf("expected hub presence indicator to render online status, body=%s", body)
 	}
+	if !strings.Contains(body, `data-lucide="circle-check"`) {
+		t.Fatalf("expected hub presence icon to render online Lucide glyph, body=%s", body)
+	}
 	if !strings.Contains(body, `title="Online"`) {
 		t.Fatalf("expected hub presence indicator tooltip to render online status, body=%s", body)
 	}
@@ -3182,6 +3185,9 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	}
 	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
 		t.Fatalf("expected root hub presence indicator to render online status, body=%s", body)
+	}
+	if !strings.Contains(body, `data-lucide="circle-check"`) {
+		t.Fatalf("expected root hub presence icon to render online Lucide glyph, body=%s", body)
 	}
 	if !strings.Contains(body, `title="Online"`) {
 		t.Fatalf("expected root hub presence indicator tooltip to render online status, body=%s", body)

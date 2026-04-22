@@ -191,7 +191,7 @@
                           aria-label="{{$presenceLabel}}"
                           role="img"
                         >
-                          <span class="connected-agent-presence-dot" aria-hidden="true"></span>
+                          <i data-lucide="{{if eq $presenceStatus "online"}}circle-check{{else}}circle-x{{end}}" class="connected-agent-presence-icon" aria-hidden="true"></i>
                         </span>
                       </div>
                     </div>
@@ -2443,11 +2443,13 @@
         presence.setAttribute("aria-label", presenceLabel);
         presence.setAttribute("role", "img");
 
-        const presenceDot = document.createElement("span");
-        presenceDot.className = "connected-agent-presence-dot";
-        presenceDot.setAttribute("aria-hidden", "true");
-
-        presence.appendChild(presenceDot);
+        const presenceIcon = createLucideIconPlaceholder(
+          presenceStatus === "online" ? "circle-check" : "circle-x",
+          "connected-agent-presence-icon"
+        );
+        if (presenceIcon) {
+          presence.appendChild(presenceIcon);
+        }
         meta.appendChild(presence);
 
         cardMain.appendChild(meta);
@@ -2734,6 +2736,8 @@
             connectedAgentsList.hidden = false;
           }
         }
+        hydrateLucideIcons(manualDispatchTargets);
+        hydrateLucideIcons(connectedAgentsList);
         if (shouldPollConnectedAgents()) {
           scheduleConnectedAgentsAutoRefresh();
           return;
