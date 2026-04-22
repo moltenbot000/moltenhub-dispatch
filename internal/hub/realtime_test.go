@@ -159,6 +159,36 @@ func TestConnectOpenClawUsesRuntimeEndpointDerivedFromPullURL(t *testing.T) {
 	defer session.Close()
 }
 
+func TestConnectOpenClawUsesVersionedFallbackEndpointWhenRuntimePullEndpointMissing(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/ws" {
+			t.Fatalf("path = %q, want /v1/openclaw/messages/ws", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("session_key"); got != "main" {
+			t.Fatalf("session_key = %q, want main", got)
+		}
+		if got := r.URL.Query().Get("sessionKey"); got != "main" {
+			t.Fatalf("sessionKey = %q, want main", got)
+		}
+		websocket.Handler(func(conn *websocket.Conn) {
+			defer conn.Close()
+			if err := websocket.JSON.Send(conn, map[string]any{"type": "session_ready"}); err != nil {
+				t.Fatalf("send session_ready: %v", err)
+			}
+		}).ServeHTTP(w, r)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	session, err := client.ConnectOpenClaw(context.Background(), "agent-token", "main")
+	if err != nil {
+		t.Fatalf("ConnectOpenClaw() error = %v", err)
+	}
+	defer session.Close()
+}
+
 func TestConnectOpenClawClosesSessionWhenContextCanceled(t *testing.T) {
 	t.Parallel()
 
