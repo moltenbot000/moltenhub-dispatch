@@ -191,7 +191,7 @@
                           aria-label="{{$presenceLabel}}"
                           role="img"
                         >
-                          <i data-lucide="{{if eq $presenceStatus "online"}}circle-check{{else}}circle-x{{end}}" class="connected-agent-presence-icon" aria-hidden="true"></i>
+                          <i data-lucide="{{if eq $presenceStatus "online"}}wifi{{else}}wifi-off{{end}}" class="connected-agent-presence-icon" aria-hidden="true"></i>
                         </span>
                       </div>
                     </div>
@@ -2493,7 +2493,7 @@
         presence.setAttribute("role", "img");
 
         const presenceIcon = createLucideIconPlaceholder(
-          presenceStatus === "online" ? "circle-check" : "circle-x",
+          presenceStatus === "online" ? "wifi" : "wifi-off",
           "connected-agent-presence-icon"
         );
         if (presenceIcon) {
