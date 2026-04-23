@@ -46,6 +46,7 @@ type HubClient interface {
 	PullOpenClaw(ctx context.Context, token string, timeout time.Duration) (hub.PullResponse, bool, error)
 	AckOpenClaw(ctx context.Context, token, deliveryID string) error
 	NackOpenClaw(ctx context.Context, token, deliveryID string) error
+	MarkOnline(ctx context.Context, token string, req hub.OnlineRequest) error
 	MarkOffline(ctx context.Context, token string, req hub.OfflineRequest) error
 }
 
@@ -857,15 +858,11 @@ func (s *Service) MarkOnline(ctx context.Context, transport string) error {
 	}
 	normalizedTransport := normalizePresenceTransport(transport)
 	s.syncHubClient(state)
-	profile := AgentProfile{
-		DisplayName:     state.Session.DisplayName,
-		Emoji:           state.Session.Emoji,
-		ProfileMarkdown: state.Session.ProfileBio,
-	}
-	_, err := s.hub.UpdateMetadata(ctx, state.Session.AgentToken, hub.UpdateMetadataRequest{
-		Metadata: buildAgentMetadata(profile, state.Settings.SessionKey, normalizedTransport),
-	})
-	if err != nil {
+	if err := s.hub.MarkOnline(ctx, state.Session.AgentToken, hub.OnlineRequest{
+		SessionKey: state.Settings.SessionKey,
+		Transport:  normalizedTransport,
+		Reason:     "runtime startup",
+	}); err != nil {
 		s.noteHubInteraction(err, normalizedTransport)
 		return err
 	}

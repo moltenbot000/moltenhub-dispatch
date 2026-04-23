@@ -23,6 +23,7 @@ type fakeHubClient struct {
 	capabilitiesErr       error
 	capabilitiesErrOnCall int
 	publishCalls          []hub.PublishRequest
+	onlineCalls           []hub.OnlineRequest
 	offlineCalls          []hub.OfflineRequest
 	baseURLCalls          []string
 	runtimeEndpoints      []hub.RuntimeEndpoints
@@ -107,6 +108,11 @@ func (f *fakeHubClient) AckOpenClaw(_ context.Context, _ string, _ string) error
 }
 
 func (f *fakeHubClient) NackOpenClaw(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
+func (f *fakeHubClient) MarkOnline(_ context.Context, _ string, req hub.OnlineRequest) error {
+	f.onlineCalls = append(f.onlineCalls, req)
 	return nil
 }
 
@@ -2762,7 +2768,7 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 	}
 }
 
-func TestMarkOnlineUpdatesHubPresenceMetadata(t *testing.T) {
+func TestMarkOnlineSendsHubPresence(t *testing.T) {
 	t.Parallel()
 
 	service, fake := newTestService(t)
@@ -2784,25 +2790,17 @@ func TestMarkOnlineUpdatesHubPresenceMetadata(t *testing.T) {
 		t.Fatalf("mark online: %v", err)
 	}
 
-	if len(fake.updateMetadataCalls) != 1 {
-		t.Fatalf("expected one metadata update, got %d", len(fake.updateMetadataCalls))
+	if len(fake.onlineCalls) != 1 {
+		t.Fatalf("expected one online update, got %d", len(fake.onlineCalls))
 	}
-	metadata := fake.updateMetadataCalls[0].Metadata
-	presence, ok := metadata["presence"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected presence metadata, got %#v", metadata["presence"])
+	if got, want := fake.onlineCalls[0].SessionKey, service.settings.SessionKey; got != want {
+		t.Fatalf("online session_key = %#v, want %q", got, want)
 	}
-	if got, want := presence["status"], "online"; got != want {
-		t.Fatalf("presence status = %#v, want %q", got, want)
+	if got, want := fake.onlineCalls[0].Transport, ConnectionTransportHTTPLong; got != want {
+		t.Fatalf("online transport = %#v, want %q", got, want)
 	}
-	if got, want := presence["ready"], true; got != want {
-		t.Fatalf("presence ready = %#v, want %v", got, want)
-	}
-	if got, want := presence["transport"], ConnectionTransportHTTPLong; got != want {
-		t.Fatalf("presence transport = %#v, want %q", got, want)
-	}
-	if got, want := presence["session_key"], service.settings.SessionKey; got != want {
-		t.Fatalf("presence session_key = %#v, want %q", got, want)
+	if got, want := fake.onlineCalls[0].Reason, "runtime startup"; got != want {
+		t.Fatalf("online reason = %#v, want %q", got, want)
 	}
 
 	state := service.store.Snapshot()
@@ -3134,7 +3132,7 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	deadline := time.After(2 * time.Second)
 	metadataObserved := false
 	for {
-		if len(fake.updateMetadataCalls) > 0 {
+		if len(fake.onlineCalls) > 0 {
 			metadataObserved = true
 		}
 		if metadataObserved && fake.pullCalls > 0 {
@@ -3144,7 +3142,7 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 		case <-deadline:
 			cancel()
 			<-done
-			t.Fatalf("expected startup presence sync before dispatch loop; metadata_calls=%d pull_calls=%d", len(fake.updateMetadataCalls), fake.pullCalls)
+			t.Fatalf("expected startup presence sync before dispatch loop; online_calls=%d pull_calls=%d", len(fake.onlineCalls), fake.pullCalls)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
@@ -3152,16 +3150,14 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	cancel()
 	<-done
 
-	metadata := fake.updateMetadataCalls[0].Metadata
-	presence, ok := metadata["presence"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected presence metadata, got %#v", metadata["presence"])
+	if got, want := fake.onlineCalls[0].SessionKey, service.settings.SessionKey; got != want {
+		t.Fatalf("online session_key = %#v, want %q", got, want)
 	}
-	if got, want := presence["status"], "online"; got != want {
-		t.Fatalf("presence status = %#v, want %q", got, want)
+	if got, want := fake.onlineCalls[0].Transport, ConnectionTransportHTTPLong; got != want {
+		t.Fatalf("online transport = %#v, want %q", got, want)
 	}
-	if got, want := presence["transport"], ConnectionTransportHTTPLong; got != want {
-		t.Fatalf("presence transport = %#v, want %q", got, want)
+	if got, want := fake.onlineCalls[0].Reason, "runtime startup"; got != want {
+		t.Fatalf("online reason = %#v, want %q", got, want)
 	}
 	if fake.pullCalls == 0 {
 		t.Fatalf("expected dispatch loop to continue into pull fallback after presence sync, got %d pulls", fake.pullCalls)
@@ -3191,24 +3187,14 @@ func TestEnsurePresenceOnlineResyncsWhenTransportChanges(t *testing.T) {
 		t.Fatalf("ensure presence online websocket: %v", err)
 	}
 
-	if got, want := len(fake.updateMetadataCalls), 2; got != want {
-		t.Fatalf("update metadata calls = %d, want %d", got, want)
+	if got, want := len(fake.onlineCalls), 2; got != want {
+		t.Fatalf("online calls = %d, want %d", got, want)
 	}
-
-	firstPresence, ok := fake.updateMetadataCalls[0].Metadata["presence"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected first presence metadata, got %#v", fake.updateMetadataCalls[0].Metadata["presence"])
+	if got, want := fake.onlineCalls[0].Transport, ConnectionTransportHTTPLong; got != want {
+		t.Fatalf("first online transport = %#v, want %q", got, want)
 	}
-	if got, want := firstPresence["transport"], ConnectionTransportHTTPLong; got != want {
-		t.Fatalf("first presence transport = %#v, want %q", got, want)
-	}
-
-	secondPresence, ok := fake.updateMetadataCalls[1].Metadata["presence"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected second presence metadata, got %#v", fake.updateMetadataCalls[1].Metadata["presence"])
-	}
-	if got, want := secondPresence["transport"], ConnectionTransportWebSocket; got != want {
-		t.Fatalf("second presence transport = %#v, want %q", got, want)
+	if got, want := fake.onlineCalls[1].Transport, ConnectionTransportWebSocket; got != want {
+		t.Fatalf("second online transport = %#v, want %q", got, want)
 	}
 }
 
@@ -3345,25 +3331,18 @@ func TestRunHubLoopMarksPresenceWebsocketWhenRealtimeConnects(t *testing.T) {
 		service.RunHubLoop(ctx)
 	}()
 
-	sawWebsocketPresence := false
 	deadline := time.After(2 * time.Second)
 	for {
-		for _, call := range fake.updateMetadataCalls {
-			presence, _ := call.Metadata["presence"].(map[string]any)
-			if presence["transport"] == ConnectionTransportWebSocket {
-				sawWebsocketPresence = true
-			}
-			if sawWebsocketPresence && presence["transport"] == ConnectionTransportHTTPLong {
-				cancel()
-				<-done
-				return
-			}
+		if len(fake.onlineCalls) >= 2 {
+			cancel()
+			<-done
+			return
 		}
 		select {
 		case <-deadline:
 			cancel()
 			<-done
-			t.Fatalf("expected websocket presence sync followed by http long-poll fallback sync, got %#v", fake.updateMetadataCalls)
+			t.Fatalf("expected websocket presence sync followed by http long-poll fallback sync, got %#v", fake.onlineCalls)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}

@@ -135,6 +135,12 @@ type OfflineRequest struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
+type OnlineRequest struct {
+	SessionKey string `json:"session_key,omitempty"`
+	Transport  string `json:"transport,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+}
+
 func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -295,6 +301,10 @@ func (c *Client) NackOpenClaw(ctx context.Context, token, deliveryID string) err
 
 func (c *Client) MarkOffline(ctx context.Context, token string, req OfflineRequest) error {
 	return c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawOfflineURL, "/v1/openclaw/messages/offline"), token, req, nil)
+}
+
+func (c *Client) MarkOnline(ctx context.Context, token string, req OnlineRequest) error {
+	return c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint("", "/v1/openclaw/messages/online"), token, req, nil)
 }
 
 func (c *Client) CheckPing(ctx context.Context) (string, error) {
