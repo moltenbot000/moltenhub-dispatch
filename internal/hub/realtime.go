@@ -344,31 +344,7 @@ func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {
 }
 
 func websocketEndpointFromPull(pullURL string) string {
-	pullURL = strings.TrimSpace(pullURL)
-	if pullURL == "" {
-		return ""
-	}
-	parsed, err := url.Parse(pullURL)
-	if err != nil {
-		return ""
-	}
-
-	trimmedPath := strings.TrimRight(parsed.Path, "/")
-	switch {
-	case strings.HasSuffix(trimmedPath, "/messages/pull"):
-		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages/pull") + "/messages/ws"
-	case strings.HasSuffix(trimmedPath, "/messages_pull"):
-		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages_pull") + "/messages_ws"
-	case strings.HasSuffix(trimmedPath, "/pull"):
-		parsed.Path = strings.TrimSuffix(trimmedPath, "/pull") + "/ws"
-	default:
-		return ""
-	}
-
-	parsed.RawPath = ""
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String()
+	return openClawEndpointFromPull(pullURL, "/messages/ws", "/messages_ws", "/ws")
 }
 
 func httpOriginFor(wsURL string) string {

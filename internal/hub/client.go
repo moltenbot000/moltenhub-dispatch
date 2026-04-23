@@ -354,6 +354,10 @@ func (c *Client) openClawDeliveryEndpoint(action string) string {
 }
 
 func deliveryEndpointFromPull(pullURL, action string) string {
+	return openClawEndpointFromPull(pullURL, "/messages/"+action, "/messages_"+action, "/"+action)
+}
+
+func openClawEndpointFromPull(pullURL, messagesSuffix, legacyMessagesSuffix, pullSuffix string) string {
 	pullURL = strings.TrimSpace(pullURL)
 	if pullURL == "" {
 		return ""
@@ -366,11 +370,11 @@ func deliveryEndpointFromPull(pullURL, action string) string {
 	trimmedPath := strings.TrimRight(parsed.Path, "/")
 	switch {
 	case strings.HasSuffix(trimmedPath, "/messages/pull"):
-		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages/pull") + "/messages/" + action
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages/pull") + messagesSuffix
 	case strings.HasSuffix(trimmedPath, "/messages_pull"):
-		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages_pull") + "/messages_" + action
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages_pull") + legacyMessagesSuffix
 	case strings.HasSuffix(trimmedPath, "/pull"):
-		parsed.Path = strings.TrimSuffix(trimmedPath, "/pull") + "/" + action
+		parsed.Path = strings.TrimSuffix(trimmedPath, "/pull") + pullSuffix
 	default:
 		return ""
 	}

@@ -157,6 +157,52 @@ func TestWebsocketEndpointFromPull(t *testing.T) {
 	}
 }
 
+func TestDeliveryEndpointFromPull(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		pull   string
+		action string
+		want   string
+	}{
+		{
+			name:   "canonical messages route",
+			pull:   "https://na.hub.molten.bot/v1/openclaw/messages/pull",
+			action: "ack",
+			want:   "https://na.hub.molten.bot/v1/openclaw/messages/ack",
+		},
+		{
+			name:   "runtime pull route",
+			pull:   "https://runtime.na.hub.molten.bot/runtime/openclaw/pull",
+			action: "nack",
+			want:   "https://runtime.na.hub.molten.bot/runtime/openclaw/nack",
+		},
+		{
+			name:   "legacy messages alias route",
+			pull:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages_pull",
+			action: "ack",
+			want:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages_ack",
+		},
+		{
+			name:   "unknown route",
+			pull:   "https://runtime.na.hub.molten.bot/v1/openclaw",
+			action: "ack",
+			want:   "",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := deliveryEndpointFromPull(tc.pull, tc.action); got != tc.want {
+				t.Fatalf("deliveryEndpointFromPull(%q, %q) = %q, want %q", tc.pull, tc.action, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConnectOpenClawUsesRuntimeEndpointDerivedFromPullURL(t *testing.T) {
 	t.Parallel()
 
