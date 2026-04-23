@@ -264,12 +264,18 @@
                     <p class="runtime-event-card-subtitle">
                       {{.Subtitle}}
                       {{if .Status}}
-                      <span class="{{.StatusClass}}">{{.Status}}</span>
+                      <span class="{{.StatusClass}} runtime-event-card-status-icon" aria-label="{{.Status}}" title="{{.Status}}">
+                        <i data-lucide="{{.StatusIcon}}" aria-hidden="true"></i>
+                        <span class="sr-only">{{.Status}}</span>
+                      </span>
                       {{end}}
                     </p>
                     {{else if .Status}}
                     <p class="runtime-event-card-subtitle">
-                      <span class="{{.StatusClass}}">{{.Status}}</span>
+                      <span class="{{.StatusClass}} runtime-event-card-status-icon" aria-label="{{.Status}}" title="{{.Status}}">
+                        <i data-lucide="{{.StatusIcon}}" aria-hidden="true"></i>
+                        <span class="sr-only">{{.Status}}</span>
+                      </span>
                     </p>
                     {{end}}
                   </div>
@@ -662,6 +668,26 @@
           node.className = normalized.join(" ");
         }
         return node;
+      };
+
+      const createStatusIconBadge = (label, className, iconName) => {
+        const statusLabel = trimmedString(label);
+        if (statusLabel === "") {
+          return null;
+        }
+        const badge = document.createElement("span");
+        badge.className = `${trimmedString(className) || "runtime-event-card-status"} runtime-event-card-status-icon`.trim();
+        badge.setAttribute("aria-label", statusLabel);
+        badge.title = statusLabel;
+        const icon = createLucideIconPlaceholder(iconName, []);
+        if (icon) {
+          badge.appendChild(icon);
+        }
+        const hiddenLabel = document.createElement("span");
+        hiddenLabel.className = "sr-only";
+        hiddenLabel.textContent = statusLabel;
+        badge.appendChild(hiddenLabel);
+        return badge;
       };
 
       const hydrateLucideIcons = (root = document) => {
@@ -2653,7 +2679,7 @@
           : "runtime-event-card-status runtime-event-card-status-queued";
       };
 
-      const pendingTaskIconName = (task) => {
+      const pendingTaskStatusIconName = (task) => {
         return trimmedString(task && task.status) === "sending" ? "send" : "clock-3";
       };
 
@@ -2714,7 +2740,8 @@
             subtitle: skillName,
             status: pendingTaskStatusLabel(task),
             statusClass: pendingTaskStatusClass(task),
-            iconName: pendingTaskIconName(task),
+            statusIconName: pendingTaskStatusIconName(task),
+            iconName: pendingTaskStatusIconName(task),
             iconClass: trimmedString(task && task.status) === "sending"
               ? "runtime-event-card-title-icon-sending"
               : "runtime-event-card-title-icon-queued",
@@ -2898,10 +2925,10 @@
             }, {
               subtitleText: item.subtitle,
               subtitleBuilder: item.status ? (subtitle) => {
-                const status = document.createElement("span");
-                status.className = item.statusClass;
-                status.textContent = item.status;
-                subtitle.appendChild(status);
+                const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
+                if (status) {
+                  subtitle.appendChild(status);
+                }
               } : null,
               iconName: item.iconName,
               iconClass: item.iconClass,

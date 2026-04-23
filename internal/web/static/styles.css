@@ -4743,6 +4743,19 @@ body.settings-modal-open {
   text-transform: uppercase;
 }
 
+.runtime-event-card-status-icon {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.runtime-event-card-status-icon .lucide,
+.runtime-event-card-status-icon [data-lucide] {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
 .runtime-event-card-status-sending {
   border: 1px solid color-mix(in srgb, var(--text) 20%, var(--border));
   background: color-mix(in srgb, var(--surface-library-bg) 82%, rgba(255, 255, 255, 0.08));

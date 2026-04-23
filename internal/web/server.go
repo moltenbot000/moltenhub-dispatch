@@ -690,6 +690,7 @@ type activityFeedItem struct {
 	Subtitle       string
 	Status         string
 	StatusClass    string
+	StatusIcon     string
 	WhenLabel      string
 	Detail         string
 	Level          string
@@ -784,6 +785,7 @@ func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []ac
 			Subtitle:       skill,
 			Status:         status,
 			StatusClass:    pendingTaskStatusClass(task.Status),
+			StatusIcon:     pendingTaskStatusIcon(task.Status),
 			WhenLabel:      formatTimestamp(task.CreatedAt),
 			Skill:          skill,
 			TargetAgent:    target,
@@ -857,6 +859,13 @@ func pendingTaskStatusClass(status string) string {
 		return "runtime-event-card-status runtime-event-card-status-sending"
 	}
 	return "runtime-event-card-status runtime-event-card-status-queued"
+}
+
+func pendingTaskStatusIcon(status string) string {
+	if strings.TrimSpace(status) == app.PendingTaskStatusSending {
+		return "send"
+	}
+	return "clock-3"
 }
 
 func formatTimestamp(value time.Time) string {

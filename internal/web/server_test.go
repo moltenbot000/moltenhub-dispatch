@@ -1625,8 +1625,8 @@ func TestHandleIndexRendersPendingTasksPanelInMainUI(t *testing.T) {
 	if !strings.Contains(body, "Worker A") || !strings.Contains(body, "🛠") {
 		t.Fatalf("expected activity card to render agent display name and emoji, body=%s", body)
 	}
-	if !strings.Contains(body, "In Queue") {
-		t.Fatalf("expected activity card to render in queue state, body=%s", body)
+	if !strings.Contains(body, `data-lucide="clock-3"`) || !strings.Contains(body, "runtime-event-card-status-icon") {
+		t.Fatalf("expected activity card to render in-queue status as an icon, body=%s", body)
 	}
 	if !strings.Contains(body, "Pending task") {
 		t.Fatalf("expected consolidated activity feed to label pending tasks, body=%s", body)
