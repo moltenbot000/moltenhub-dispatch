@@ -2219,18 +2219,43 @@
         return ordered;
       };
 
+      const normalizeConnectedAgentPresenceStatus = (value) => {
+        const status = trimmedString(value).toLowerCase();
+        if (!status) {
+          return "";
+        }
+        if (status === "online" || status === "connected" || status === "ready" || status === "available") {
+          return "online";
+        }
+        if (status === "offline" || status === "disconnected" || status === "unavailable") {
+          return "offline";
+        }
+        return "";
+      };
+
+      const connectedAgentPresenceStatusFromPresence = (presence) => {
+        const normalized = normalizeConnectedAgentPresenceStatus(presence && presence.status);
+        if (normalized) {
+          return normalized;
+        }
+        if (presence && typeof presence.ready === "boolean") {
+          return presence.ready ? "online" : "offline";
+        }
+        return "";
+      };
+
       const connectedAgentPresenceStatus = (agent) => {
-        const presenceStatus = trimmedString(agent && agent.metadata && agent.metadata.presence && agent.metadata.presence.status).toLowerCase();
-        if (presenceStatus === "online") {
-          return "online";
+        const metadataPresenceStatus = connectedAgentPresenceStatusFromPresence(agent && agent.metadata && agent.metadata.presence);
+        if (metadataPresenceStatus) {
+          return metadataPresenceStatus;
         }
-        const rootPresenceStatus = trimmedString(agent && agent.presence && agent.presence.status).toLowerCase();
-        if (rootPresenceStatus === "online") {
-          return "online";
+        const rootPresenceStatus = connectedAgentPresenceStatusFromPresence(agent && agent.presence);
+        if (rootPresenceStatus) {
+          return rootPresenceStatus;
         }
-        const status = trimmedString(agent && agent.status).toLowerCase();
-        if (status === "online") {
-          return "online";
+        const status = normalizeConnectedAgentPresenceStatus(agent && agent.status);
+        if (status) {
+          return status;
         }
         return "offline";
       };

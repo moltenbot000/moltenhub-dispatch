@@ -3276,7 +3276,7 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	if !strings.Contains(body, `trimmedString(agent && agent.emoji)`) {
 		t.Fatalf("expected client-side emoji helper to read root emoji, body=%s", body)
 	}
-	if !strings.Contains(body, `trimmedString(agent && agent.presence && agent.presence.status).toLowerCase()`) {
+	if !strings.Contains(body, `connectedAgentPresenceStatusFromPresence(agent && agent.presence)`) {
 		t.Fatalf("expected client-side presence helper to read root presence.status, body=%s", body)
 	}
 }

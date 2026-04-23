@@ -2035,16 +2035,45 @@ func ConnectedAgentEmoji(agent ConnectedAgent) string {
 
 func ConnectedAgentPresenceStatus(agent ConnectedAgent) string {
 	metadata := connectedAgentMetadata(agent)
-	if metadata != nil && metadata.Presence != nil && strings.EqualFold(strings.TrimSpace(metadata.Presence.Status), "online") {
-		return "online"
+	if metadata != nil {
+		if status := connectedPresenceStatusFromPresence(metadata.Presence); status != "" {
+			return status
+		}
 	}
-	if agent.Presence != nil && strings.EqualFold(strings.TrimSpace(agent.Presence.Status), "online") {
-		return "online"
+	if status := connectedPresenceStatusFromPresence(agent.Presence); status != "" {
+		return status
 	}
-	if strings.EqualFold(strings.TrimSpace(agent.Status), "online") {
-		return "online"
+	if status := normalizedConnectedPresenceStatus(agent.Status); status != "" {
+		return status
 	}
 	return "offline"
+}
+
+func connectedPresenceStatusFromPresence(presence *hub.AgentPresence) string {
+	if presence == nil {
+		return ""
+	}
+	if status := normalizedConnectedPresenceStatus(presence.Status); status != "" {
+		return status
+	}
+	if presence.Ready != nil {
+		if *presence.Ready {
+			return "online"
+		}
+		return "offline"
+	}
+	return ""
+}
+
+func normalizedConnectedPresenceStatus(status string) string {
+	switch normalizeCapabilityPresenceStatus(status) {
+	case "online":
+		return "online"
+	case "offline":
+		return "offline"
+	default:
+		return ""
+	}
 }
 
 func connectedAgentSupportsSkill(agent ConnectedAgent, skillName string) bool {
@@ -2263,7 +2292,7 @@ func mergeConnectedAgentEntries(primary, secondary ConnectedAgent) ConnectedAgen
 	merged.AgentID = coalesceTrimmed(merged.AgentID, secondary.AgentID)
 	merged.URI = coalesceTrimmed(merged.URI, secondary.URI)
 	merged.Handle = coalesceTrimmed(merged.Handle, secondary.Handle)
-	merged.Status = coalesceTrimmed(merged.Status, secondary.Status)
+	merged.Status = coalesceTrimmed(secondary.Status, merged.Status)
 	merged.DisplayName = coalesceTrimmed(merged.DisplayName, secondary.DisplayName)
 	merged.Emoji = coalesceTrimmed(merged.Emoji, secondary.Emoji)
 	merged.Presence = mergeConnectedAgentPresence(merged.Presence, secondary.Presence)
@@ -2337,11 +2366,11 @@ func mergeConnectedAgentPresence(primary, secondary *hub.AgentPresence) *hub.Age
 	}
 
 	presence := *primary
-	presence.Status = coalesceTrimmed(presence.Status, secondary.Status)
-	presence.Transport = coalesceTrimmed(presence.Transport, secondary.Transport)
-	presence.SessionKey = coalesceTrimmed(presence.SessionKey, secondary.SessionKey)
-	presence.UpdatedAt = coalesceTrimmed(presence.UpdatedAt, secondary.UpdatedAt)
-	if presence.Ready == nil && secondary.Ready != nil {
+	presence.Status = coalesceTrimmed(secondary.Status, presence.Status)
+	presence.Transport = coalesceTrimmed(secondary.Transport, presence.Transport)
+	presence.SessionKey = coalesceTrimmed(secondary.SessionKey, presence.SessionKey)
+	presence.UpdatedAt = coalesceTrimmed(secondary.UpdatedAt, presence.UpdatedAt)
+	if secondary.Ready != nil {
 		ready := *secondary.Ready
 		presence.Ready = &ready
 	}
@@ -2695,20 +2724,22 @@ func connectedAgentPresenceFromCapabilitySources(sources []map[string]any) *hub.
 
 	status := normalizeCapabilityPresenceStatus(firstCapabilityString(sources, "status"))
 	if status == "" {
-		status = "online"
+		return nil
 	}
 	return &hub.AgentPresence{Status: status}
 }
 
 func connectedAgentStatusFromCapabilitySources(sources []map[string]any, metadata *hub.AgentMetadata) string {
-	if metadata != nil && metadata.Presence != nil && strings.TrimSpace(metadata.Presence.Status) != "" {
-		return strings.TrimSpace(metadata.Presence.Status)
+	if metadata != nil {
+		if status := connectedPresenceStatusFromPresence(metadata.Presence); status != "" {
+			return status
+		}
 	}
 	status := normalizeCapabilityPresenceStatus(firstCapabilityString(sources, "status"))
 	if status != "" {
 		return status
 	}
-	return "online"
+	return ""
 }
 
 func normalizeCapabilityPresenceStatus(status string) string {
