@@ -30,6 +30,7 @@
     class="shell"
     data-bound="{{if .State.Session.AgentToken}}true{{else}}false{{end}}"
     data-connected-agent-count="{{len .State.ConnectedAgents}}"
+    {{if not .Connection.HubConnected}}inert aria-hidden="true"{{end}}
   >
     <header class="page-header">
       <div class="brand-lockup">
@@ -81,66 +82,6 @@
     {{end}}
 
     {{if .State.Session.AgentToken}}
-    <section
-      id="dispatch-overview"
-      class="panel dispatch-overview brand-login-card-shell"
-      data-auto-dismiss-seconds="30"
-    >
-      <div class="dispatch-overview-hero">
-        <div class="dispatch-overview-copy">
-          <p class="eyebrow dispatch-overview-eyebrow">Dispatch Workflow</p>
-          <h2 class="dispatch-overview-title brand-heading-h2-bold">Queue the right task with fewer clicks.</h2>
-          <p class="dispatch-overview-body brand-body-base-muted">Select a worker, let Dispatch load the first advertised skill from Molten Hub, then send markdown or JSON with automatic payload detection.</p>
-        </div>
-        <div class="dispatch-overview-summary">
-          <button
-            type="button"
-            id="dispatch-overview-close"
-            class="dispatch-overview-close"
-            aria-label="Close dispatch overview"
-          >
-            Close
-          </button>
-          <dl class="dispatch-overview-stats" aria-label="Dispatch state summary">
-            <div class="dispatch-overview-stat">
-              <dt>Connected Agents</dt>
-              <dd id="dispatch-overview-connected-agents-count">{{len .State.ConnectedAgents}}</dd>
-            </div>
-            <div class="dispatch-overview-stat">
-              <dt>Pending Tasks</dt>
-              <dd id="dispatch-overview-pending-tasks-count">{{len .State.PendingTasks}}</dd>
-            </div>
-            <div class="dispatch-overview-stat">
-              <dt>Recent Events</dt>
-              <dd id="dispatch-overview-recent-events-count">{{len .State.RecentEvents}}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-      <ol class="dispatch-overview-steps" aria-label="Dispatch steps">
-        <li>Pick one connected agent.</li>
-        <li>Confirm or change the skill Dispatch loads from that agent.</li>
-        <li>Paste markdown or JSON and submit the task.</li>
-      </ol>
-    </section>
-    {{end}}
-
-    {{if not .State.Session.AgentToken}}
-    <section class="grid two-up">
-      <article class="panel prompt-wrap dispatch-gate-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-        <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-          <div class="panel-header-copy">
-            <p class="eyebrow dispatch-panel-eyebrow">1. Onboarding</p>
-            <h2 class="panel-section-title">Connect this dispatcher to Molten Hub</h2>
-          </div>
-        </div>
-        <div class="dispatch-panel-body">
-          <p class="empty panel-section-copy">Choose a runtime region, paste an existing agent token, then connect this runtime to Molten Hub.</p>
-        </div>
-      </article>
-    </section>
-    {{end}}
-
     <section id="sub-actions-notice" class="panel dispatch-gate-panel" {{if .SubActions.Visible}}hidden{{end}}>
       <h2 data-sub-actions-title>{{if .SubActions.RequiresAgentConnection}}Connect agents in Molten Bot Hub{{else}}Sub-Actions Hidden{{end}}</h2>
       <p class="empty" data-sub-actions-reason>{{.SubActions.Reason}}</p>
@@ -312,7 +253,9 @@
         </article>
       </section>
     </div>
+    {{end}}
   </main>
+  {{if .State.Session.AgentToken}}
   <div class="page-bottom-dock" aria-hidden="false">
     <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Dispatch menu">
       <a
@@ -359,135 +302,35 @@
       </button>
     </div>
   </div>
-  {{if .State.Session.AgentToken}}
-      <div
-    class="settings-modal-backdrop"
-    id="agent-settings-modal-backdrop"
-    role="dialog"
-    aria-modal="true"
-    aria-hidden="true"
-    aria-labelledby="agent-settings-modal-title"
-    aria-describedby="agent-settings-modal-summary"
-    hidden
-  >
-    <section class="settings-modal form-surface">
-      <header class="settings-modal-header">
-        <div class="settings-modal-copy">
-          <p class="eyebrow">Agent Settings</p>
-          <h2 id="agent-settings-modal-title">Edit Agent Profile</h2>
-          <p id="agent-settings-modal-summary">Update how this agent appears in Molten Hub.</p>
-        </div>
-        <button type="button" class="settings-modal-close" id="agent-settings-modal-close">Close</button>
-      </header>
-      <form method="post" action="/profile" class="stack profile-shell" id="agent-settings-form">
-        <div class="profile-grid profile-grid-top">
-          <label>Handle<input id="agent-settings-handle" name="handle" value="{{.ProfileForm.Handle}}" {{if .State.Session.HandleFinalized}}readonly{{end}}></label>
-          <label>Display Name<input id="agent-settings-display-name" name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
-          <fieldset class="emoji-fieldset" id="agent-settings-emoji-picker">
-            <legend>Emoji</legend>
-            <div class="hub-emoji-picker" data-hub-emoji-picker>
-              <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
-              <button
-                type="button"
-                class="hub-emoji-picker-toggle"
-                data-hub-emoji-toggle
-                aria-haspopup="dialog"
-                aria-expanded="false"
-              >
-                <span class="hub-emoji-picker-toggle-content">
-                  <span class="hub-emoji-picker-toggle-chip">
-                    <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                  </span>
-                  <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
-                </span>
-                <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
-                  <i data-lucide="chevron-down" aria-hidden="true"></i>
-                </span>
-              </button>
-              <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
-                <div class="hub-emoji-picker-panel-header">
-                  <p class="hub-emoji-picker-label">Pick one emoji</p>
-                  <button type="button" class="hub-emoji-picker-clear" data-hub-emoji-clear>Clear</button>
-                </div>
-                <div class="hub-emoji-picker-mart" data-hub-emoji-mart-root aria-live="polite"></div>
-              </div>
-            </div>
-          </fieldset>
-        </div>
-        <label>Bio<textarea id="agent-settings-profile-markdown" name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
-        {{if not .State.Session.HandleFinalized}}
-        <p class="hint">This bind used a temporary handle. Pick the permanent handle you want, then save the profile once to finalize it.</p>
-        {{end}}
-        <div class="profile-form-footer">
-          <div class="profile-form-footer-primary">
-            <div class="connected-agents-refresh-shell connected-agents-refresh-shell-inline connected-agents-refresh-shell-compact">
-              <div
-                id="agent-settings-refresh-connected-agents-progress"
-                class="connected-agents-refresh-progress"
-                data-connected-agents-refresh-progress
-                role="progressbar"
-                aria-label="Connected agents refresh progress"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-valuenow="0"
-              >
-                <span class="connected-agents-refresh-progress-bar" data-connected-agents-refresh-bar></span>
-              </div>
-              <button
-                type="button"
-                id="agent-settings-refresh-connected-agents"
-                class="connected-agents-refresh connected-agents-refresh-icon-button"
-                data-connected-agents-refresh-button
-                aria-label="Refresh connected agents"
-                title="Refresh connected agents"
-              >
-                <i data-lucide="refresh-cw" aria-hidden="true"></i>
-              </button>
-            </div>
-            <button type="submit" class="profile-save-button">Save</button>
-          </div>
-          <p id="agent-settings-refresh-connected-agents-status" class="connected-agents-refresh-status" data-connected-agents-refresh-status aria-live="polite"></p>
-        </div>
-      </form>
-    </section>
-  </div>
   {{end}}
-  {{if not .State.Session.AgentToken}}
   <div
     class="onboarding-modal-backdrop"
     id="onboarding-modal-backdrop"
     role="dialog"
     aria-modal="true"
+    aria-hidden="{{if .Connection.HubConnected}}true{{else}}false{{end}}"
     aria-labelledby="onboarding-modal-title"
     aria-describedby="onboarding-modal-summary"
+    {{if .Connection.HubConnected}}hidden{{end}}
   >
     <section class="onboarding-modal form-surface">
       <div class="onboarding-modal-shell">
-        <aside class="onboarding-modal-sidebar">
-          <header class="onboarding-modal-header">
-            <p class="eyebrow">Molten Hub Onboarding</p>
-            <h2 id="onboarding-modal-title">Connect Molten Hub</h2>
-            <p id="onboarding-modal-summary">Connect this runtime using an existing agent token for the selected region.</p>
-          </header>
-          <section class="onboarding-flow" aria-live="polite">
-            <p class="state-summary-label">Onboarding Flow</p>
-            <ul class="onboarding-steps" id="onboarding-steps">
-              {{range .Onboarding.Steps}}
-              <li class="onboarding-step onboarding-step-{{.Status}}" data-step-id="{{.ID}}">
-                <span class="onboarding-step-label">{{.Label}}</span>
-                <small class="onboarding-step-detail">{{.Detail}}</small>
-              </li>
-              {{end}}
-            </ul>
-            <p class="onboarding-message" id="onboarding-message">{{.Onboarding.Message}}</p>
-          </section>
-          <div class="onboarding-modal-note">
-            <p>Connect this runtime to Molten Hub.</p>
-            <a class="onboarding-signin-link" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">Open Molten Hub sign-in</a>
+        <header class="onboarding-modal-sidebar">
+          <div class="onboarding-modal-header">
+            <p class="eyebrow">Molten Hub Dispatch</p>
+            <h2 id="onboarding-modal-title">{{if and .State.Session.AgentToken .Connection.HubConnected}}Agent Profile{{else}}Connect to Hub{{end}}</h2>
+            <p id="onboarding-modal-summary">{{if .State.Session.AgentToken}}{{if .Connection.HubConnected}}Update how this agent appears in Molten Hub.{{else}}Molten Hub is not connected.{{end}}{{else}}Get your agent token from Molten Hub.{{end}}</p>
           </div>
-        </aside>
-        <form method="post" action="/bind" class="stack profile-shell onboarding-form" id="bind-form">
+          {{if not (and .State.Session.AgentToken .Connection.HubConnected)}}
+          <a class="onboarding-signin-link" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">
+            <span>Agent Token</span>
+            <i data-lucide="external-link" aria-hidden="true"></i>
+          </a>
+          {{end}}
+        </header>
+        <form method="post" action="{{if .State.Session.AgentToken}}/profile{{else}}/bind{{end}}" class="stack profile-shell onboarding-form" id="bind-form" data-bound="{{if .State.Session.AgentToken}}true{{else}}false{{end}}">
           <input id="onboarding-mode-field" type="hidden" name="agent_mode" value="existing">
+          {{if not .State.Session.AgentToken}}
           <fieldset class="runtime-toggle onboarding-section">
             <legend>Region</legend>
             <div class="runtime-toggle-options">
@@ -495,8 +338,7 @@
               <label class="runtime-option">
                 <input type="radio" name="hub_region" value="{{.ID}}" {{if eq $.SelectedRuntime.ID .ID}}checked{{end}}>
                 <span>
-                  <strong>{{.Label}}</strong>
-                  <small>{{.Description}}</small>
+                  <strong>{{.Description}}</strong>
                 </span>
               </label>
               {{end}}
@@ -504,16 +346,17 @@
           </fieldset>
           <label id="onboarding-token-field" class="onboarding-token-field">
             <span id="onboarding-token-label">Agent Token</span>
-            <input id="onboarding-token-input" type="text" name="bind_token" value="{{.ProfileForm.BindToken}}" required inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token">
-            <small id="onboarding-token-hint" class="onboarding-token-hint">Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.</small>
+            <input id="onboarding-token-input" type="password" name="bind_token" value="{{.ProfileForm.BindToken}}" required inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste agent token">
+            <small id="onboarding-token-hint" class="onboarding-token-hint">Use the agent token from Molten Hub.</small>
           </label>
-          <div id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden>
+          {{end}}
+          <div id="onboarding-profile-fields" class="stack onboarding-profile-fields" {{if not .State.Session.AgentToken}}hidden{{end}}>
             <div class="profile-grid profile-grid-top onboarding-profile-grid">
-              <label id="onboarding-handle-field" hidden>Handle<input name="handle" value="{{.ProfileForm.Handle}}" placeholder="codex-beast"></label>
-              <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
+              <label id="onboarding-handle-field" {{if not .State.Session.AgentToken}}hidden{{end}}>Handle<input id="agent-settings-handle" name="handle" value="{{.ProfileForm.Handle}}" placeholder="happy-molten-bot" {{if .State.Session.HandleFinalized}}readonly{{end}}></label>
+              <label>Display Name<input id="agent-settings-display-name" name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
               <fieldset class="emoji-fieldset">
                 <legend>Emoji</legend>
-                <div class="hub-emoji-picker" data-hub-emoji-picker>
+                <div class="hub-emoji-picker" data-hub-emoji-picker id="agent-settings-emoji-picker">
                   <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
                   <button
                     type="button"
@@ -521,16 +364,10 @@
                     data-hub-emoji-toggle
                     aria-haspopup="dialog"
                     aria-expanded="false"
+                    aria-label="Choose emoji"
+                    title="Choose emoji"
                   >
-                    <span class="hub-emoji-picker-toggle-content">
-                      <span class="hub-emoji-picker-toggle-chip">
-                        <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{if .ProfileForm.Emoji}}{{.ProfileForm.Emoji}}{{else}}🙂{{end}}</span>
-                      </span>
-                      <span class="hub-emoji-picker-toggle-text" data-hub-emoji-selected-text>{{if .ProfileForm.Emoji}}Selected: {{.ProfileForm.Emoji}}{{else}}Choose an emoji{{end}}</span>
-                    </span>
-                    <span class="hub-emoji-picker-toggle-caret" aria-hidden="true">
-                      <i data-lucide="chevron-down" aria-hidden="true"></i>
-                    </span>
+                    <span class="hub-emoji-picker-toggle-preview" data-hub-emoji-preview>{{.ProfileForm.Emoji}}</span>
                   </button>
                   <div class="hub-emoji-picker-panel" data-hub-emoji-panel hidden>
                     <div class="hub-emoji-picker-panel-header">
@@ -542,16 +379,26 @@
                 </div>
               </fieldset>
             </div>
-            <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
+            <label>Bio<textarea id="agent-settings-profile-markdown" name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
           </div>
           <div class="onboarding-form-actions">
-            <button type="submit" id="bind-submit">Connect Runtime</button>
+            <p class="onboarding-message{{if .Onboarding.Error}} is-error{{end}}" id="onboarding-message" aria-live="polite">{{if or (not .State.Session.AgentToken) .Onboarding.Error}}{{.Onboarding.Message}}{{end}}</p>
+            {{if .State.Session.AgentToken}}
+            <button type="submit" class="secondary-button" id="agent-disconnect-submit" formaction="/disconnect" formmethod="post" aria-label="Disconnect agent" title="Disconnect">
+              <i data-lucide="unlink" aria-hidden="true"></i>
+            </button>
+            {{end}}
+            {{if and .State.Session.AgentToken .Connection.HubConnected}}
+            <button type="button" class="settings-modal-close onboarding-modal-close" id="agent-profile-modal-close" aria-label="Close agent profile" title="Close">
+              <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+            {{end}}
+            <button type="submit" id="bind-submit" {{if .State.Session.AgentToken}}disabled{{end}}>{{if .State.Session.AgentToken}}Save{{else}}Connect Runtime{{end}}</button>
           </div>
         </form>
       </div>
     </section>
   </div>
-  {{end}}
   <script src="/static/lucide.min.js"></script>
   <script id="initial-connected-agents-data" type="application/json">{{toJSON .State.ConnectedAgents}}</script>
   <script id="initial-pending-tasks-data" type="application/json">{{toJSON .State.PendingTasks}}</script>
@@ -565,8 +412,6 @@
       const hubConnItem = document.getElementById("hub-conn-item");
       const hubConnDot = document.getElementById("hub-conn-dot");
       const hubConnText = document.getElementById("hub-conn-text");
-      const dispatchOverview = document.getElementById("dispatch-overview");
-      const dispatchOverviewClose = document.getElementById("dispatch-overview-close");
       const subActions = document.getElementById("sub-actions");
       const subActionsNotice = document.getElementById("sub-actions-notice");
       const manualDispatchForm = document.getElementById("manual-dispatch-form");
@@ -593,9 +438,6 @@
       const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
       const activityFeedList = document.getElementById("activity-feed-list");
       const activityFeedEmpty = document.getElementById("activity-feed-empty");
-      const dispatchOverviewConnectedAgentsCount = document.getElementById("dispatch-overview-connected-agents-count");
-      const dispatchOverviewPendingTasksCount = document.getElementById("dispatch-overview-pending-tasks-count");
-      const dispatchOverviewRecentEventsCount = document.getElementById("dispatch-overview-recent-events-count");
       const connectedAgentsList = document.getElementById("connected-agents-list");
       const connectedAgentsEmpty = document.getElementById("connected-agents-empty");
       const connectedAgentsRefreshButtons = Array.from(document.querySelectorAll("[data-connected-agents-refresh-button]"));
@@ -604,8 +446,7 @@
       const connectedAgentsRefreshProgressBarNodes = Array.from(document.querySelectorAll("[data-connected-agents-refresh-bar]"));
       const onboardingModalBackdrop = document.getElementById("onboarding-modal-backdrop");
       const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");
-      const agentSettingsModalBackdrop = document.getElementById("agent-settings-modal-backdrop");
-      const agentSettingsModalClose = document.getElementById("agent-settings-modal-close");
+      const agentSettingsModalClose = document.getElementById("agent-profile-modal-close");
       const agentSettingsHandle = document.getElementById("agent-settings-handle");
       const agentSettingsDisplayName = document.getElementById("agent-settings-display-name");
       const agentSettingsEmojiPicker = document.getElementById("agent-settings-emoji-picker");
@@ -620,7 +461,6 @@
       const onboardingTokenHint = document.getElementById("onboarding-token-hint");
       const onboardingHandleField = document.getElementById("onboarding-handle-field");
       const onboardingProfileFields = document.getElementById("onboarding-profile-fields");
-      const onboardingSteps = document.getElementById("onboarding-steps");
       const onboardingMessage = document.getElementById("onboarding-message");
       const flash = document.querySelector(".flash[data-auto-dismiss-seconds]");
       const themeToggleButton = document.getElementById("theme-toggle");
@@ -635,9 +475,6 @@
       const THEME_KEY = "hubui.theme";
       const THEME_MODES = ["light", "dark", "night"];
       const DEFAULT_THEME_MODE = "dark";
-      const DISPATCH_OVERVIEW_STORAGE_KEY = "moltenhub.dispatchOverview.dismissed";
-      const DISPATCH_OVERVIEW_DISMISS_ANIMATION_MS = 240;
-      const DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;
       const CONNECTED_AGENTS_REFRESH_TICK_MS = 250;
       const LUCIDE_ICON_ATTR = "data-lucide";
@@ -714,7 +551,7 @@
         }, dismissDelay);
       }
 
-      if (onboardingModalBackdrop) {
+      if (onboardingModalBackdrop && !onboardingModalBackdrop.hidden) {
         document.body.classList.add("onboarding-modal-open");
       }
 
@@ -724,39 +561,44 @@
       const PANEL_ESTIMATED_HEIGHT = 430;
       const PANEL_ANIMATION_DURATION_MS = 180;
       const DEFAULT_EMOJI = "🙂";
-      const REACT_VERSION = "18.2.0";
-      const EMOJI_MART_REACT_MODULE = `https://esm.sh/@emoji-mart/react@1.1.1?deps=react@${REACT_VERSION}`;
-      const EMOJI_MART_DATA_MODULE = "https://esm.sh/@emoji-mart/data@1.2.1";
-      const REACT_MODULE = `https://esm.sh/react@${REACT_VERSION}`;
-      const REACT_DOM_CLIENT_MODULE = `https://esm.sh/react-dom@${REACT_VERSION}/client?deps=react@${REACT_VERSION}`;
-
-      let emojiMartModulesPromise = null;
-      const loadEmojiMartModules = async () => {
-        if (!emojiMartModulesPromise) {
-          emojiMartModulesPromise = Promise.all([
-            import(REACT_MODULE),
-            import(REACT_DOM_CLIENT_MODULE),
-            import(EMOJI_MART_REACT_MODULE),
-            import(EMOJI_MART_DATA_MODULE),
-          ]).then(([reactModule, reactDomClientModule, pickerModule, dataModule]) => {
-            const React = reactModule.default || reactModule;
-            const createRoot = reactDomClientModule.createRoot;
-            const Picker = pickerModule.default || pickerModule.Picker || pickerModule;
-            const emojiMartData = dataModule.default || dataModule;
-            if (typeof createRoot !== "function") {
-              throw new Error("react-dom createRoot is unavailable");
-            }
-            if (typeof Picker !== "function") {
-              throw new Error("@emoji-mart/react picker module is unavailable");
-            }
-            if (!emojiMartData || typeof emojiMartData !== "object") {
-              throw new Error("@emoji-mart/data module is unavailable");
-            }
-            return { React, createRoot, Picker, emojiMartData };
-          });
-        }
-        return emojiMartModulesPromise;
-      };
+      const PROFILE_EMOJI_GROUPS = [
+        {
+          label: "Smileys",
+          emoji: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🙂", "🙃", "😉", "😊", "😇", "😍", "🤩", "😘", "😎", "🥳", "🤔", "🫡", "🤯", "😴", "😭", "😤", "😈"],
+        },
+        {
+          label: "People",
+          emoji: ["👋", "👏", "🙌", "🙏", "💪", "🦾", "👍", "👎", "✌️", "🤘", "👌", "🤌", "👀", "🧠", "🧑‍💻", "🧑‍🔬", "🧑‍🚀", "🧙", "🥷", "🦸", "🧟", "💃", "🕺", "🏃"],
+        },
+        {
+          label: "Nature",
+          emoji: ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐸", "🐵", "🐧", "🐦", "🦉", "🦋", "🌵", "🌲", "🌸", "🌈", "🌊", "🔥"],
+        },
+        {
+          label: "Food",
+          emoji: ["🍏", "🍎", "🍌", "🍓", "🍒", "🍑", "🍍", "🥝", "🥑", "🥕", "🌮", "🍕", "🍔", "🍟", "🍜", "🍣", "🍩", "🍪", "🍰", "☕", "🍺", "🍷", "🥂", "🍾"],
+        },
+        {
+          label: "Activity",
+          emoji: ["⚽", "🏀", "🏈", "⚾", "🎾", "🏐", "🎱", "🏓", "🥊", "🎮", "🎲", "🎯", "🎨", "🎬", "🎤", "🎧", "🎹", "🥁", "🎸", "🏆", "🥇", "🧩", "♟️", "🕹️"],
+        },
+        {
+          label: "Travel",
+          emoji: ["🚗", "🚕", "🚌", "🏎️", "🚓", "🚑", "🚒", "🚚", "🚲", "✈️", "🚀", "🛸", "🛰️", "⛵", "🚢", "🏠", "🏢", "🏰", "⛰️", "🏝️", "🌋", "🗺️", "🧭", "🧳"],
+        },
+        {
+          label: "Objects",
+          emoji: ["⌚", "📱", "💻", "⌨️", "🖥️", "🖨️", "📷", "📡", "💡", "🔦", "🧯", "🔋", "🪫", "🔌", "🧲", "🧪", "🧬", "🔬", "🔭", "🛠️", "⚙️", "🔧", "🔨", "🪛"],
+        },
+        {
+          label: "Symbols",
+          emoji: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "💯", "💥", "💫", "💦", "✨", "⚡", "☀️", "🌙", "⭐", "🌟", "🔮", "✅", "❌", "⚠️", "♻️", "🔁"],
+        },
+        {
+          label: "Agent",
+          emoji: ["🤖", "🦾", "🧠", "🚀", "🛰️", "📡", "🧪", "🧬", "⚙️", "🛠️", "💡", "🔮", "🎯", "✨", "🔥", "⚡", "🌊", "🎛️", "🧭", "🧑‍💻", "🧑‍🔬", "🧑‍🚀", "🪄", "🏁"],
+        },
+      ];
 
       const graphemeSegmenter = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
         ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
@@ -799,19 +641,48 @@
         }
         const input = root.querySelector("[data-hub-emoji-input]");
         const preview = root.querySelector("[data-hub-emoji-preview]");
-        const selectedText = root.querySelector("[data-hub-emoji-selected-text]");
         if (
           !(input instanceof HTMLInputElement) ||
-          !(preview instanceof HTMLElement) ||
-          !(selectedText instanceof HTMLElement)
+          !(preview instanceof HTMLElement)
         ) {
           return;
         }
         const emojiValue = firstEmojiGrapheme(value);
         input.value = emojiValue;
         preview.textContent = emojiValue || DEFAULT_EMOJI;
-        selectedText.textContent = emojiValue ? `Selected: ${emojiValue}` : "Choose an emoji";
-        selectedText.classList.toggle("is-selected", emojiValue !== "");
+      };
+
+      let agentProfileBaseline = null;
+      const agentProfileSnapshot = () => ({
+        handle: agentSettingsHandle instanceof HTMLInputElement ? trimmedString(agentSettingsHandle.value) : "",
+        displayName: agentSettingsDisplayName instanceof HTMLInputElement ? trimmedString(agentSettingsDisplayName.value) : "",
+        emoji: agentSettingsEmojiPicker instanceof HTMLElement
+          ? trimmedString(agentSettingsEmojiPicker.querySelector("[data-hub-emoji-input]")?.value)
+          : "",
+        profileMarkdown: agentSettingsProfileMarkdown instanceof HTMLTextAreaElement ? trimmedString(agentSettingsProfileMarkdown.value) : "",
+      });
+
+      const agentProfileChanged = () => {
+        if (!agentProfileBaseline) {
+          return false;
+        }
+        const current = agentProfileSnapshot();
+        return current.handle !== agentProfileBaseline.handle
+          || current.displayName !== agentProfileBaseline.displayName
+          || current.emoji !== agentProfileBaseline.emoji
+          || current.profileMarkdown !== agentProfileBaseline.profileMarkdown;
+      };
+
+      const syncAgentProfileSaveState = () => {
+        if (!(bindSubmit instanceof HTMLButtonElement) || !(bindForm instanceof HTMLFormElement) || bindForm.dataset.bound !== "true") {
+          return;
+        }
+        bindSubmit.disabled = !agentProfileChanged();
+      };
+
+      const resetAgentProfileBaseline = () => {
+        agentProfileBaseline = agentProfileSnapshot();
+        syncAgentProfileSaveState();
       };
 
       const applyAgentProfileToSettingsForm = (profile) => {
@@ -832,6 +703,7 @@
           agentSettingsProfileMarkdown.value = profileMarkdown;
         }
         syncHubEmojiPickerValue(agentSettingsEmojiPicker, emoji);
+        resetAgentProfileBaseline();
       };
 
       const refreshAgentSettingsProfile = async () => {
@@ -868,16 +740,16 @@
       };
 
       const setAgentSettingsModalOpen = (open, returnFocus = false) => {
-        if (!(agentSettingsModalBackdrop instanceof HTMLElement)) {
+        if (!(onboardingModalBackdrop instanceof HTMLElement)) {
           return;
         }
         const visible = Boolean(open);
         if (!visible && closeActiveEmojiPicker) {
           closeActiveEmojiPicker();
         }
-        agentSettingsModalBackdrop.hidden = !visible;
-        agentSettingsModalBackdrop.setAttribute("aria-hidden", visible ? "false" : "true");
-        document.body.classList.toggle("settings-modal-open", visible);
+        onboardingModalBackdrop.hidden = !visible;
+        onboardingModalBackdrop.setAttribute("aria-hidden", visible ? "false" : "true");
+        document.body.classList.toggle("onboarding-modal-open", visible);
         if (!visible) {
           if (returnFocus && agentSettingsDockButton instanceof HTMLElement) {
             agentSettingsDockButton.focus({ preventScroll: true });
@@ -1344,7 +1216,6 @@
         const input = root.querySelector("[data-hub-emoji-input]");
         const toggle = root.querySelector("[data-hub-emoji-toggle]");
         const preview = root.querySelector("[data-hub-emoji-preview]");
-        const selectedText = root.querySelector("[data-hub-emoji-selected-text]");
         const panel = root.querySelector("[data-hub-emoji-panel]");
         const clearButton = root.querySelector("[data-hub-emoji-clear]");
         const pickerMount = root.querySelector("[data-hub-emoji-mart-root]");
@@ -1352,7 +1223,6 @@
           !(input instanceof HTMLInputElement) ||
           !(toggle instanceof HTMLButtonElement) ||
           !(preview instanceof HTMLElement) ||
-          !(selectedText instanceof HTMLElement) ||
           !(panel instanceof HTMLElement) ||
           !(clearButton instanceof HTMLButtonElement) ||
           !(pickerMount instanceof HTMLElement)
@@ -1361,20 +1231,51 @@
         }
 
         let open = false;
-        let pickerRoot = null;
         let pickerMounted = false;
-        let pickerLoading = false;
         let panelCloseTimer = 0;
         if (panel.parentElement !== document.body) {
           document.body.appendChild(panel);
         }
 
-        const renderPickerMessage = (message) => {
+        const mountPicker = () => {
+          if (pickerMounted || !open) {
+            return;
+          }
           pickerMount.innerHTML = "";
-          const node = document.createElement("p");
-          node.className = "hub-emoji-picker-empty";
-          node.textContent = message;
-          pickerMount.appendChild(node);
+          PROFILE_EMOJI_GROUPS.forEach((group) => {
+            if (!group || !Array.isArray(group.emoji) || group.emoji.length === 0) {
+              return;
+            }
+            const section = document.createElement("section");
+            section.className = "hub-emoji-picker-category";
+
+            const heading = document.createElement("p");
+            heading.className = "hub-emoji-picker-category-label";
+            heading.textContent = String(group.label || "Emoji");
+            section.appendChild(heading);
+
+            const grid = document.createElement("div");
+            grid.className = "hub-emoji-picker-grid";
+            group.emoji.forEach((emoji) => {
+              const emojiValue = firstEmojiGrapheme(emoji);
+              if (!emojiValue) {
+                return;
+              }
+              const option = document.createElement("button");
+              option.type = "button";
+              option.className = "hub-emoji-picker-option";
+              option.textContent = emojiValue;
+              option.setAttribute("aria-label", `Use ${emojiValue}`);
+              option.addEventListener("click", () => {
+                setEmojiValue(emojiValue, true);
+              });
+              grid.appendChild(option);
+            });
+            section.appendChild(grid);
+            pickerMount.appendChild(section);
+          });
+          pickerMounted = true;
+          window.requestAnimationFrame(positionPanel);
         };
 
         const syncSelectedState = () => {
@@ -1384,8 +1285,6 @@
           }
           const previewEmoji = emojiValue || DEFAULT_EMOJI;
           preview.textContent = previewEmoji;
-          selectedText.textContent = emojiValue ? `Selected: ${emojiValue}` : "Choose an emoji";
-          selectedText.classList.toggle("is-selected", emojiValue !== "");
         };
 
         const positionPanel = () => {
@@ -1433,12 +1332,7 @@
         };
 
         const unmountPicker = () => {
-          if (pickerRoot && pickerMounted) {
-            pickerRoot.render(null);
-          }
           pickerMounted = false;
-          pickerLoading = false;
-          pickerMount.classList.remove("is-loading");
           pickerMount.innerHTML = "";
         };
 
@@ -1461,53 +1355,6 @@
           }, PANEL_ANIMATION_DURATION_MS);
           if (closeActiveEmojiPicker === closePanel) {
             closeActiveEmojiPicker = null;
-          }
-        };
-
-        const mountPicker = async () => {
-          if (pickerLoading || pickerMounted || !open) {
-            return;
-          }
-          pickerLoading = true;
-          pickerMount.classList.add("is-loading");
-          renderPickerMessage("Loading emoji picker...");
-          try {
-            const { React, createRoot, Picker, emojiMartData } = await loadEmojiMartModules();
-            if (!open) {
-              return;
-            }
-            pickerMount.innerHTML = "";
-            if (!pickerRoot) {
-              pickerRoot = createRoot(pickerMount);
-            }
-            pickerRoot.render(
-              React.createElement(Picker, {
-                data: emojiMartData,
-                onEmojiSelect: (emoji) => {
-                  const nextEmoji = emoji && typeof emoji.native === "string" ? emoji.native : "";
-                  if (!nextEmoji) {
-                    return;
-                  }
-                  setEmojiValue(nextEmoji, true);
-                },
-                previewPosition: "none",
-                skinTonePosition: "none",
-                searchPosition: "sticky",
-                maxFrequentRows: 2,
-                theme: currentThemeMode() === "light" ? "light" : "dark",
-              }),
-            );
-            pickerMounted = true;
-            window.requestAnimationFrame(positionPanel);
-          } catch (error) {
-            if (!open) {
-              return;
-            }
-            const message = error instanceof Error ? error.message : "Unknown error";
-            renderPickerMessage(`Emoji picker failed to load: ${message}`);
-          } finally {
-            pickerLoading = false;
-            pickerMount.classList.remove("is-loading");
           }
         };
 
@@ -1534,12 +1381,17 @@
           window.addEventListener("keydown", handleWindowKeydown);
           window.addEventListener("resize", positionPanel);
           window.addEventListener("scroll", positionPanel, true);
-          void mountPicker();
+          mountPicker();
         };
 
         const setEmojiValue = (nextValue, closeWhenDone = false) => {
-          input.value = firstEmojiGrapheme(nextValue);
+          const nextEmoji = firstEmojiGrapheme(nextValue);
+          const changed = input.value !== nextEmoji;
+          input.value = nextEmoji;
           syncSelectedState();
+          if (changed) {
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          }
           if (closeWhenDone) {
             closePanel();
           }
@@ -1600,9 +1452,9 @@
         });
       }
 
-      if (agentSettingsModalBackdrop instanceof HTMLElement) {
-        agentSettingsModalBackdrop.addEventListener("click", (event) => {
-          if (event.target === agentSettingsModalBackdrop) {
+      if (onboardingModalBackdrop instanceof HTMLElement) {
+        onboardingModalBackdrop.addEventListener("click", (event) => {
+          if (event.target === onboardingModalBackdrop && bound) {
             setAgentSettingsModalOpen(false, true);
           }
         });
@@ -1612,7 +1464,7 @@
         if (event.key !== "Escape") {
           return;
         }
-        if (!(agentSettingsModalBackdrop instanceof HTMLElement) || agentSettingsModalBackdrop.hidden) {
+        if (!(onboardingModalBackdrop instanceof HTMLElement) || onboardingModalBackdrop.hidden || !bound) {
           return;
         }
         if (document.querySelector(".hub-emoji-picker-panel:not([hidden])")) {
@@ -1622,43 +1474,27 @@
       });
 
       const bound = shell?.dataset.bound === "true";
+      if (bound && bindForm instanceof HTMLFormElement && bindForm.dataset.bound === "true") {
+        resetAgentProfileBaseline();
+        [
+          agentSettingsHandle,
+          agentSettingsDisplayName,
+          agentSettingsProfileMarkdown,
+          agentSettingsEmojiPicker instanceof HTMLElement
+            ? agentSettingsEmojiPicker.querySelector("[data-hub-emoji-input]")
+            : null,
+        ].forEach((field) => {
+          if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+            field.addEventListener("input", syncAgentProfileSaveState);
+          }
+        });
+      }
       const normalizedOnboardingMode = (value) => String(value || "").trim() === "new" ? "new" : "existing";
+      const onboardingModeFromToken = (token) => String(token || "").trim().toLowerCase().startsWith("b_") ? "new" : "existing";
       let onboardingModeState = normalizedOnboardingMode(
         onboardingModeField instanceof HTMLInputElement ? onboardingModeField.value : "existing",
       );
       const currentOnboardingMode = () => onboardingModeState;
-      const onboardingDefaults = (mode = (bound ? "existing" : currentOnboardingMode())) => {
-        const isNew = String(mode || "").trim() === "new";
-        return [
-          {
-            id: "bind",
-            label: "Bind",
-            status: "pending",
-            detail: isNew
-              ? "Exchange the bind token for an agent credential."
-              : "Verify the existing Molten Hub agent credential.",
-          },
-          {
-            id: "work_bind",
-            label: "Work",
-            status: "pending",
-            detail: "Resolve and verify Molten Hub credentials.",
-          },
-          {
-            id: "profile_set",
-            label: "Profile Set",
-            status: "pending",
-            detail: "Persist the agent profile in Molten Hub.",
-          },
-          {
-            id: "work_activate",
-            label: "Work",
-            status: "pending",
-            detail: "Apply the runtime transport and confirm activation.",
-          },
-        ];
-      };
-
       const applyOnboardingMode = (mode) => {
         const normalizedMode = normalizedOnboardingMode(mode);
         onboardingModeState = normalizedMode;
@@ -1682,8 +1518,8 @@
         }
         if (onboardingTokenHint) {
           onboardingTokenHint.textContent = isNew
-            ? "Paste a bind token to redeem a new agent credential, then save the runtime profile for the selected region."
-            : "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.";
+            ? "Use a bind token from Molten Hub."
+            : "Use the agent token from Molten Hub.";
         }
         if (onboardingHandleField instanceof HTMLElement) {
           onboardingHandleField.hidden = !isNew;
@@ -1692,13 +1528,12 @@
           onboardingProfileFields.hidden = !isNew;
         }
         if (bindSubmit) {
-          bindSubmit.textContent = isNew ? "Redeem Token" : "Connect Runtime";
+          bindSubmit.textContent = isNew ? "Lets Gooo!" : "Connect Runtime";
         }
         renderOnboarding({
           stage: "bind",
           active: false,
           message: "",
-          steps: onboardingDefaults(normalizedMode).map((step, index) => index === 0 ? { ...step, status: "current" } : step),
         });
       };
 
@@ -1725,41 +1560,32 @@
           }
         });
         if (bindSubmit) {
-          const idleLabel = currentOnboardingMode() === "new" ? "Redeem Token" : "Connect Runtime";
-          bindSubmit.textContent = busy ? (idleLabel === "Redeem Token" ? "Redeeming..." : "Connecting...") : idleLabel;
+          const isNew = currentOnboardingMode() === "new";
+          const idleLabel = isNew ? "Lets Gooo!" : "Connect Runtime";
+          bindSubmit.textContent = busy ? (isNew ? "Going..." : "Connecting...") : idleLabel;
         }
       };
 
       const renderOnboarding = (flow) => {
-        if (!onboardingSteps) {
-          return;
-        }
-        const steps = Array.isArray(flow && flow.steps) && flow.steps.length
-          ? flow.steps
-          : onboardingDefaults();
-        onboardingSteps.innerHTML = "";
-        steps.forEach((step) => {
-          const status = String(step && step.status || "pending");
-          const detail = String(step && step.detail || "").trim();
-          const item = document.createElement("li");
-          item.className = `onboarding-step onboarding-step-${status}`;
-          item.setAttribute("data-step-id", String(step && step.id || ""));
-
-          const labelNode = document.createElement("span");
-          labelNode.className = "onboarding-step-label";
-          labelNode.textContent = String(step && step.label || "Step");
-          item.appendChild(labelNode);
-
-          const detailNode = document.createElement("small");
-          detailNode.className = "onboarding-step-detail";
-          detailNode.textContent = detail;
-          item.appendChild(detailNode);
-
-          onboardingSteps.appendChild(item);
-        });
         if (onboardingMessage) {
           onboardingMessage.textContent = String(flow && flow.message || "").trim();
+          onboardingMessage.classList.toggle("is-error", Boolean(flow && flow.error));
         }
+      };
+
+      const formatOnboardingMessage = (message) => {
+        let value = String(message || "").trim();
+        if (value === "") {
+          return "Unable to complete onboarding.";
+        }
+        value = value.replace(/(?:^|\s)\/[^\s:]+:\s*/g, " ");
+        value = value.replace(/\bhub API\s+\d{3}\b:?\s*/gi, " ");
+        value = value.replace(/\b[a-z][a-z0-9_]*_[a-z0-9_]+\b:?\s*/gi, " ");
+        value = value.replace(/\s+/g, " ").trim();
+        if (value === "") {
+          return "Unable to complete onboarding.";
+        }
+        return value.charAt(0).toUpperCase() + value.slice(1);
       };
 
       const redirectToConsole = () => {
@@ -1767,7 +1593,14 @@
       };
 
       if (!bound) {
-        applyOnboardingMode(currentOnboardingMode());
+        applyOnboardingMode(onboardingTokenInput instanceof HTMLInputElement
+          ? onboardingModeFromToken(onboardingTokenInput.value)
+          : currentOnboardingMode());
+        if (onboardingTokenInput instanceof HTMLInputElement) {
+          onboardingTokenInput.addEventListener("input", () => {
+            applyOnboardingMode(onboardingModeFromToken(onboardingTokenInput.value));
+          });
+        }
         if (onboardingExistingAgentToggle instanceof HTMLButtonElement) {
           onboardingExistingAgentToggle.addEventListener("click", () => {
             applyOnboardingMode("existing");
@@ -1790,8 +1623,8 @@
           renderOnboarding({
             stage: "bind",
             active: true,
-            message: isNew ? "Exchanging bind token for an agent credential." : "Verifying existing Molten Hub agent credential.",
-            steps: onboardingDefaults(mode).map((step) => step.id === "bind" ? { ...step, status: "current" } : step),
+            message: isNew ? "Setting up your agent." : "Checking agent token.",
+            error: false,
           });
           setBindBusy(true);
           let redirected = false;
@@ -1820,15 +1653,19 @@
               body = null;
             }
             if (!response.ok || !body || body.ok !== true) {
-              const message = String(body && body.error || `onboarding request failed with ${response.status}`);
+              const rawMessage = String(body && (body.detail || body.error) || `onboarding request failed with ${response.status}`);
+              if (typeof console !== "undefined" && typeof console.error === "function") {
+                console.error("Onboarding failed:", rawMessage);
+              }
+              const message = formatOnboardingMessage(rawMessage);
               if (body && body.onboarding) {
-                renderOnboarding(body.onboarding);
+                renderOnboarding({ ...body.onboarding, message, error: true });
               } else {
                 renderOnboarding({
                   stage: "bind",
                   active: false,
                   message,
-                  steps: onboardingDefaults(mode).map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
+                  error: true,
                 });
               }
               if (body && body.bound) {
@@ -1843,12 +1680,16 @@
             redirected = true;
             redirectToConsole();
           } catch (error) {
-            const message = error instanceof Error ? error.message : "Unable to complete onboarding request.";
+            const rawMessage = error instanceof Error ? error.message : "Unable to complete onboarding request.";
+            if (typeof console !== "undefined" && typeof console.error === "function") {
+              console.error("Onboarding failed:", rawMessage);
+            }
+            const message = formatOnboardingMessage(rawMessage);
             renderOnboarding({
               stage: "bind",
               active: false,
               message,
-              steps: onboardingDefaults(mode).map((step) => step.id === "bind" ? { ...step, status: "error", detail: message } : step),
+              error: true,
             });
           } finally {
             if (!redirected) {
@@ -1872,9 +1713,6 @@
       let latestPendingTasks = [];
       let latestRecentEvents = [];
       let activityFeedExpandedKeys = new Set();
-      let dispatchOverviewDismissTimer = 0;
-      let dispatchOverviewDismissedThisSession = false;
-
       const parseInitialArrayData = (node) => {
         if (!(node instanceof HTMLScriptElement)) {
           return [];
@@ -1897,90 +1735,7 @@
         }
         const status = trimmedString(state.status).toLowerCase();
         const transport = trimmedString(state.transport).toLowerCase();
-        return status === "connected" || transport === "ws" || transport === "http_long_poll" || transport === "connected";
-      };
-
-      const clearDispatchOverviewDismissTimer = () => {
-        if (!dispatchOverviewDismissTimer) {
-          return;
-        }
-        window.clearTimeout(dispatchOverviewDismissTimer);
-        dispatchOverviewDismissTimer = 0;
-      };
-
-      const readDispatchOverviewDismissed = () => {
-        try {
-          return localStorage.getItem(DISPATCH_OVERVIEW_STORAGE_KEY) === "true";
-        } catch (_error) {
-          return false;
-        }
-      };
-
-      const persistDispatchOverviewDismissed = () => {
-        try {
-          localStorage.setItem(DISPATCH_OVERVIEW_STORAGE_KEY, "true");
-        } catch (_error) {
-          // Ignore localStorage failures.
-        }
-      };
-
-      const dispatchOverviewAutoDismissDelay = () => {
-        if (!(dispatchOverview instanceof HTMLElement)) {
-          return DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS;
-        }
-        const configuredSeconds = Number.parseFloat(dispatchOverview.dataset.autoDismissSeconds || "");
-        if (Number.isFinite(configuredSeconds) && configuredSeconds > 0) {
-          return configuredSeconds * 1000;
-        }
-        return DISPATCH_OVERVIEW_DEFAULT_AUTO_DISMISS_MS;
-      };
-
-      const dismissDispatchOverview = (persist) => {
-        if (!(dispatchOverview instanceof HTMLElement)) {
-          return;
-        }
-        dispatchOverviewDismissedThisSession = true;
-        clearDispatchOverviewDismissTimer();
-        if (persist) {
-          persistDispatchOverviewDismissed();
-        }
-        if (dispatchOverview.hidden) {
-          return;
-        }
-        dispatchOverview.classList.add("dispatch-overview-fading");
-        window.setTimeout(() => {
-          if (!(dispatchOverview instanceof HTMLElement)) {
-            return;
-          }
-          dispatchOverview.hidden = true;
-          dispatchOverview.classList.remove("dispatch-overview-fading");
-        }, DISPATCH_OVERVIEW_DISMISS_ANIMATION_MS);
-      };
-
-      const showDispatchOverview = () => {
-        if (!(dispatchOverview instanceof HTMLElement)) {
-          return;
-        }
-        clearDispatchOverviewDismissTimer();
-        dispatchOverview.hidden = false;
-        dispatchOverview.classList.remove("dispatch-overview-fading");
-        dispatchOverviewDismissTimer = window.setTimeout(() => {
-          dismissDispatchOverview(true);
-        }, dispatchOverviewAutoDismissDelay());
-      };
-
-      const syncDispatchOverview = (state = latestHubConnectionState) => {
-        if (!(dispatchOverview instanceof HTMLElement) || dispatchOverviewDismissedThisSession) {
-          return;
-        }
-        const hubConnected = isHubConnectedState(state);
-        if (readDispatchOverviewDismissed() && hubConnected) {
-          clearDispatchOverviewDismissTimer();
-          dispatchOverview.hidden = true;
-          dispatchOverview.classList.remove("dispatch-overview-fading");
-          return;
-        }
-        showDispatchOverview();
+        return status === "connected" || transport === "ws" || transport === "http_long_poll" || transport === "http" || transport === "connected";
       };
 
       const syncSubActions = (state = latestHubConnectionState) => {
@@ -2074,7 +1829,7 @@
         if (!hubConnItem || !hubConnText) {
           return;
         }
-        const connected = mode === "ws" || mode === "http_long_poll" || mode === "connected";
+        const connected = mode === "ws" || mode === "http_long_poll" || mode === "http" || mode === "connected";
         const online = connected;
         const actionable = connected || mode === "disconnected";
         const actionTone = connected ? "online" : (mode === "disconnected" ? "offline" : "");
@@ -2095,7 +1850,6 @@
           transport: mode || "offline",
         };
         syncSubActions(latestHubConnectionState);
-        syncDispatchOverview(latestHubConnectionState);
       };
       let dispatchRequestInFlight = false;
       let dispatchStatusClearTimer = 0;
@@ -2738,18 +2492,6 @@
         return bound && connectedAgentsCount === 0;
       };
 
-      const syncDispatchOverviewStats = () => {
-        if (dispatchOverviewConnectedAgentsCount instanceof HTMLElement) {
-          dispatchOverviewConnectedAgentsCount.textContent = String(connectedAgentsCount);
-        }
-        if (dispatchOverviewPendingTasksCount instanceof HTMLElement) {
-          dispatchOverviewPendingTasksCount.textContent = String(latestPendingTasks.length);
-        }
-        if (dispatchOverviewRecentEventsCount instanceof HTMLElement) {
-          dispatchOverviewRecentEventsCount.textContent = String(latestRecentEvents.length);
-        }
-      };
-
       const runtimeTargetAgentLabel = (value) => {
         const displayName = trimmedString(value && value.target_agent_display_name);
         if (displayName !== "") {
@@ -2969,18 +2711,16 @@
         latestPendingTasks = nextTasks;
         latestRecentEvents = nextEvents;
         if (!(activityFeedList instanceof HTMLElement) || !(activityFeedEmpty instanceof HTMLElement)) {
-          syncDispatchOverviewStats();
-          return;
-        }
+                  return;
+                }
         const feed = mergeActivityFeed(nextTasks, nextEvents);
         activityFeedList.innerHTML = "";
         if (feed.length === 0) {
           activityFeedExpandedKeys = new Set();
           activityFeedList.hidden = true;
           activityFeedEmpty.hidden = false;
-          syncDispatchOverviewStats();
-          return;
-        }
+                  return;
+                }
         const lanes = groupActivityFeedLanes(feed);
         const nextExpandedKeys = new Set();
         lanes.forEach((lane) => {
@@ -3038,8 +2778,7 @@
         activityFeedEmpty.hidden = true;
         activityFeedList.hidden = false;
         hydrateLucideIcons(activityFeedList);
-        syncDispatchOverviewStats();
-      };
+              };
 
       const renderConnectedAgents = (agents) => {
         const nextAgents = Array.isArray(agents) ? agents : [];
@@ -3072,8 +2811,7 @@
         if (bound) {
           stopConnectedAgentsAutoRefresh("Auto-refresh paused while agents are connected.");
         }
-        syncDispatchOverviewStats();
-      };
+              };
 
       const setConnectedAgentsRefreshProgress = (ratio) => {
         const clamped = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
@@ -3290,7 +3028,6 @@
       if (shell && hubConnItem && hubConnText && subActions && subActionsNotice) {
         setLocalConnection();
         syncSubActions(latestHubConnectionState);
-        syncDispatchOverview(latestHubConnectionState);
         refreshState();
         window.setInterval(refreshState, 3000);
       }
@@ -3302,11 +3039,6 @@
           });
         }
       });
-      if (dispatchOverviewClose instanceof HTMLButtonElement) {
-        dispatchOverviewClose.addEventListener("click", () => {
-          dismissDispatchOverview(true);
-        });
-      }
       if (skillPayloadInput instanceof HTMLTextAreaElement) {
         skillPayloadInput.addEventListener("input", () => {
           validateSkillPayload();

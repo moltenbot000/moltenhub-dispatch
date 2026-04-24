@@ -87,6 +87,11 @@ func OnboardingModeFromToken(token string) string {
 	return OnboardingModeExisting
 }
 
+func onboardingTokenHasModePrefix(token string) bool {
+	token = strings.ToLower(strings.TrimSpace(token))
+	return strings.HasPrefix(token, "b_") || strings.HasPrefix(token, "t_")
+}
+
 func NormalizeOnboardingTokens(mode, bindToken, agentToken string) (string, string, string) {
 	bindToken = strings.TrimSpace(bindToken)
 	agentToken = strings.TrimSpace(agentToken)
@@ -95,6 +100,13 @@ func NormalizeOnboardingTokens(mode, bindToken, agentToken string) (string, stri
 	submittedToken := bindToken
 	if submittedToken == "" {
 		submittedToken = agentToken
+	}
+	if submittedToken != "" && onboardingTokenHasModePrefix(submittedToken) {
+		resolvedMode := OnboardingModeFromToken(submittedToken)
+		if resolvedMode == OnboardingModeNew {
+			return OnboardingModeNew, submittedToken, ""
+		}
+		return OnboardingModeExisting, "", submittedToken
 	}
 	switch mode {
 	case OnboardingModeNew:
@@ -132,31 +144,32 @@ func DefaultOnboardingStepsForMode(mode string) []OnboardingStep {
 	steps := []OnboardingStep{
 		{
 			ID:     OnboardingStepBind,
-			Label:  "Bind",
+			Label:  "Redeem Token",
 			Status: "pending",
-			Detail: "Exchange the bind token for an agent credential.",
+			Detail: "Create this dispatcher's agent credential.",
 		},
 		{
 			ID:     OnboardingStepWorkBind,
-			Label:  "Work",
+			Label:  "Verify",
 			Status: "pending",
-			Detail: "Resolve and verify Molten Hub credentials.",
+			Detail: "Check the Molten Hub credential.",
 		},
 		{
 			ID:     OnboardingStepProfileSet,
-			Label:  "Profile Set",
+			Label:  "Register",
 			Status: "pending",
-			Detail: "Persist the agent profile in Molten Hub.",
+			Detail: "Register this runtime with Molten Hub.",
 		},
 		{
 			ID:     OnboardingStepWorkActivate,
-			Label:  "Work",
+			Label:  "Activate",
 			Status: "pending",
-			Detail: "Apply the runtime transport and confirm activation.",
+			Detail: "Apply the region settings.",
 		},
 	}
 	if strings.EqualFold(strings.TrimSpace(mode), OnboardingModeExisting) {
-		steps[0].Detail = "Verify the existing Molten Hub agent credential."
+		steps[0].Label = "Agent Token"
+		steps[0].Detail = "Check the agent token."
 	}
 	return steps
 }

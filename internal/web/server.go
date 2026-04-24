@@ -3,12 +3,14 @@ package web
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
+	"math/big"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -26,11 +28,14 @@ var assets embed.FS
 
 var canonicalUUIDPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+var defaultProfileEmojis = []string{"🤖", "🚀", "🧠", "🛠️", "⚡", "🔥", "✨", "🧪", "🛰️", "💡", "🌊", "🎯"}
+
 type service interface {
 	Snapshot() app.AppState
 	BindAndRegister(ctx context.Context, profile app.BindProfile) error
 	UpdateAgentProfile(ctx context.Context, profile app.AgentProfile) error
 	RefreshAgentProfile(ctx context.Context) (app.AgentProfile, error)
+	DisconnectAgent(ctx context.Context) error
 	AddConnectedAgent(agent app.ConnectedAgent) error
 	RefreshConnectedAgents(ctx context.Context) ([]app.ConnectedAgent, error)
 	DispatchFromUI(ctx context.Context, req app.DispatchRequest) (app.PendingTask, error)
@@ -98,6 +103,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/dispatch", s.handleDispatchAPI)
 	s.mux.HandleFunc("/bind", s.handleBind)
 	s.mux.HandleFunc("/profile", s.handleProfile)
+	s.mux.HandleFunc("/disconnect", s.handleDisconnect)
 	s.mux.HandleFunc("/agents", s.handleAgents)
 	s.mux.HandleFunc("/dispatch", s.handleDispatch)
 	s.mux.HandleFunc("/settings", s.handleSettings)
@@ -221,6 +227,18 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.redirectWithMessage(w, r, "info", "Agent profile updated.")
+}
+
+func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.service.DisconnectAgent(r.Context()); err != nil {
+		s.redirectWithMessage(w, r, "error", err.Error())
+		return
+	}
+	s.redirectWithMessage(w, r, "info", "Agent disconnected.")
 }
 
 func (s *Server) handleOnboarding(w http.ResponseWriter, r *http.Request) {
@@ -752,6 +770,7 @@ type onboardingView struct {
 	Stage   string               `json:"stage,omitempty"`
 	Active  bool                 `json:"active,omitempty"`
 	Message string               `json:"message,omitempty"`
+	Error   bool                 `json:"error,omitempty"`
 }
 
 type onboardingStepView struct {
@@ -790,7 +809,7 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 			form.Emoji = state.Session.Emoji
 		}
 		if form.Emoji == "" {
-			form.Emoji = "🤖"
+			form.Emoji = randomDefaultProfileEmoji()
 		}
 		if form.ProfileMarkdown == "" {
 			form.ProfileMarkdown = state.Session.ProfileBio
@@ -799,9 +818,20 @@ func defaultProfileForm(state app.AppState, form agentProfileForm) agentProfileF
 	}
 
 	if form.Emoji == "" {
-		form.Emoji = "🤖"
+		form.Emoji = randomDefaultProfileEmoji()
 	}
 	return form
+}
+
+func randomDefaultProfileEmoji() string {
+	if len(defaultProfileEmojis) == 0 {
+		return "🤖"
+	}
+	index, err := rand.Int(rand.Reader, big.NewInt(int64(len(defaultProfileEmojis))))
+	if err != nil {
+		return defaultProfileEmojis[int(time.Now().UnixNano()%int64(len(defaultProfileEmojis)))]
+	}
+	return defaultProfileEmojis[index.Int64()]
 }
 
 func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []activityFeedItem {
@@ -956,7 +986,7 @@ func connectionStatusView(appState app.AppState) connectionView {
 		Status:       status,
 		Transport:    transport,
 		Error:        strings.TrimSpace(state.Error),
-		HubConnected: status == app.ConnectionStatusConnected,
+		HubConnected: connectionUsable(status, transport),
 		HubTransport: transport,
 		HubBaseURL:   baseURL,
 		HubDomain:    domain,
@@ -1002,6 +1032,16 @@ func fallbackTarget(target string) string {
 	return target
 }
 
+func connectionUsable(status, transport string) bool {
+	status = strings.TrimSpace(status)
+	transport = strings.TrimSpace(transport)
+	return status == app.ConnectionStatusConnected ||
+		transport == app.ConnectionTransportWebSocket ||
+		transport == app.ConnectionTransportHTTPLong ||
+		transport == app.ConnectionTransportHTTP ||
+		transport == app.ConnectionTransportConnected
+}
+
 func subActionState(state app.AppState) subActionView {
 	if strings.TrimSpace(state.Session.AgentToken) == "" {
 		return subActionView{
@@ -1012,7 +1052,7 @@ func subActionState(state app.AppState) subActionView {
 	if len(state.ConnectedAgents) > 0 {
 		return subActionView{Visible: true}
 	}
-	if state.Connection.Status != app.ConnectionStatusConnected {
+	if !connectionUsable(state.Connection.Status, state.Connection.Transport) {
 		return subActionView{
 			Visible: false,
 			Reason:  "Sub-actions stay hidden while the Hub connection is offline or unavailable.",
@@ -1032,6 +1072,20 @@ func defaultOnboardingView(state app.AppState) onboardingView {
 	if strings.TrimSpace(state.Session.AgentToken) != "" {
 		for i := range steps {
 			steps[i].Status = "completed"
+		}
+		if !connectionUsable(state.Connection.Status, state.Connection.Transport) {
+			connection := connectionStatusView(state)
+			message := strings.TrimSpace(connection.Description)
+			if message == "" {
+				message = "Molten Hub is not connected."
+			}
+			return onboardingView{
+				Steps:   steps,
+				Stage:   app.OnboardingStepWorkActivate,
+				Active:  false,
+				Message: message,
+				Error:   true,
+			}
 		}
 		return onboardingView{
 			Steps:   steps,
@@ -1070,6 +1124,7 @@ func onboardingViewFromError(mode string, _ app.AppState, err error) onboardingV
 		Stage:   stage,
 		Active:  false,
 		Message: err.Error(),
+		Error:   true,
 	}
 }
 

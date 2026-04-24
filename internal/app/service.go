@@ -440,6 +440,24 @@ func (s *Service) RefreshAgentProfile(ctx context.Context) (AgentProfile, error)
 	return profile, nil
 }
 
+func (s *Service) DisconnectAgent(ctx context.Context) error {
+	state := s.store.Snapshot()
+	if strings.TrimSpace(state.Session.AgentToken) != "" {
+		_ = s.MarkOffline(ctx, "manual disconnect")
+	}
+	s.presenceSynced = false
+	s.presenceTransport = ""
+	return s.store.Update(func(current *AppState) error {
+		current.Session = Session{}
+		current.Connection = ConnectionState{
+			Status:        ConnectionStatusDisconnected,
+			Transport:     ConnectionTransportOffline,
+			LastChangedAt: time.Now().UTC(),
+		}
+		return nil
+	})
+}
+
 func (s *Service) AddConnectedAgent(agent ConnectedAgent) error {
 	agent = normalizeConnectedAgent(agent)
 	if connectedAgentIdentityKey(agent) == "" {
