@@ -91,6 +91,15 @@ func (s *stubService) RefreshAgentProfile(_ context.Context) (app.AgentProfile, 
 	return profile, nil
 }
 
+func (s *stubService) DisconnectAgent(_ context.Context) error {
+	s.state.Session = app.Session{}
+	s.state.Connection = app.ConnectionState{
+		Status:    app.ConnectionStatusDisconnected,
+		Transport: app.ConnectionTransportOffline,
+	}
+	return nil
+}
+
 func (s *stubService) AddConnectedAgent(app.ConnectedAgent) error {
 	return nil
 }
@@ -338,12 +347,28 @@ func TestHandleBindUsesSubmittedAgentMode(t *testing.T) {
 			wantAgentToken: "agent-123",
 		},
 		{
-			name:           "fallback still supports prefixed token when mode omitted",
+			name:           "bind prefix overrides omitted mode",
 			mode:           "",
 			token:          "b_bind-123",
 			wantMode:       app.OnboardingModeNew,
 			wantBindToken:  "b_bind-123",
 			wantAgentToken: "",
+		},
+		{
+			name:           "bind prefix overrides existing mode",
+			mode:           "existing",
+			token:          "b_bind-123",
+			wantMode:       app.OnboardingModeNew,
+			wantBindToken:  "b_bind-123",
+			wantAgentToken: "",
+		},
+		{
+			name:           "target prefix overrides new mode",
+			mode:           "new",
+			token:          "t_agent-123",
+			wantMode:       app.OnboardingModeExisting,
+			wantBindToken:  "",
+			wantAgentToken: "t_agent-123",
 		},
 	}
 
@@ -468,7 +493,7 @@ func TestHandleOnboardingAPIReturnsSuccess(t *testing.T) {
 	if len(body.Onboarding.Steps) != 4 {
 		t.Fatalf("expected four onboarding steps, got %#v", body.Onboarding.Steps)
 	}
-	if got, want := body.Onboarding.Steps[0].Detail, "Exchange the bind token for an agent credential."; got != want {
+	if got, want := body.Onboarding.Steps[0].Detail, "Create this dispatcher's agent credential."; got != want {
 		t.Fatalf("bind step detail = %q, want %q", got, want)
 	}
 }
@@ -763,38 +788,23 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "Edit Agent Profile") {
+	if !strings.Contains(body, "Agent Profile") {
 		t.Fatalf("expected bound profile panel, body=%s", body)
 	}
-	if !strings.Contains(body, `class="panel dispatch-overview brand-login-card-shell"`) {
-		t.Fatalf("expected bound dispatch overview panel, body=%s", body)
-	}
-	if !strings.Contains(body, `id="dispatch-overview"`) {
-		t.Fatalf("expected dispatch overview id for dismiss-once behavior, body=%s", body)
-	}
-	if !strings.Contains(body, `data-auto-dismiss-seconds="30"`) {
-		t.Fatalf("expected dispatch overview to advertise 30s auto-dismiss, body=%s", body)
-	}
-	if !strings.Contains(body, "Queue the right task with fewer clicks.") {
-		t.Fatalf("expected practical dispatch overview heading, body=%s", body)
-	}
-	if !strings.Contains(body, `id="dispatch-overview-close"`) {
-		t.Fatalf("expected dismiss button for dispatch overview, body=%s", body)
-	}
-	if !strings.Contains(body, ">Connected Agents<") || !strings.Contains(body, ">Pending Tasks<") || !strings.Contains(body, ">Recent Events<") {
-		t.Fatalf("expected overview stat labels for dispatch state, body=%s", body)
+	if strings.Contains(body, `dispatch-overview`) || strings.Contains(body, "Queue the right task with fewer clicks.") {
+		t.Fatalf("did not expect removed dispatch workflow overview, body=%s", body)
 	}
 	if strings.Contains(body, `name="bind_token"`) {
 		t.Fatalf("did not expect bind token field after bind, body=%s", body)
 	}
-	if !strings.Contains(body, `name="handle" value="codex-beast" readonly`) {
+	if !strings.Contains(body, `id="agent-settings-handle" name="handle" value="codex-beast"`) || !strings.Contains(body, `readonly`) {
 		t.Fatalf("expected readonly handle field, body=%s", body)
 	}
-	if !strings.Contains(body, `name="display_name" value="Dispatch Agent"`) {
+	if !strings.Contains(body, `id="agent-settings-display-name" name="display_name" value="Dispatch Agent"`) {
 		t.Fatalf("expected display name field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="agent-settings-form"`) {
-		t.Fatalf("expected agent settings form id for client refresh hydration, body=%s", body)
+	if !strings.Contains(body, `id="bind-form"`) || !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `action="/profile"`) {
+		t.Fatalf("expected shared profile form for bound agent settings, body=%s", body)
 	}
 	if !strings.Contains(body, `const agentSettingsDisplayName = document.getElementById("agent-settings-display-name");`) {
 		t.Fatalf("expected agent settings display name client hook, body=%s", body)
@@ -823,14 +833,14 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, "Failure-review follow-ups always target the first connected agent marked as a failure reviewer.") {
 		t.Fatalf("did not expect removed failure reviewer hint, body=%s", body)
 	}
-	if strings.Contains(body, `id="bind-form"`) {
-		t.Fatalf("did not expect onboarding bind form once bound, body=%s", body)
+	if !strings.Contains(body, `id="agent-disconnect-submit" formaction="/disconnect"`) {
+		t.Fatalf("expected disconnect action in shared profile form, body=%s", body)
 	}
 	if strings.Contains(body, `name="hub_region"`) {
 		t.Fatalf("did not expect runtime selector once bound, body=%s", body)
 	}
-	if strings.Contains(body, `id="onboarding-modal-backdrop"`) {
-		t.Fatalf("did not expect onboarding modal once bound, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="true"`) || !strings.Contains(body, `hidden`) {
+		t.Fatalf("expected shared profile modal to stay hidden until settings is opened, body=%s", body)
 	}
 	if strings.Contains(body, ">1. Agent Settings<") {
 		t.Fatalf("did not expect removed agent settings section, body=%s", body)
@@ -969,17 +979,8 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `const dispatchTaskClear = document.getElementById("dispatch-task-clear");`) {
 		t.Fatalf("expected clear button hook in client script, body=%s", body)
 	}
-	if !strings.Contains(body, `const dispatchOverview = document.getElementById("dispatch-overview");`) {
-		t.Fatalf("expected dispatch overview client hook, body=%s", body)
-	}
-	if !strings.Contains(body, `const DISPATCH_OVERVIEW_STORAGE_KEY = "moltenhub.dispatchOverview.dismissed";`) {
-		t.Fatalf("expected dispatch overview dismissal storage key, body=%s", body)
-	}
-	if !strings.Contains(body, `dismissDispatchOverview(true);`) {
-		t.Fatalf("expected dispatch overview dismissal to persist, body=%s", body)
-	}
-	if !strings.Contains(body, `if (readDispatchOverviewDismissed() && hubConnected) {`) {
-		t.Fatalf("expected dispatch overview to stay suppressible only while connected to hub, body=%s", body)
+	if strings.Contains(body, `dispatchOverview`) || strings.Contains(body, `DISPATCH_OVERVIEW_STORAGE_KEY`) || strings.Contains(body, `dismissDispatchOverview`) {
+		t.Fatalf("did not expect removed dispatch overview client hooks, body=%s", body)
 	}
 	if !strings.Contains(body, `dispatchTaskClear.disabled = busy;`) {
 		t.Fatalf("expected dispatch busy state to disable the clear action, body=%s", body)
@@ -1605,9 +1606,6 @@ func TestHandleIndexShowsConnectAgentsPanelWhenNoConnectedAgents(t *testing.T) {
 	if strings.Contains(body, `id="sub-actions-notice-refresh"`) {
 		t.Fatalf("did not expect notice panel refresh control on the main page, body=%s", body)
 	}
-	if !strings.Contains(body, `id="agent-settings-refresh-connected-agents"`) {
-		t.Fatalf("expected settings modal refresh control for connected agents, body=%s", body)
-	}
 }
 
 func TestHandleIndexRendersPendingTasksPanelInMainUI(t *testing.T) {
@@ -1770,6 +1768,10 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
 			Session: app.Session{
 				AgentToken:      "agent-token",
 				Handle:          "dispatch-agent",
@@ -1817,11 +1819,14 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	if !strings.Contains(body, `<div class="site-bg" aria-hidden="true">`) || !strings.Contains(body, `id="snowfall-canvas"`) {
 		t.Fatalf("expected themed background shell with snowfall canvas, body=%s", body)
 	}
-	if !strings.Contains(body, `id="agent-settings-modal-backdrop"`) {
-		t.Fatalf("expected agent settings dialog markup, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="true"`) {
+		t.Fatalf("expected shared profile dialog markup, body=%s", body)
 	}
-	if !strings.Contains(body, `id="agent-settings-modal-close"`) {
-		t.Fatalf("expected settings dialog close control, body=%s", body)
+	if !strings.Contains(body, `id="agent-profile-modal-close"`) {
+		t.Fatalf("expected profile dialog close control, body=%s", body)
+	}
+	if !strings.Contains(body, `aria-label="Close agent profile"`) || !strings.Contains(body, `data-lucide="x"`) {
+		t.Fatalf("expected profile dialog close to be an icon-only X button, body=%s", body)
 	}
 	if !strings.Contains(body, `Update how this agent appears in Molten Hub.`) {
 		t.Fatalf("expected updated agent settings summary copy, body=%s", body)
@@ -1829,26 +1834,29 @@ func TestHandleIndexRendersBottomDockAndSettingsDialogForBoundSession(t *testing
 	if strings.Contains(body, `Update how this dispatcher appears in Molten Hub.`) {
 		t.Fatalf("did not expect outdated dispatcher settings summary copy, body=%s", body)
 	}
-	if !strings.Contains(body, `id="agent-settings-refresh-connected-agents"`) {
-		t.Fatalf("expected connected-agents refresh button inside settings dialog, body=%s", body)
-	}
-	if !strings.Contains(body, `id="agent-settings-refresh-connected-agents-progress"`) {
-		t.Fatalf("expected connected-agents refresh progress inside settings dialog, body=%s", body)
-	}
-	if strings.Contains(body, `id="agent-settings-refresh-connected-agents-next"`) {
-		t.Fatalf("did not expect removed connected-agents refresh countdown inside settings dialog, body=%s", body)
-	}
-	if !strings.Contains(body, `id="agent-settings-refresh-connected-agents-status"`) {
-		t.Fatalf("expected connected-agents refresh status inside settings dialog, body=%s", body)
-	}
-	if !strings.Contains(body, `class="connected-agents-refresh connected-agents-refresh-icon-button"`) {
-		t.Fatalf("expected icon-only refresh button styling inside settings dialog, body=%s", body)
-	}
 	if strings.Contains(body, `Refresh Connected Agents`) {
 		t.Fatalf("did not expect text label inside icon-only refresh button, body=%s", body)
 	}
-	if !strings.Contains(body, `class="profile-save-button"`) || !strings.Contains(body, `>Save</button>`) {
-		t.Fatalf("expected compact save button in profile footer, body=%s", body)
+	if !strings.Contains(body, `id="bind-form"`) || !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `action="/profile"`) {
+		t.Fatalf("expected settings to use the shared bound profile form, body=%s", body)
+	}
+	if !strings.Contains(body, `id="agent-disconnect-submit" formaction="/disconnect"`) {
+		t.Fatalf("expected disconnect button in shared profile form, body=%s", body)
+	}
+	if !strings.Contains(body, `aria-label="Disconnect agent"`) || !strings.Contains(body, `data-lucide="unlink"`) {
+		t.Fatalf("expected disconnect to be an unlink icon button, body=%s", body)
+	}
+	disconnectIndex := strings.Index(body, `id="agent-disconnect-submit"`)
+	closeIndex := strings.Index(body, `id="agent-profile-modal-close"`)
+	saveIndex := strings.Index(body, `id="bind-submit" disabled>Save</button>`)
+	if disconnectIndex < 0 || closeIndex < 0 || saveIndex < 0 || !(disconnectIndex < closeIndex && closeIndex < saveIndex) {
+		t.Fatalf("expected close action between disconnect and save, body=%s", body)
+	}
+	if !strings.Contains(body, `id="bind-submit" disabled>Save</button>`) {
+		t.Fatalf("expected save button to start disabled in profile form, body=%s", body)
+	}
+	if !strings.Contains(body, `const syncAgentProfileSaveState = () => {`) || !strings.Contains(body, `bindSubmit.disabled = !agentProfileChanged();`) {
+		t.Fatalf("expected profile save dirty-state tracking, body=%s", body)
 	}
 	if !strings.Contains(body, `const agentSettingsDockButton = document.getElementById("agent-settings-dock-button");`) {
 		t.Fatalf("expected settings dock JS hook, body=%s", body)
@@ -1882,6 +1890,9 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
 			RecentEvents: []app.RuntimeEvent{
 				{
 					Title:                  "Task dispatched",
@@ -1961,6 +1972,9 @@ func TestHandleIndexKeepsPendingTasksClosedByDefault(t *testing.T) {
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
 			PendingTasks: []app.PendingTask{
 				{
 					ID:                     "task-1",
@@ -2015,6 +2029,9 @@ func TestHandleIndexMergesPendingTasksAndRecentEventsByTime(t *testing.T) {
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
 			PendingTasks: []app.PendingTask{
 				{
 					ID:                     "task-newer",
@@ -2105,6 +2122,21 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)
 	}
+	if !strings.Contains(body, `.onboarding-message.is-error {`) || !strings.Contains(body, `color: var(--bad);`) {
+		t.Fatalf("expected onboarding errors to render in the danger color, body=%s", body)
+	}
+	if !strings.Contains(body, `.onboarding-form-actions {`) || !strings.Contains(body, `align-items: center;`) || !strings.Contains(body, `min-height: 44px;`) {
+		t.Fatalf("expected onboarding status and submit button to share a compact action row, body=%s", body)
+	}
+	if !strings.Contains(body, ".onboarding-modal-close {\n  width: 44px;") || !strings.Contains(body, ".onboarding-modal .onboarding-modal-close {\n  width: 44px;") {
+		t.Fatalf("expected profile close button to align with footer icon actions, body=%s", body)
+	}
+	if !strings.Contains(body, `#bind-submit:disabled {`) || !strings.Contains(body, `cursor: not-allowed;`) {
+		t.Fatalf("expected disabled save button styling, body=%s", body)
+	}
+	if !strings.Contains(body, `.secondary-button svg,`) || !strings.Contains(body, `width: 44px;`) {
+		t.Fatalf("expected secondary icon button styling for disconnect, body=%s", body)
+	}
 	if !strings.Contains(body, `.manual-dispatch-skill-select-wrap {`) {
 		t.Fatalf("expected manual dispatch skill-select wrapper styles, body=%s", body)
 	}
@@ -2153,14 +2185,8 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.brand-btn-primary-main {`) {
 		t.Fatalf("expected user-portal primary button styles, body=%s", body)
 	}
-	if !strings.Contains(body, `.dispatch-overview {`) {
-		t.Fatalf("expected dispatch overview layout styles, body=%s", body)
-	}
-	if !strings.Contains(body, `.dispatch-overview-close {`) {
-		t.Fatalf("expected dispatch overview dismiss button styles, body=%s", body)
-	}
-	if !strings.Contains(body, `.dispatch-overview-fading {`) {
-		t.Fatalf("expected dispatch overview fade-out styles, body=%s", body)
+	if strings.Contains(body, `.dispatch-overview`) {
+		t.Fatalf("did not expect removed dispatch overview styles, body=%s", body)
 	}
 	if !strings.Contains(body, `display: none !important;`) {
 		t.Fatalf("expected explicit hidden display override, body=%s", body)
@@ -2259,27 +2285,24 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "Sub-Actions Hidden") {
-		t.Fatalf("expected hidden sub-actions notice, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) {
+		t.Fatalf("expected onboarding modal while runtime is unbound, body=%s", body)
 	}
-	if !strings.Contains(body, `id="sub-actions" hidden`) {
-		t.Fatalf("expected sub-actions container to be hidden, body=%s", body)
+	if strings.Contains(body, `<h2 data-sub-actions-title>`) || strings.Contains(body, `id="sub-actions-notice"`) || strings.Contains(body, `<div id="sub-actions"`) {
+		t.Fatalf("did not expect sub-actions surfaces before onboarding completes, body=%s", body)
 	}
 	if strings.Contains(body, ">3. Connected Agents<") {
 		t.Fatalf("did not expect removed connected agents section, body=%s", body)
 	}
-	if !strings.Contains(body, ">Dispatch<") {
-		t.Fatalf("expected manual dispatch markup to remain available for client-side reveal, body=%s", body)
-	}
-	if !strings.Contains(body, "until this runtime is bound to Molten Hub and connectivity is working") {
-		t.Fatalf("expected unbound gating reason, body=%s", body)
+	if strings.Contains(body, ">Dispatch<") || strings.Contains(body, `id="manual-dispatch-form"`) {
+		t.Fatalf("did not expect manual dispatch markup before onboarding completes, body=%s", body)
 	}
 	if strings.Contains(body, "Save Global Settings") {
 		t.Fatalf("did not expect save button for global settings, body=%s", body)
 	}
 }
 
-func TestHandleIndexKeepsDispatchVisibleWhenAgentsExistButHubStatusIsOffline(t *testing.T) {
+func TestHandleIndexShowsOnboardingErrorWhenTokenExistsButHubStatusIsOffline(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
@@ -2308,14 +2331,66 @@ func TestHandleIndexKeepsDispatchVisibleWhenAgentsExistButHubStatusIsOffline(t *
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if strings.Contains(body, `id="sub-actions" hidden`) {
-		t.Fatalf("expected dispatch surface to remain visible with known connected agents, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="false"`) {
+		t.Fatalf("expected forced onboarding modal while hub is offline, body=%s", body)
 	}
-	if !strings.Contains(body, `id="sub-actions-notice" class="panel dispatch-gate-panel" hidden`) {
-		t.Fatalf("expected hidden sub-actions notice when connected agents exist, body=%s", body)
+	if !strings.Contains(body, `inert aria-hidden="true"`) {
+		t.Fatalf("expected app shell to be inert while hub is offline, body=%s", body)
 	}
-	if !strings.Contains(body, `const dispatchEnabled = bound && connectedAgentsCount > 0;`) {
-		t.Fatalf("expected client-side sub-action gate to keep dispatch visible when agents exist, body=%s", body)
+	if !strings.Contains(body, `class="onboarding-message is-error"`) || !strings.Contains(body, `publish failed`) {
+		t.Fatalf("expected hub connection error in onboarding status, body=%s", body)
+	}
+	if !strings.Contains(body, `action="/profile"`) || !strings.Contains(body, `id="agent-disconnect-submit"`) {
+		t.Fatalf("expected bound profile form with disconnect option while token is present, body=%s", body)
+	}
+	if strings.Contains(body, `id="agent-profile-modal-close"`) {
+		t.Fatalf("did not expect close control while forced onboarding is blocking the app, body=%s", body)
+	}
+}
+
+func TestHandleIndexTreatsHTTPPollingAsUsableConnection(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportHTTP,
+				BaseURL:   "https://na.hub.molten.bot/v1",
+				Domain:    "na.hub.molten.bot",
+			},
+			Session: app.Session{
+				AgentToken:      "agent-token",
+				Handle:          "dispatch-agent",
+				HandleFinalized: true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, `inert aria-hidden="true"`) {
+		t.Fatalf("did not expect app shell to be blocked for HTTP polling, body=%s", body)
+	}
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="true"`) || !strings.Contains(body, `hidden`) {
+		t.Fatalf("expected onboarding/profile modal to stay hidden while HTTP polling is usable, body=%s", body)
+	}
+	if !strings.Contains(body, `data-transport="http"`) || !strings.Contains(body, `class="dot http"`) {
+		t.Fatalf("expected HTTP polling to render as non-red connection state, body=%s", body)
+	}
+	if !strings.Contains(body, `Connect agents in Molten Bot Hub`) {
+		t.Fatalf("expected connected-agent guidance instead of connection issue, body=%s", body)
+	}
+	if strings.Contains(body, `class="onboarding-message is-error"`) {
+		t.Fatalf("did not expect connection issue copy while HTTP polling is usable, body=%s", body)
 	}
 }
 
@@ -2373,6 +2448,12 @@ func TestHandleIndexRendersInteractiveEmojiPicker(t *testing.T) {
 	if !strings.Contains(body, `data-hub-emoji-toggle`) {
 		t.Fatalf("expected interactive emoji picker toggle, body=%s", body)
 	}
+	if !strings.Contains(body, `aria-label="Choose emoji"`) {
+		t.Fatalf("expected emoji picker toggle to be an icon button, body=%s", body)
+	}
+	if strings.Contains(body, `hub-emoji-picker-toggle-text`) || strings.Contains(body, `hub-emoji-picker-toggle-caret`) || strings.Contains(body, `data-hub-emoji-selected-text`) {
+		t.Fatalf("did not expect text or caret inside emoji picker toggle, body=%s", body)
+	}
 	if !strings.Contains(body, `data-hub-emoji-panel`) {
 		t.Fatalf("expected interactive emoji picker panel, body=%s", body)
 	}
@@ -2388,14 +2469,30 @@ func TestHandleIndexRendersInteractiveEmojiPicker(t *testing.T) {
 	if !strings.Contains(body, `document.body.appendChild(panel);`) {
 		t.Fatalf("expected emoji picker panel to portal to document body, body=%s", body)
 	}
-	if !strings.Contains(body, `const REACT_VERSION = "18.2.0";`) {
-		t.Fatalf("expected shared React version constant for emoji picker modules, body=%s", body)
+	if !strings.Contains(body, `const PROFILE_EMOJI_GROUPS = [`) || !strings.Contains(body, `className = "hub-emoji-picker-category"`) || !strings.Contains(body, `className = "hub-emoji-picker-grid"`) {
+		t.Fatalf("expected built-in categorized emoji picker grid, body=%s", body)
 	}
-	if !strings.Contains(body, `https://esm.sh/@emoji-mart/react@1.1.1?deps=react@${REACT_VERSION}`) {
-		t.Fatalf("expected @emoji-mart/react module usage, body=%s", body)
+	if strings.Contains(body, `https://esm.sh/@emoji-mart`) || strings.Contains(body, `Loading emoji picker...`) {
+		t.Fatalf("did not expect remote emoji picker loader, body=%s", body)
 	}
-	if !strings.Contains(body, `https://esm.sh/@emoji-mart/data@1.2.1`) {
-		t.Fatalf("expected @emoji-mart/data module usage, body=%s", body)
+}
+
+func TestDefaultProfileFormChoosesDefaultEmoji(t *testing.T) {
+	t.Parallel()
+
+	form := defaultProfileForm(app.AppState{Settings: app.DefaultSettings()}, agentProfileForm{})
+	if form.Emoji == "" {
+		t.Fatalf("expected default emoji")
+	}
+	found := false
+	for _, emoji := range defaultProfileEmojis {
+		if form.Emoji == emoji {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("default emoji %q is not in default set %#v", form.Emoji, defaultProfileEmojis)
 	}
 }
 
@@ -2458,6 +2555,9 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) {
 		t.Fatalf("expected onboarding modal for unbound session, body=%s", body)
 	}
+	if !strings.Contains(body, `data-bound="false"`) || !strings.Contains(body, `inert aria-hidden="true"`) {
+		t.Fatalf("expected unbound app shell to be inert behind onboarding modal, body=%s", body)
+	}
 	if strings.Contains(body, `id="onboarding-existing-agent-toggle"`) || strings.Contains(body, `id="onboarding-new-agent-toggle"`) {
 		t.Fatalf("expected onboarding modal to remove existing/new agent mode toggles, body=%s", body)
 	}
@@ -2467,29 +2567,41 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `<legend>Region</legend>`) {
 		t.Fatalf("expected onboarding region legend to use concise label, body=%s", body)
 	}
+	if !strings.Contains(body, `<strong>North America</strong>`) || !strings.Contains(body, `<strong>Europe</strong>`) {
+		t.Fatalf("expected region selector to use full region names, body=%s", body)
+	}
+	if strings.Contains(body, `<strong>NA</strong>`) || strings.Contains(body, `<strong>EU</strong>`) {
+		t.Fatalf("did not expect region selector shorthand labels, body=%s", body)
+	}
 	if !strings.Contains(body, `id="onboarding-profile-fields" class="stack onboarding-profile-fields" hidden`) {
 		t.Fatalf("expected onboarding profile fields to stay hidden in existing-agent mode, body=%s", body)
 	}
-	if !strings.Contains(body, `class="panel prompt-wrap dispatch-gate-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel`) {
-		t.Fatalf("expected onboarding summary card to reuse studio prompt-wrap shell, body=%s", body)
+	if strings.Contains(body, `1. Onboarding`) || strings.Contains(body, `Connect this dispatcher to Molten Hub`) {
+		t.Fatalf("did not expect duplicate main-page onboarding description behind modal, body=%s", body)
 	}
-	if !strings.Contains(body, `<h2 class="panel-section-title">Connect this dispatcher to Molten Hub</h2>`) {
-		t.Fatalf("expected onboarding summary card heading to reuse studio section title treatment, body=%s", body)
+	if strings.Contains(body, `onboarding-quick-start`) || strings.Contains(body, `1. Open Hub`) || strings.Contains(body, `2. Paste token`) || strings.Contains(body, `3. Connect`) {
+		t.Fatalf("did not expect quick-start pills in onboarding modal, body=%s", body)
 	}
-	if !strings.Contains(body, `id="onboarding-steps"`) {
-		t.Fatalf("expected onboarding steps container, body=%s", body)
+	if strings.Contains(body, `id="sub-actions-notice"`) || strings.Contains(body, `id="sub-actions"`) || strings.Contains(body, `id="manual-dispatch-form"`) {
+		t.Fatalf("did not expect dispatch surfaces while unbound onboarding modal is active, body=%s", body)
+	}
+	if strings.Contains(body, `class="page-bottom-dock"`) {
+		t.Fatalf("did not expect bottom dock while unbound onboarding modal is active, body=%s", body)
+	}
+	if strings.Contains(body, `id="onboarding-steps"`) || strings.Contains(body, "Connection Check") {
+		t.Fatalf("did not expect visible onboarding connection-check steps, body=%s", body)
 	}
 	if !strings.Contains(body, `id="onboarding-message"`) {
 		t.Fatalf("expected onboarding message container, body=%s", body)
 	}
-	if !strings.Contains(body, `onboarding-step onboarding-step-current" data-step-id="bind"`) {
-		t.Fatalf("expected bind step to render as current in unbound state, body=%s", body)
+	if !strings.Contains(body, `<div class="onboarding-form-actions">`+"\n"+`            <p class="onboarding-message" id="onboarding-message" aria-live="polite">`) {
+		t.Fatalf("expected onboarding status message to sit beside the submit button, body=%s", body)
 	}
-	if !strings.Contains(body, "Verify the existing Molten Hub agent credential.") {
-		t.Fatalf("expected existing-agent onboarding bind detail to match hub flow, body=%s", body)
+	if !strings.Contains(body, `const formatOnboardingMessage = (message) => {`) || !strings.Contains(body, `console.error("Onboarding failed:", rawMessage);`) {
+		t.Fatalf("expected onboarding errors to be formatted for users and logged raw, body=%s", body)
 	}
-	if !strings.Contains(body, "Persist the agent profile in Molten Hub.") {
-		t.Fatalf("expected unbound onboarding profile detail to match hub flow, body=%s", body)
+	if strings.Contains(body, `onboarding-step onboarding-step-current" data-step-id="bind"`) || strings.Contains(body, "Check the agent token.") || strings.Contains(body, "Register this runtime with Molten Hub.") {
+		t.Fatalf("did not expect onboarding step details in modal, body=%s", body)
 	}
 	if !strings.Contains(body, `id="onboarding-mode-field" type="hidden" name="agent_mode" value="existing"`) {
 		t.Fatalf("expected onboarding mode field in onboarding modal, body=%s", body)
@@ -2497,13 +2609,25 @@ func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing
 	if !strings.Contains(body, `id="onboarding-token-label"`) {
 		t.Fatalf("expected redesigned onboarding form fields, body=%s", body)
 	}
-	if !strings.Contains(body, `id="onboarding-token-input" type="text"`) {
-		t.Fatalf("expected onboarding token input to render as text field, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-token-input" type="password"`) {
+		t.Fatalf("expected onboarding token input to render as secret field, body=%s", body)
 	}
-	if !strings.Contains(body, "Connect this runtime using an existing agent token for the selected region.") {
+	if !strings.Contains(body, `const onboardingModeFromToken = (token) => String(token || "").trim().toLowerCase().startsWith("b_") ? "new" : "existing";`) {
+		t.Fatalf("expected onboarding token prefix to drive profile form visibility, body=%s", body)
+	}
+	if !strings.Contains(body, "Molten Hub Dispatch") || !strings.Contains(body, "Connect to Hub") {
+		t.Fatalf("expected onboarding modal to match app title language, body=%s", body)
+	}
+	if !strings.Contains(body, "Get your agent token from Molten Hub.") {
 		t.Fatalf("expected onboarding summary to describe existing-agent token flow, body=%s", body)
 	}
-	if !strings.Contains(body, "Paste an existing agent token to reconnect this runtime while preserving the current Molten Hub identity.") {
+	if !strings.Contains(body, `<span>Agent Token</span>`) || !strings.Contains(body, `data-lucide="external-link"`) {
+		t.Fatalf("expected onboarding Hub link to point users to their agent token, body=%s", body)
+	}
+	if strings.Contains(body, "Open Molten Hub sign-in") || strings.Contains(body, "Use an existing agent token to put this runtime online.") || strings.Contains(body, "Connect this dispatcher") {
+		t.Fatalf("did not expect old onboarding modal copy, body=%s", body)
+	}
+	if !strings.Contains(body, "Use the agent token from Molten Hub.") {
 		t.Fatalf("expected onboarding token hint for existing-agent mode, body=%s", body)
 	}
 }
@@ -2514,6 +2638,10 @@ func TestHandleIndexRendersCompletedOnboardingFlowForBoundSession(t *testing.T) 
 	server, err := New(&stubService{
 		state: app.AppState{
 			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
 			Session: app.Session{
 				AgentToken:      "agent-token",
 				Handle:          "dispatch-agent",
@@ -2531,8 +2659,8 @@ func TestHandleIndexRendersCompletedOnboardingFlowForBoundSession(t *testing.T) 
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if strings.Contains(body, `id="onboarding-modal-backdrop"`) {
-		t.Fatalf("did not expect onboarding modal once already bound, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="true"`) {
+		t.Fatalf("expected hidden shared profile modal once already bound, body=%s", body)
 	}
 	if strings.Contains(body, `id="onboarding-steps"`) {
 		t.Fatalf("did not expect onboarding steps section once already bound, body=%s", body)
@@ -2543,8 +2671,11 @@ func TestHandleIndexRendersCompletedOnboardingFlowForBoundSession(t *testing.T) 
 	if strings.Contains(body, `name="bind_token"`) {
 		t.Fatalf("did not expect bind token field once already bound, body=%s", body)
 	}
-	if !strings.Contains(body, "Edit Agent Profile") {
+	if !strings.Contains(body, "Agent Profile") {
 		t.Fatalf("expected profile editor once already bound, body=%s", body)
+	}
+	if !strings.Contains(body, `id="bind-form"`) || !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `id="agent-disconnect-submit" formaction="/disconnect"`) {
+		t.Fatalf("expected bound profile editor to use shared form with disconnect, body=%s", body)
 	}
 	if strings.Contains(body, "The bind token is removed only after the agent is successfully bound. The finalized handle stays visible but immutable here.") {
 		t.Fatalf("did not expect removed finalized-handle hint, body=%s", body)
@@ -2574,11 +2705,17 @@ func TestHandleIndexAllowsFinalizingTemporaryHandle(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if strings.Contains(body, `name="handle" value="tmp-agent-123" readonly`) {
+	if !strings.Contains(body, `placeholder="happy-molten-bot"`) {
+		t.Fatalf("expected friendly default handle example, body=%s", body)
+	}
+	if strings.Contains(body, `placeholder="codex-beast"`) {
+		t.Fatalf("did not expect old handle placeholder, body=%s", body)
+	}
+	if strings.Contains(body, `id="agent-settings-handle" name="handle" value="tmp-agent-123" placeholder="happy-molten-bot" readonly`) {
 		t.Fatalf("expected temporary handle to remain editable, body=%s", body)
 	}
-	if !strings.Contains(body, "temporary handle") {
-		t.Fatalf("expected temporary-handle onboarding hint, body=%s", body)
+	if strings.Contains(body, "This bind used a temporary handle") || strings.Contains(body, "temporary handle") {
+		t.Fatalf("did not expect temporary-handle helper copy, body=%s", body)
 	}
 }
 
@@ -2626,8 +2763,11 @@ func TestHandleBindShowsEditProfileAfterSessionBecomesBound(t *testing.T) {
 	if strings.Contains(body, `name="bind_token"`) {
 		t.Fatalf("did not expect bind token field after session became bound, body=%s", body)
 	}
-	if !strings.Contains(body, "Edit Agent Profile") {
-		t.Fatalf("expected edit profile panel after bound session, body=%s", body)
+	if !strings.Contains(body, "Connect to Hub") || !strings.Contains(body, `class="onboarding-message is-error"`) {
+		t.Fatalf("expected forced connection error after bound session is still offline, body=%s", body)
+	}
+	if !strings.Contains(body, `id="bind-form"`) || !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `action="/profile"`) {
+		t.Fatalf("expected bound profile form after session became bound, body=%s", body)
 	}
 	if !strings.Contains(body, "agent bound, but profile registration failed") {
 		t.Fatalf("expected surfaced bind error, body=%s", body)
@@ -2663,6 +2803,55 @@ func TestHandleProfileRedirectsOnFailure(t *testing.T) {
 	}
 	if got := rec.Header().Get("Location"); got != "/" {
 		t.Fatalf("expected root redirect location, got %q", got)
+	}
+}
+
+func TestHandleDisconnectReturnsToTokenOnboarding(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken:      "agent-token",
+				Handle:          "dispatch-agent",
+				HandleFinalized: true,
+				DisplayName:     "Dispatch Agent",
+			},
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/disconnect", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect response, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("expected root redirect location, got %q", got)
+	}
+
+	followReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	followRec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(followRec, followReq)
+	body := followRec.Body.String()
+
+	if !strings.Contains(body, `data-bound="false"`) || !strings.Contains(body, `inert aria-hidden="true"`) {
+		t.Fatalf("expected disconnected app shell to return to forced onboarding, body=%s", body)
+	}
+	if !strings.Contains(body, `name="hub_region"`) || !strings.Contains(body, `id="onboarding-token-input" type="password"`) {
+		t.Fatalf("expected region and token fields after disconnect, body=%s", body)
+	}
+	if strings.Contains(body, `id="agent-disconnect-submit"`) || strings.Contains(body, `action="/profile"`) {
+		t.Fatalf("did not expect bound profile actions after disconnect, body=%s", body)
 	}
 }
 
@@ -3031,9 +3220,9 @@ func TestHandleProfileAPIReturnsStructuredRefreshError(t *testing.T) {
 	}
 
 	var body struct {
-		OK     bool   `json:"ok"`
-		Error  string `json:"error"`
-		Detail string `json:"detail"`
+		OK      bool   `json:"ok"`
+		Error   string `json:"error"`
+		Detail  string `json:"detail"`
 		Profile struct {
 			Handle string `json:"handle"`
 		} `json:"profile"`
@@ -3091,9 +3280,6 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 	if strings.Contains(body, `id="connected-agents-refresh"`) {
 		t.Fatalf("did not expect main-page connected agents refresh control, body=%s", body)
-	}
-	if !strings.Contains(body, `id="agent-settings-refresh-connected-agents"`) {
-		t.Fatalf("expected connected agents refresh control in settings modal, body=%s", body)
 	}
 	if !strings.Contains(body, `class="connected-agent-card connected-agent-card-button is-online"`) {
 		t.Fatalf("expected connected agent card to render online styling state, body=%s", body)

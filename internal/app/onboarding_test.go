@@ -18,10 +18,10 @@ func TestDefaultOnboardingSteps(t *testing.T) {
 		steps[3].ID != OnboardingStepWorkActivate {
 		t.Fatalf("unexpected step order: %#v", steps)
 	}
-	if got, want := steps[0].Detail, "Exchange the bind token for an agent credential."; got != want {
+	if got, want := steps[0].Detail, "Create this dispatcher's agent credential."; got != want {
 		t.Fatalf("bind detail = %q, want %q", got, want)
 	}
-	if got, want := steps[2].Detail, "Persist the agent profile in Molten Hub."; got != want {
+	if got, want := steps[2].Detail, "Register this runtime with Molten Hub."; got != want {
 		t.Fatalf("profile detail = %q, want %q", got, want)
 	}
 }
@@ -33,10 +33,10 @@ func TestDefaultOnboardingStepsForModeExisting(t *testing.T) {
 	if len(steps) != 4 {
 		t.Fatalf("expected 4 onboarding steps, got %d", len(steps))
 	}
-	if got, want := steps[0].Detail, "Verify the existing Molten Hub agent credential."; got != want {
+	if got, want := steps[0].Detail, "Check the agent token."; got != want {
 		t.Fatalf("bind detail = %q, want %q", got, want)
 	}
-	if got, want := steps[2].Detail, "Persist the agent profile in Molten Hub."; got != want {
+	if got, want := steps[2].Detail, "Register this runtime with Molten Hub."; got != want {
 		t.Fatalf("profile detail = %q, want %q", got, want)
 	}
 }
@@ -180,12 +180,20 @@ func TestNormalizeOnboardingTokens(t *testing.T) {
 			wantAgentToken: "t_123",
 		},
 		{
-			name:           "explicit existing mode keeps prefixed token in existing flow",
+			name:           "bind prefix overrides explicit existing mode",
 			mode:           "existing",
 			bindToken:      "b_123",
+			wantMode:       OnboardingModeNew,
+			wantBindToken:  "b_123",
+			wantAgentToken: "",
+		},
+		{
+			name:           "target prefix overrides explicit new mode",
+			mode:           "new",
+			bindToken:      "t_123",
 			wantMode:       OnboardingModeExisting,
 			wantBindToken:  "",
-			wantAgentToken: "b_123",
+			wantAgentToken: "t_123",
 		},
 		{
 			name:           "legacy bind token routes to existing flow",
