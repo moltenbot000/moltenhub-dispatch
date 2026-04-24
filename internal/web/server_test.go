@@ -2111,13 +2111,13 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 		t.Fatalf("expected manual dispatch section to force a single full-width column, body=%s", body)
 	}
 	if !strings.Contains(body, `.manual-dispatch-targets-grid {`) {
-		t.Fatalf("expected horizontal manual dispatch target grid rule, body=%s", body)
+		t.Fatalf("expected horizontal manual dispatch target layout rule, body=%s", body)
 	}
-	if !strings.Contains(body, `grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));`) {
-		t.Fatalf("expected selectable agent cards to auto-fill the available width, body=%s", body)
+	if !strings.Contains(body, `flex-wrap: wrap;`) || !strings.Contains(body, `gap: 8px;`) {
+		t.Fatalf("expected selectable agent cards to wrap with compact spacing, body=%s", body)
 	}
-	if !strings.Contains(body, `grid-auto-rows: 1fr;`) {
-		t.Fatalf("expected selectable agent grid rows to stretch evenly, body=%s", body)
+	if !strings.Contains(body, `.manual-dispatch-targets-grid .connected-agent-card-button {`) || !strings.Contains(body, `width: auto;`) {
+		t.Fatalf("expected selectable agent cards to size to content, body=%s", body)
 	}
 	if !strings.Contains(body, `.manual-dispatch-actions {`) || !strings.Contains(body, `justify-content: flex-end;`) {
 		t.Fatalf("expected manual dispatch submit actions to right-align, body=%s", body)

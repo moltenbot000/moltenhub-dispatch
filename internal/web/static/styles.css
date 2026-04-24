@@ -4449,9 +4449,15 @@ body.settings-modal-open {
 }
 
 .manual-dispatch-targets-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-  grid-auto-rows: 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: stretch;
+}
+
+.manual-dispatch-targets-grid .connected-agent-card-button {
+  width: auto;
+  max-width: 100%;
 }
 
 .connected-agent-card {
