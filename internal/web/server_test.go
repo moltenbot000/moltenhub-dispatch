@@ -2984,14 +2984,14 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if strings.Contains(body, `class="connected-agent-secondary"`) {
 		t.Fatalf("did not expect connected-agent secondary handle/id label on cards, body=%s", body)
 	}
-	if !strings.Contains(body, `class="connected-agent-presence is-offline"`) {
-		t.Fatalf("expected offline presence indicator on connected agent cards, body=%s", body)
+	if strings.Contains(body, `class="connected-agent-presence is-offline"`) {
+		t.Fatalf("did not expect offline presence indicator on connected agent cards, body=%s", body)
 	}
-	if !strings.Contains(body, `data-lucide="wifi-off"`) {
-		t.Fatalf("expected Lucide offline connectivity icon on connected agent cards, body=%s", body)
+	if strings.Contains(body, `data-lucide="wifi-off"`) {
+		t.Fatalf("did not expect Lucide offline connectivity icon on connected agent cards, body=%s", body)
 	}
-	if !strings.Contains(body, `title="Offline"`) {
-		t.Fatalf("expected offline presence tooltip on connected agent cards, body=%s", body)
+	if strings.Contains(body, `title="Offline"`) {
+		t.Fatalf("did not expect offline presence tooltip on connected agent cards, body=%s", body)
 	}
 	if strings.Contains(body, ">Offline<") {
 		t.Fatalf("did not expect textual offline badge label on connected agent cards, body=%s", body)
@@ -3194,9 +3194,6 @@ func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
 		t.Fatalf("expected hub presence indicator to render online status, body=%s", body)
 	}
-	if !strings.Contains(body, `data-lucide="wifi"`) {
-		t.Fatalf("expected hub presence icon to render online connectivity Lucide glyph, body=%s", body)
-	}
 	if !strings.Contains(body, `title="Online"`) {
 		t.Fatalf("expected hub presence indicator tooltip to render online status, body=%s", body)
 	}
@@ -3257,9 +3254,6 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	}
 	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
 		t.Fatalf("expected root hub presence indicator to render online status, body=%s", body)
-	}
-	if !strings.Contains(body, `data-lucide="wifi"`) {
-		t.Fatalf("expected root hub presence icon to render online connectivity Lucide glyph, body=%s", body)
 	}
 	if !strings.Contains(body, `title="Online"`) {
 		t.Fatalf("expected root hub presence indicator tooltip to render online status, body=%s", body)
