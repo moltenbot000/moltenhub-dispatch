@@ -122,6 +122,7 @@ func (s *stubService) ConsumeFlash() (app.FlashMessage, error) {
 }
 
 func testConnectedAgent(agentID, displayName, agentUUID, uri string, skills ...app.Skill) app.ConnectedAgent {
+	online := true
 	agent := app.ConnectedAgent{
 		AgentID:   agentID,
 		Handle:    agentID,
@@ -130,6 +131,7 @@ func testConnectedAgent(agentID, displayName, agentUUID, uri string, skills ...a
 		Metadata: &hub.AgentMetadata{
 			DisplayName: displayName,
 			Skills:      skillMetadata(skills...),
+			Presence:    &hub.AgentPresence{Ready: &online},
 		},
 	}
 	if displayName == "" && len(skills) == 0 {
