@@ -2975,11 +2975,17 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `id="agent-settings-refresh-connected-agents"`) {
 		t.Fatalf("expected connected agents refresh control in settings modal, body=%s", body)
 	}
-	if !strings.Contains(body, `class="connected-agent-card connected-agent-card-button"`) {
-		t.Fatalf("expected connected agent card layout, body=%s", body)
+	if !strings.Contains(body, `class="connected-agent-card connected-agent-card-button is-online"`) {
+		t.Fatalf("expected connected agent card to render online styling state, body=%s", body)
 	}
 	if !strings.Contains(body, ">Dispatcher<") {
 		t.Fatalf("expected connected agent display name on connected agent cards, body=%s", body)
+	}
+	if !strings.Contains(body, `class="connected-agent-presence is-online"`) {
+		t.Fatalf("expected online presence indicator on connected agent cards, body=%s", body)
+	}
+	if !strings.Contains(body, `title="Online"`) {
+		t.Fatalf("expected online presence tooltip on connected agent cards, body=%s", body)
 	}
 	if strings.Contains(body, `class="connected-agent-secondary"`) {
 		t.Fatalf("did not expect connected-agent secondary handle/id label on cards, body=%s", body)
