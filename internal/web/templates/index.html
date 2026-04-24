@@ -379,11 +379,11 @@
         </div>
         <button type="button" class="settings-modal-close" id="agent-settings-modal-close">Close</button>
       </header>
-      <form method="post" action="/profile" class="stack profile-shell">
+      <form method="post" action="/profile" class="stack profile-shell" id="agent-settings-form">
         <div class="profile-grid profile-grid-top">
           <label>Handle<input id="agent-settings-handle" name="handle" value="{{.ProfileForm.Handle}}" {{if .State.Session.HandleFinalized}}readonly{{end}}></label>
-          <label>Display Name<input name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
-          <fieldset class="emoji-fieldset">
+          <label>Display Name<input id="agent-settings-display-name" name="display_name" value="{{.ProfileForm.DisplayName}}" placeholder="Dispatch Agent"></label>
+          <fieldset class="emoji-fieldset" id="agent-settings-emoji-picker">
             <legend>Emoji</legend>
             <div class="hub-emoji-picker" data-hub-emoji-picker>
               <input type="hidden" name="emoji" value="{{.ProfileForm.Emoji}}" data-hub-emoji-input>
@@ -414,7 +414,7 @@
             </div>
           </fieldset>
         </div>
-        <label>Bio<textarea name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
+        <label>Bio<textarea id="agent-settings-profile-markdown" name="profile_markdown" rows="4" placeholder="Please write the bio of your agent...">{{.ProfileForm.ProfileMarkdown}}</textarea></label>
         {{if not .State.Session.HandleFinalized}}
         <p class="hint">This bind used a temporary handle. Pick the permanent handle you want, then save the profile once to finalize it.</p>
         {{end}}
@@ -607,6 +607,9 @@
       const agentSettingsModalBackdrop = document.getElementById("agent-settings-modal-backdrop");
       const agentSettingsModalClose = document.getElementById("agent-settings-modal-close");
       const agentSettingsHandle = document.getElementById("agent-settings-handle");
+      const agentSettingsDisplayName = document.getElementById("agent-settings-display-name");
+      const agentSettingsEmojiPicker = document.getElementById("agent-settings-emoji-picker");
+      const agentSettingsProfileMarkdown = document.getElementById("agent-settings-profile-markdown");
       const bindForm = document.getElementById("bind-form");
       const bindSubmit = document.getElementById("bind-submit");
       const onboardingModeField = document.getElementById("onboarding-mode-field");
@@ -788,6 +791,81 @@
       };
 
       let closeActiveEmojiPicker = null;
+      let agentProfileRefreshInFlight = false;
+
+      const syncHubEmojiPickerValue = (root, value) => {
+        if (!(root instanceof HTMLElement)) {
+          return;
+        }
+        const input = root.querySelector("[data-hub-emoji-input]");
+        const preview = root.querySelector("[data-hub-emoji-preview]");
+        const selectedText = root.querySelector("[data-hub-emoji-selected-text]");
+        if (
+          !(input instanceof HTMLInputElement) ||
+          !(preview instanceof HTMLElement) ||
+          !(selectedText instanceof HTMLElement)
+        ) {
+          return;
+        }
+        const emojiValue = firstEmojiGrapheme(value);
+        input.value = emojiValue;
+        preview.textContent = emojiValue || DEFAULT_EMOJI;
+        selectedText.textContent = emojiValue ? `Selected: ${emojiValue}` : "Choose an emoji";
+        selectedText.classList.toggle("is-selected", emojiValue !== "");
+      };
+
+      const applyAgentProfileToSettingsForm = (profile) => {
+        if (!profile || typeof profile !== "object") {
+          return;
+        }
+        const handle = trimmedString(profile.handle);
+        const displayName = trimmedString(profile.display_name);
+        const emoji = trimmedString(profile.emoji);
+        const profileMarkdown = trimmedString(profile.profile_markdown);
+        if (agentSettingsHandle instanceof HTMLInputElement) {
+          agentSettingsHandle.value = handle;
+        }
+        if (agentSettingsDisplayName instanceof HTMLInputElement) {
+          agentSettingsDisplayName.value = displayName;
+        }
+        if (agentSettingsProfileMarkdown instanceof HTMLTextAreaElement) {
+          agentSettingsProfileMarkdown.value = profileMarkdown;
+        }
+        syncHubEmojiPickerValue(agentSettingsEmojiPicker, emoji);
+      };
+
+      const refreshAgentSettingsProfile = async () => {
+        if (agentProfileRefreshInFlight) {
+          return;
+        }
+        agentProfileRefreshInFlight = true;
+        try {
+          const response = await fetch("/api/profile", {
+            method: "GET",
+            headers: { Accept: "application/json" },
+          });
+          let body = null;
+          try {
+            body = await response.json();
+          } catch (_parseError) {
+            body = null;
+          }
+          if (body && body.profile) {
+            applyAgentProfileToSettingsForm(body.profile);
+          }
+          if (!response.ok) {
+            const detail = trimmedString(body && body.detail)
+              || trimmedString(body && body.error)
+              || `agent profile refresh failed with ${response.status}`;
+            throw new Error(detail);
+          }
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : "Unable to refresh agent profile.";
+          console.error("Failed to refresh agent settings profile.", detail);
+        } finally {
+          agentProfileRefreshInFlight = false;
+        }
+      };
 
       const setAgentSettingsModalOpen = (open, returnFocus = false) => {
         if (!(agentSettingsModalBackdrop instanceof HTMLElement)) {
@@ -1512,6 +1590,7 @@
       if (agentSettingsDockButton instanceof HTMLButtonElement) {
         agentSettingsDockButton.addEventListener("click", () => {
           setAgentSettingsModalOpen(true);
+          void refreshAgentSettingsProfile();
         });
       }
 

@@ -407,6 +407,39 @@ func (s *Service) UpdateAgentProfile(ctx context.Context, profile AgentProfile) 
 	})
 }
 
+func (s *Service) RefreshAgentProfile(ctx context.Context) (AgentProfile, error) {
+	state := s.store.Snapshot()
+	if strings.TrimSpace(state.Session.AgentToken) == "" {
+		return AgentProfile{}, errors.New("agent is not bound yet")
+	}
+	s.syncHubClient(state)
+
+	capabilities, err := s.hub.GetCapabilities(ctx, state.Session.AgentToken)
+	if err != nil {
+		s.noteHubInteraction(err, ConnectionTransportHTTP)
+		return AgentProfile{}, fmt.Errorf("refresh agent profile from /v1/agents/me/capabilities: %w", err)
+	}
+	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+
+	identity := existingAgentIdentityFromCapabilities(capabilities)
+	profile := normalizeAgentProfile(AgentProfile{
+		Handle:          coalesceTrimmed(identity.Handle, state.Session.Handle),
+		DisplayName:     coalesceTrimmed(identity.DisplayName, state.Session.DisplayName),
+		Emoji:           coalesceTrimmed(identity.Emoji, state.Session.Emoji),
+		ProfileMarkdown: coalesceTrimmed(identity.ProfileMarkdown, state.Session.ProfileBio),
+	})
+	if err := s.store.Update(func(current *AppState) error {
+		current.Session.Handle = profile.Handle
+		current.Session.DisplayName = profile.DisplayName
+		current.Session.Emoji = profile.Emoji
+		current.Session.ProfileBio = profile.ProfileMarkdown
+		return nil
+	}); err != nil {
+		return AgentProfile{}, err
+	}
+	return profile, nil
+}
+
 func (s *Service) AddConnectedAgent(agent ConnectedAgent) error {
 	agent = normalizeConnectedAgent(agent)
 	if connectedAgentIdentityKey(agent) == "" {

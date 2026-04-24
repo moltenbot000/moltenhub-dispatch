@@ -30,6 +30,7 @@ type service interface {
 	Snapshot() app.AppState
 	BindAndRegister(ctx context.Context, profile app.BindProfile) error
 	UpdateAgentProfile(ctx context.Context, profile app.AgentProfile) error
+	RefreshAgentProfile(ctx context.Context) (app.AgentProfile, error)
 	AddConnectedAgent(agent app.ConnectedAgent) error
 	RefreshConnectedAgents(ctx context.Context) ([]app.ConnectedAgent, error)
 	DispatchFromUI(ctx context.Context, req app.DispatchRequest) (app.PendingTask, error)
@@ -92,6 +93,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/status", s.handleStatus)
 	s.mux.HandleFunc("/api/onboarding", s.handleOnboarding)
+	s.mux.HandleFunc("/api/profile", s.handleProfileAPI)
 	s.mux.HandleFunc("/api/connected-agents", s.handleConnectedAgents)
 	s.mux.HandleFunc("/api/dispatch", s.handleDispatchAPI)
 	s.mux.HandleFunc("/bind", s.handleBind)
@@ -327,6 +329,39 @@ func (s *Server) handleConnectedAgents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":               true,
 		"connected_agents": agents,
+	})
+}
+
+func (s *Server) handleProfileAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodHead)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	profile, err := s.service.RefreshAgentProfile(r.Context())
+	if err != nil {
+		state := s.service.Snapshot()
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"ok":     false,
+			"error":  "agent profile refresh failed",
+			"detail": err.Error(),
+			"profile": map[string]any{
+				"handle":           state.Session.Handle,
+				"display_name":     state.Session.DisplayName,
+				"emoji":            state.Session.Emoji,
+				"profile_markdown": state.Session.ProfileBio,
+			},
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"profile": map[string]any{
+			"handle":           profile.Handle,
+			"display_name":     profile.DisplayName,
+			"emoji":            profile.Emoji,
+			"profile_markdown": profile.ProfileMarkdown,
+		},
 	})
 }
 

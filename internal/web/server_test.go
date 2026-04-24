@@ -23,12 +23,14 @@ type stubService struct {
 	state             app.AppState
 	bindErr           error
 	updateProfileErr  error
+	refreshProfileErr error
 	updateSettingsErr error
 	setFlashErr       error
 	refreshAgentsErr  error
 	dispatchErr       error
 	dispatchTask      app.PendingTask
 	lastDispatchReq   app.DispatchRequest
+	lastProfile       app.AgentProfile
 	bindStateOnError  bool
 	lastBindProfile   app.BindProfile
 	lastFlashLevel    string
@@ -73,6 +75,20 @@ func (s *stubService) UpdateAgentProfile(_ context.Context, profile app.AgentPro
 	s.state.Session.Emoji = profile.Emoji
 	s.state.Session.ProfileBio = profile.ProfileMarkdown
 	return nil
+}
+
+func (s *stubService) RefreshAgentProfile(_ context.Context) (app.AgentProfile, error) {
+	if s.refreshProfileErr != nil {
+		return app.AgentProfile{}, s.refreshProfileErr
+	}
+	profile := app.AgentProfile{
+		Handle:          s.state.Session.Handle,
+		DisplayName:     s.state.Session.DisplayName,
+		Emoji:           s.state.Session.Emoji,
+		ProfileMarkdown: s.state.Session.ProfileBio,
+	}
+	s.lastProfile = profile
+	return profile, nil
 }
 
 func (s *stubService) AddConnectedAgent(app.ConnectedAgent) error {
@@ -776,6 +792,18 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `name="display_name" value="Dispatch Agent"`) {
 		t.Fatalf("expected display name field, body=%s", body)
+	}
+	if !strings.Contains(body, `id="agent-settings-form"`) {
+		t.Fatalf("expected agent settings form id for client refresh hydration, body=%s", body)
+	}
+	if !strings.Contains(body, `const agentSettingsDisplayName = document.getElementById("agent-settings-display-name");`) {
+		t.Fatalf("expected agent settings display name client hook, body=%s", body)
+	}
+	if !strings.Contains(body, `fetch("/api/profile"`) {
+		t.Fatalf("expected settings modal profile refresh request, body=%s", body)
+	}
+	if !strings.Contains(body, `void refreshAgentSettingsProfile();`) {
+		t.Fatalf("expected settings modal to refresh profile on open, body=%s", body)
 	}
 	if !strings.Contains(body, `id="hub-conn-item"`) {
 		t.Fatalf("expected connection indicator in page, body=%s", body)
@@ -2928,6 +2956,96 @@ func TestHandleConnectedAgentsReturnsStructuredRefreshError(t *testing.T) {
 	}
 	if len(body.ConnectedAgents) != 1 || body.ConnectedAgents[0].AgentID != "stale-agent" {
 		t.Fatalf("expected stale connected agents to be returned for context, got %#v", body.ConnectedAgents)
+	}
+}
+
+func TestHandleProfileAPIReturnsSnapshot(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Session: app.Session{
+				AgentToken:  "agent-token",
+				Handle:      "dispatch-agent",
+				DisplayName: "Dispatch Agent",
+				Emoji:       "🤖",
+				ProfileBio:  "Dispatches skill requests.",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/profile", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	var body struct {
+		OK      bool `json:"ok"`
+		Profile struct {
+			Handle          string `json:"handle"`
+			DisplayName     string `json:"display_name"`
+			Emoji           string `json:"emoji"`
+			ProfileMarkdown string `json:"profile_markdown"`
+		} `json:"profile"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !body.OK {
+		t.Fatalf("expected ok=true response, got %#v", body)
+	}
+	if body.Profile.Handle != "dispatch-agent" || body.Profile.DisplayName != "Dispatch Agent" {
+		t.Fatalf("unexpected profile payload: %#v", body.Profile)
+	}
+}
+
+func TestHandleProfileAPIReturnsStructuredRefreshError(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Session: app.Session{
+				AgentToken:  "agent-token",
+				Handle:      "stale-agent",
+				DisplayName: "Stale Agent",
+			},
+		},
+		refreshProfileErr: errors.New("refresh agent profile from /v1/agents/me/capabilities: hub API 401 unauthorized: missing or invalid bearer token"),
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/profile", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 response, got %d", rec.Code)
+	}
+
+	var body struct {
+		OK     bool   `json:"ok"`
+		Error  string `json:"error"`
+		Detail string `json:"detail"`
+		Profile struct {
+			Handle string `json:"handle"`
+		} `json:"profile"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Error != "agent profile refresh failed" {
+		t.Fatalf("unexpected error payload: %#v", body)
+	}
+	if body.Profile.Handle != "stale-agent" {
+		t.Fatalf("expected stale profile to be returned, got %#v", body.Profile)
 	}
 }
 

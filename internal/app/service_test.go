@@ -597,6 +597,49 @@ func TestBindAndRegisterRejectsUnsupportedAPIBase(t *testing.T) {
 	}
 }
 
+func TestRefreshAgentProfileFetchesAndPersistsCapabilitiesIdentity(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session = Session{
+			AgentToken:      "agent-token",
+			Handle:          "",
+			HandleFinalized: true,
+			DisplayName:     "",
+			Emoji:           "",
+			ProfileBio:      "",
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	fake.capabilitiesResponse = map[string]any{
+		"metadata": map[string]any{
+			"handle":           "dispatch-agent",
+			"display_name":     "Dispatch Agent",
+			"emoji":            "🤖",
+			"profile_markdown": "Dispatches skill requests.",
+		},
+	}
+
+	profile, err := service.RefreshAgentProfile(context.Background())
+	if err != nil {
+		t.Fatalf("refresh agent profile: %v", err)
+	}
+
+	if profile.Handle != "dispatch-agent" || profile.DisplayName != "Dispatch Agent" {
+		t.Fatalf("unexpected profile: %#v", profile)
+	}
+	state := service.store.Snapshot()
+	if state.Session.Handle != "dispatch-agent" {
+		t.Fatalf("expected persisted handle, got %q", state.Session.Handle)
+	}
+	if state.Session.DisplayName != "Dispatch Agent" || state.Session.Emoji != "🤖" || state.Session.ProfileBio != "Dispatches skill requests." {
+		t.Fatalf("unexpected persisted session profile: %#v", state.Session)
+	}
+}
+
 func TestBindAndRegisterPersistsSelectedRuntime(t *testing.T) {
 	t.Parallel()
 
