@@ -120,7 +120,7 @@
   --surface-auth-verify-hover-shadow: 0 16px 28px rgba(10, 132, 255, 0.28);
   --surface-auth-verify-text: #ffffff;
   --radius: 6px;
-  --radius-card: 15px;
+  --radius-card: var(--radius);
   --radius-sm: calc(var(--radius) - 2px);
   --foreground: rgba(26, 26, 26, 1);
   --glass-bg: rgba(255, 255, 255, 0.45);
@@ -616,7 +616,7 @@ textarea {
 }
 
 .panel {
-  border-radius: 22px;
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 
@@ -668,7 +668,7 @@ textarea {
 }
 
 .event {
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   font-size: 0.8rem;
   line-height: 1.4;
@@ -1165,7 +1165,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 .prompt-action-paste {
   width: 100%;
   border: 1px solid var(--surface-control-border);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: var(--surface-control-bg);
   color: var(--text);
   box-shadow: var(--surface-control-shadow);
@@ -1382,7 +1382,7 @@ select.prompt-control {
   min-width: 0;
   min-inline-size: 72px;
   min-height: 38px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 8px 13px;
   font-size: 0.77rem;
   font-weight: 800;
@@ -1399,7 +1399,7 @@ select.prompt-control {
   min-height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius);
   color: var(--text-soft);
   background: transparent;
   box-shadow: none;
@@ -1489,7 +1489,7 @@ select.prompt-control {
 
 .library-task-empty,
 .library-task-option {
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: var(--surface-library-bg);
   border: 1px solid var(--border);
 }
@@ -1557,7 +1557,7 @@ select.prompt-control {
 }
 
 .task {
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   padding: 10px 11px;
   transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease, opacity 2000ms ease;
   min-width: 0;
@@ -1711,7 +1711,7 @@ select.prompt-control {
   height: 34px;
   flex: 0 0 34px;
   align-self: center;
-  border-radius: 12px;
+  border-radius: var(--radius);
   border: 1px solid rgba(17, 34, 68, 0.12);
   background: var(--surface-task-button-bg);
   padding: 7px;
@@ -2471,7 +2471,7 @@ select.prompt-control {
 .agent-auth-shell {
   padding: clamp(24px, 3vw, 32px);
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
 }
@@ -2520,7 +2520,7 @@ select.prompt-control {
   height: 58px;
   padding: 9px;
   border: 0;
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: transparent;
   box-shadow: none;
   filter: var(--agent-logo-filter);
@@ -2867,7 +2867,7 @@ select.prompt-control {
   min-height: 38px;
   padding: 8px 13px;
   border: 1px solid var(--surface-control-border);
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface-control-bg);
   box-shadow: var(--surface-control-shadow);
   color: var(--surface-tab-text);
@@ -3578,7 +3578,7 @@ p,
 
 .flash {
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   padding: 13px 16px;
   box-shadow: var(--shadow-sm);
   background: var(--surface-glass);
@@ -3787,7 +3787,7 @@ legend {
   min-height: 44px;
   padding: 11px 14px;
   border: 1px solid var(--surface-control-border);
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface-control-bg);
   color: var(--text);
   box-shadow: var(--surface-control-shadow);
@@ -3872,7 +3872,7 @@ legend {
 .shell button.dispatch-task-button {
   min-height: 38px;
   min-inline-size: 120px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 8px 13px;
   font-size: 0.77rem;
   font-weight: 800;
@@ -3916,7 +3916,7 @@ legend {
   gap: 8px;
   padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface-glass-solid);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
@@ -3948,7 +3948,7 @@ legend {
   margin-bottom: 16px;
   padding: 13px 14px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface-library-bg);
 }
 
@@ -4015,7 +4015,7 @@ body.settings-modal-open {
   max-height: min(92vh, 880px);
   overflow: auto;
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
   display: grid;
@@ -4050,7 +4050,7 @@ body.settings-modal-open {
   min-width: 0;
   min-height: 36px;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 
 .settings-modal-close svg,
@@ -4072,7 +4072,7 @@ body.settings-modal-open {
   max-height: min(92vh, 880px);
   overflow: auto;
   border: 1px solid var(--surface-auth-panel-border);
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   background: var(--surface-auth-panel-bg);
   box-shadow: var(--surface-auth-panel-shadow);
   display: block;
@@ -4091,7 +4091,7 @@ body.settings-modal-open {
   gap: 14px 18px;
   padding: clamp(16px, 2vw, 22px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(10, 132, 255, 0.08), rgba(255, 255, 255, 0.58));
   color: rgba(248, 250, 252, 0.96);
 }
@@ -4168,7 +4168,7 @@ body.settings-modal-open {
   min-height: 40px;
   padding: 8px 12px;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.86), rgba(226, 232, 240, 0.7));
   color: var(--surface-label);
   font-weight: 700;
@@ -4466,7 +4466,7 @@ body.settings-modal-open {
 
 .connected-agent-card {
   border: 1px solid color-mix(in srgb, var(--border) 85%, rgba(17, 34, 68, 0.16));
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   background: var(--surface-glass-strong);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
@@ -4478,7 +4478,7 @@ body.settings-modal-open {
   width: 100%;
   justify-content: stretch;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   text-align: left;
   background: var(--surface-glass-strong);
   color: var(--text);
@@ -4624,7 +4624,7 @@ body.settings-modal-open {
 
 .card {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 13px;
   background: var(--surface-library-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
@@ -4831,7 +4831,7 @@ pre {
   margin: 8px 0 0;
   padding: 10px 12px;
   overflow: auto;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--surface-terminal-bg);
   border: 1px solid rgba(113, 136, 177, 0.2);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
@@ -4881,7 +4881,7 @@ pre {
   .onboarding-modal {
     width: 100%;
     max-height: calc(100vh - 24px);
-    border-radius: 18px;
+    border-radius: var(--radius-card);
   }
 
   .onboarding-modal-shell {
@@ -5224,7 +5224,7 @@ p,
 
 .card {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--radius-card);
   background: color-mix(in srgb, var(--glass-icon-bg) 80%, transparent);
 }
 
@@ -5374,7 +5374,7 @@ legend {
 .onboarding-modal input:not([type="radio"]):not([type="checkbox"]),
 .onboarding-modal textarea,
 .onboarding-modal select {
-  border-radius: 12px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--input-background);
   color: var(--foreground);
@@ -5453,7 +5453,7 @@ html.night .runtime-option:focus-within {
 .onboarding-modal button {
   min-height: 44px;
   padding: 11px 16px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--glass-icon-bg) 92%, transparent);
   color: var(--foreground);
