@@ -2366,6 +2366,40 @@ func TestHandleIndexShowsOnboardingErrorWhenTokenExistsButHubStatusIsOffline(t *
 	}
 }
 
+func TestHandleIndexShowsFlashErrorInsideOnboardingWhenStartupValidationFails(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportOffline,
+			},
+			Flash: app.FlashMessage{
+				Level:   "error",
+				Message: "automatic hub binding from MOLTEN_HUB_TOKEN failed: missing or invalid bearer token",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="onboarding-message is-error"`) {
+		t.Fatalf("expected onboarding error styling, body=%s", body)
+	}
+	if !strings.Contains(body, `automatic hub binding from MOLTEN_HUB_TOKEN failed: missing or invalid bearer token`) {
+		t.Fatalf("expected startup validation failure in onboarding message, body=%s", body)
+	}
+}
+
 func TestHandleIndexTreatsHTTPPollingAsUsableConnection(t *testing.T) {
 	t.Parallel()
 

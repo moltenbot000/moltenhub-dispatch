@@ -80,6 +80,58 @@ func TestBindFromEnvIfNeededSkipsWhenSessionAlreadyBound(t *testing.T) {
 	}
 }
 
+func TestBindFromEnvIfNeededReconnectsExistingAgentTokenEvenWhenSessionAlreadyBound(t *testing.T) {
+	t.Setenv(moltenHubTokenEnvVar, "t_env-agent-123")
+	t.Setenv(moltenHubRegionEnvVar, HubRegionEU)
+
+	store, err := NewStore(t.TempDir()+"/config.json", DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.Update(func(state *AppState) error {
+		state.Settings.HubRegion = HubRegionNA
+		state.Settings.HubURL = hubURLForRegion(HubRegionNA)
+		state.Session.AgentToken = "persisted-token"
+		state.Session.BindToken = "persisted-token"
+		state.Session.Handle = "persisted-agent"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	fake := &fakeHubClient{
+		capabilitiesResponse: map[string]any{
+			"handle":        "env-agent",
+			"display_name":  "Env Agent",
+			"profile_bio":   "Connected from env",
+			"advertised_skills": []any{},
+		},
+	}
+	service := NewService(store, fake)
+
+	if err := service.BindFromEnvIfNeeded(context.Background()); err != nil {
+		t.Fatalf("bind from env: %v", err)
+	}
+
+	if len(fake.bindRequests) != 0 {
+		t.Fatalf("bind requests = %d, want 0", len(fake.bindRequests))
+	}
+	if fake.capabilitiesCalls < 2 {
+		t.Fatalf("capabilities calls = %d, want at least 2", fake.capabilitiesCalls)
+	}
+
+	state := service.Snapshot()
+	if got := state.Session.AgentToken; got != "t_env-agent-123" {
+		t.Fatalf("session agent token = %q, want %q", got, "t_env-agent-123")
+	}
+	if got := state.Settings.HubRegion; got != HubRegionEU {
+		t.Fatalf("settings hub region = %q, want %q", got, HubRegionEU)
+	}
+	if got := state.Flash.Message; got != "Existing agent connected from "+moltenHubTokenEnvVar+"." {
+		t.Fatalf("flash message = %q", got)
+	}
+}
+
 func TestBindFromEnvIfNeededReportsFailure(t *testing.T) {
 	t.Setenv(moltenHubTokenEnvVar, "t_agent-123")
 	t.Setenv(moltenHubRegionEnvVar, HubRegionNA)

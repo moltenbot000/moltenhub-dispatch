@@ -152,6 +152,10 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 	if onboarding != nil {
 		currentOnboarding = *onboarding
 	}
+	if strings.TrimSpace(state.Session.AgentToken) == "" && currentOnboarding.Message == "" && isError && strings.TrimSpace(flash) != "" {
+		currentOnboarding.Message = strings.TrimSpace(flash)
+		currentOnboarding.Error = true
+	}
 	view := pageData{
 		State:                        state,
 		ActivityFeed:                 mergedActivityFeed(state.PendingTasks, state.RecentEvents),

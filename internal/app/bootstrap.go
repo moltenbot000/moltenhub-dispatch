@@ -28,7 +28,8 @@ func (s *Service) BindFromEnvIfNeeded(ctx context.Context) error {
 	}
 
 	state := s.store.Snapshot()
-	if strings.TrimSpace(state.Session.AgentToken) != "" {
+	mode, bindToken, agentToken := NormalizeOnboardingTokens("", token, "")
+	if mode != OnboardingModeExisting && strings.TrimSpace(state.Session.AgentToken) != "" {
 		return nil
 	}
 	if updateErr := s.UpdateSettings(func(settings *Settings) error {
@@ -42,7 +43,6 @@ func (s *Service) BindFromEnvIfNeeded(ctx context.Context) error {
 		return err
 	}
 
-	mode, bindToken, agentToken := NormalizeOnboardingTokens("", token, "")
 	if err := s.BindAndRegister(ctx, BindProfile{
 		AgentMode:  mode,
 		BindToken:  bindToken,
