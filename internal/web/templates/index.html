@@ -232,18 +232,18 @@
                   </button>
                 </div>
                 <div class="runtime-event-card-body" data-runtime-event-body hidden>
-                  {{if .WhenLabel}}<p><strong>When:</strong> {{.WhenLabel}}</p>{{end}}
-                  {{if .IsPendingTask}}<p><strong>Type:</strong> Pending task</p>{{else if .IsRecentEvent}}<p><strong>Type:</strong> Runtime event</p>{{end}}
-                  {{if .Status}}<p><strong>Status:</strong> {{.Status}}</p>{{end}}
-                  {{if .Level}}<p><strong>Level:</strong> {{.Level}}</p>{{end}}
+                  {{if .WhenLabel}}<p class="runtime-event-detail-row"><i data-lucide="clock-3" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>When:</strong> {{.WhenLabel}}</span></p>{{end}}
+                  {{if .IsPendingTask}}<p class="runtime-event-detail-row"><i data-lucide="list-checks" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Type:</strong> Pending task</span></p>{{else if .IsRecentEvent}}<p class="runtime-event-detail-row"><i data-lucide="activity" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Type:</strong> Runtime event</span></p>{{end}}
+                  {{if .Status}}<p class="runtime-event-detail-row"><i data-lucide="{{.StatusIcon}}" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Status:</strong> {{.Status}}</span></p>{{end}}
+                  {{if .Level}}<p class="runtime-event-detail-row"><i data-lucide="signal" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Level:</strong> {{.Level}}</span></p>{{end}}
                   {{if .Detail}}<p>{{.Detail}}</p>{{end}}
-                  {{if .Skill}}<p><strong>Skill:</strong> {{.Skill}}</p>{{end}}
-                  {{if .TargetAgent}}<p><strong>Target agent:</strong> {{.TargetAgent}}</p>{{end}}
-                  {{if .TaskID}}<p><strong>Task:</strong> {{.TaskID}}</p>{{end}}
-                  {{if .ChildRequestID}}<p><strong>Child request:</strong> {{.ChildRequestID}}</p>{{end}}
-                  {{if .Repo}}<p><strong>Repo:</strong> {{.Repo}}</p>{{end}}
-                  {{if .LogPath}}<p><strong>Log:</strong> {{.LogPath}}</p>{{end}}
-                  {{if .ExpiresAtLabel}}<p><strong>Expires:</strong> {{.ExpiresAtLabel}}</p>{{end}}
+                  {{if .Skill}}<p class="runtime-event-detail-row"><i data-lucide="sparkles" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Skill:</strong> {{.Skill}}</span></p>{{end}}
+                  {{if .TargetAgent}}<p class="runtime-event-detail-row"><i data-lucide="bot" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Target agent:</strong> {{.TargetAgent}}</span></p>{{end}}
+                  {{if .TaskID}}<p class="runtime-event-detail-row"><i data-lucide="clipboard-list" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Task:</strong> {{.TaskID}}</span></p>{{end}}
+                  {{if .ChildRequestID}}<p class="runtime-event-detail-row"><i data-lucide="git-branch" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Child request:</strong> {{.ChildRequestID}}</span></p>{{end}}
+                  {{if .Repo}}<p class="runtime-event-detail-row"><i data-lucide="git-fork" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Repo:</strong> {{.Repo}}</span></p>{{end}}
+                  {{if .LogPath}}<p class="runtime-event-detail-row"><i data-lucide="file-text" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Log:</strong> {{.LogPath}}</span></p>{{end}}
+                  {{if .ExpiresAtLabel}}<p class="runtime-event-detail-row"><i data-lucide="timer" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Expires:</strong> {{.ExpiresAtLabel}}</span></p>{{end}}
                 </div>
               </article>
               {{end}}
@@ -934,6 +934,36 @@
         });
       };
 
+      const runtimeDetailIconName = (label, value = "") => {
+        const normalized = trimmedString(label).toLowerCase();
+        switch (normalized) {
+          case "when":
+            return "clock-3";
+          case "type":
+            return trimmedString(value) === "Pending task" ? "list-checks" : "activity";
+          case "status":
+            return trimmedString(value) === "Sending" ? "send" : "clock-3";
+          case "level":
+            return "signal";
+          case "skill":
+            return "sparkles";
+          case "target agent":
+            return "bot";
+          case "task":
+            return "clipboard-list";
+          case "child request":
+            return "git-branch";
+          case "repo":
+            return "git-fork";
+          case "log":
+            return "file-text";
+          case "expires":
+            return "timer";
+          default:
+            return "";
+        }
+      };
+
       const appendRuntimeRow = (container, label, value) => {
         if (!(container instanceof HTMLElement)) {
           return;
@@ -948,10 +978,18 @@
           container.appendChild(row);
           return;
         }
+        row.className = "runtime-event-detail-row";
+        const iconName = runtimeDetailIconName(label, text);
+        const icon = createLucideIconPlaceholder(iconName, "runtime-event-detail-icon");
+        if (icon) {
+          row.appendChild(icon);
+        }
+        const copy = document.createElement("span");
         const strong = document.createElement("strong");
         strong.textContent = `${label}:`;
-        row.appendChild(strong);
-        row.appendChild(document.createTextNode(` ${text}`));
+        copy.appendChild(strong);
+        copy.appendChild(document.createTextNode(` ${text}`));
+        row.appendChild(copy);
         container.appendChild(row);
       };
 

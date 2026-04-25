@@ -1952,6 +1952,12 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	if !strings.Contains(body, "run_task • Task dispatched") {
 		t.Fatalf("expected recent event card to render skill + title subtitle in consolidated feed, body=%s", body)
 	}
+	if !strings.Contains(body, `class="runtime-event-detail-row"><i data-lucide="clock-3" class="runtime-event-detail-icon"`) {
+		t.Fatalf("expected recent event details to render labeled icons, body=%s", body)
+	}
+	if !strings.Contains(body, `data-lucide="sparkles" class="runtime-event-detail-icon"`) || !strings.Contains(body, `data-lucide="bot" class="runtime-event-detail-icon"`) {
+		t.Fatalf("expected recent event details to icon skill and target agent rows, body=%s", body)
+	}
 	if strings.Contains(body, `data-runtime-event-toggle aria-expanded="true"`) {
 		t.Fatalf("expected all runtime event toggles to render collapsed by default, body=%s", body)
 	}
@@ -1969,6 +1975,9 @@ func TestHandleIndexKeepsRecentEventsClosedByDefault(t *testing.T) {
 	}
 	if !strings.Contains(body, `syncRuntimeEventToggleButton(toggle, nextExpanded);`) {
 		t.Fatalf("expected runtime event toggle visuals to update inside expansion handler, body=%s", body)
+	}
+	if !strings.Contains(body, `const runtimeDetailIconName = (label, value = "") => {`) {
+		t.Fatalf("expected activity refresh path to choose detail-row icons, body=%s", body)
 	}
 	if !strings.Contains(body, `initRuntimeEventCards();`) {
 		t.Fatalf("expected runtime event toggle initialization on page load, body=%s", body)
@@ -2029,6 +2038,9 @@ func TestHandleIndexKeepsPendingTasksClosedByDefault(t *testing.T) {
 	}
 	if !strings.Contains(body, "Sending") {
 		t.Fatalf("expected pending task status label to render sending state, body=%s", body)
+	}
+	if !strings.Contains(body, `data-lucide="send" class="runtime-event-detail-icon"`) || !strings.Contains(body, `data-lucide="git-fork" class="runtime-event-detail-icon"`) {
+		t.Fatalf("expected pending task details to render status and repo icons, body=%s", body)
 	}
 }
 
@@ -2187,6 +2199,9 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.runtime-event-card-body[hidden] {`) {
 		t.Fatalf("expected runtime event hidden state styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.runtime-event-detail-row {`) || !strings.Contains(body, `.runtime-event-detail-icon {`) {
+		t.Fatalf("expected runtime event detail icon row styles, body=%s", body)
 	}
 	if !strings.Contains(body, `.brand-login-card-shell {`) {
 		t.Fatalf("expected user-portal glass card shell styles, body=%s", body)

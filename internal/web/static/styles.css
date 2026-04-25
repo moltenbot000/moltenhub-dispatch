@@ -4808,6 +4808,20 @@ body.settings-modal-open {
   line-height: 1.25;
 }
 
+.runtime-event-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.runtime-event-detail-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--meta);
+}
+
 .card p {
   margin-top: 6px;
 }
