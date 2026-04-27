@@ -1453,7 +1453,7 @@ func (p *dispatchPayload) fromJSONString(raw string) error {
 
 func (p *dispatchPayload) fromJSONBytes(data []byte) error {
 	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := support.UnmarshalJSONPayload(data, &raw); err != nil {
 		return fmt.Errorf("dispatch payload must be a JSON object: %w", err)
 	}
 	p.fromMap(raw)
@@ -1594,7 +1594,7 @@ func decodeJSONPayloadBytes(raw []byte) (any, error) {
 		return nil, nil
 	}
 	var decoded any
-	if err := json.Unmarshal(raw, &decoded); err != nil {
+	if err := support.UnmarshalJSONPayload(raw, &decoded); err != nil {
 		return nil, fmt.Errorf("payload_format json requires valid JSON payload: %w", err)
 	}
 	return decoded, nil

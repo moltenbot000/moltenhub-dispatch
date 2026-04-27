@@ -2232,6 +2232,77 @@
         return connectedAgentSkillEntries(dispatchState.selectedAgent).find((skill) => skill.name === dispatchState.skillName) || null;
       };
 
+      const escapeJSONStringControlWhitespace = (value) => {
+        let output = "";
+        let inString = false;
+        let escaped = false;
+        let changed = false;
+        for (let index = 0; index < value.length; index += 1) {
+          const character = value[index];
+          if (!inString) {
+            if (character === "\"") {
+              inString = true;
+            }
+            output += character;
+            continue;
+          }
+          if (escaped) {
+            escaped = false;
+            output += character;
+            continue;
+          }
+          if (character === "\\") {
+            escaped = true;
+            output += character;
+            continue;
+          }
+          if (character === "\"") {
+            inString = false;
+            output += character;
+            continue;
+          }
+          if (character === "\t") {
+            changed = true;
+            output += "\\t";
+            continue;
+          }
+          if (character === "\n") {
+            changed = true;
+            output += "\\n";
+            continue;
+          }
+          if (character === "\r") {
+            changed = true;
+            output += "\\r";
+            continue;
+          }
+          const codePoint = character.charCodeAt(0);
+          if (codePoint < 0x20) {
+            changed = true;
+            output += `\\u${codePoint.toString(16).padStart(4, "0")}`;
+            continue;
+          }
+          output += character;
+        }
+        return changed ? output : value;
+      };
+
+      const parseSkillPayloadJSON = (value) => {
+        try {
+          return JSON.parse(value);
+        } catch (error) {
+          const normalized = escapeJSONStringControlWhitespace(value);
+          if (normalized === value) {
+            throw error;
+          }
+          try {
+            return JSON.parse(normalized);
+          } catch (_) {
+            throw error;
+          }
+        }
+      };
+
       const detectSkillPayloadFormat = (value) => {
         const rawPayload = trimmedString(value);
         if (rawPayload === "") {
@@ -2242,7 +2313,7 @@
           return { format: "markdown", parseError: "" };
         }
         try {
-          JSON.parse(rawPayload);
+          parseSkillPayloadJSON(rawPayload);
           return { format: "json", parseError: "" };
         } catch (error) {
           return {

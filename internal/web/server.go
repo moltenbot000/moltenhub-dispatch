@@ -534,7 +534,7 @@ func decodeStructuredJSONPayload(raw string) (any, bool) {
 		return nil, false
 	}
 	var decoded any
-	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+	if err := support.UnmarshalJSONPayload([]byte(trimmed), &decoded); err != nil {
 		return nil, false
 	}
 	return decoded, true
@@ -583,7 +583,7 @@ func dispatchRequestFromValues(values url.Values) (app.DispatchRequest, error) {
 		payloadFormat = ""
 	case payloadFormat == "json":
 		var decoded any
-		if err := json.Unmarshal([]byte(payloadText), &decoded); err != nil {
+		if err := support.UnmarshalJSONPayload([]byte(payloadText), &decoded); err != nil {
 			return app.DispatchRequest{}, fmt.Errorf("payload JSON is invalid: %w", err)
 		}
 		payloadValue = decoded

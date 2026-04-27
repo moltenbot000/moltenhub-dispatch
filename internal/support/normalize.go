@@ -2,6 +2,7 @@ package support
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -85,6 +86,72 @@ func SplitLines(raw string) []string {
 		}
 	}
 	return out
+}
+
+// UnmarshalJSONPayload keeps strict JSON behavior, but tolerates raw control
+// whitespace pasted into JSON string fields such as prompt text.
+func UnmarshalJSONPayload(data []byte, out any) error {
+	if err := json.Unmarshal(data, out); err != nil {
+		normalized, ok := escapeStringControlWhitespace(data)
+		if !ok {
+			return err
+		}
+		if retryErr := json.Unmarshal(normalized, out); retryErr != nil {
+			return err
+		}
+		return nil
+	}
+	return nil
+}
+
+func escapeStringControlWhitespace(data []byte) ([]byte, bool) {
+	out := make([]byte, 0, len(data))
+	inString := false
+	escaped := false
+	changed := false
+
+	for _, b := range data {
+		if !inString {
+			if b == '"' {
+				inString = true
+			}
+			out = append(out, b)
+			continue
+		}
+
+		if escaped {
+			escaped = false
+			out = append(out, b)
+			continue
+		}
+
+		switch b {
+		case '\\':
+			escaped = true
+			out = append(out, b)
+		case '"':
+			inString = false
+			out = append(out, b)
+		case '\t':
+			changed = true
+			out = append(out, '\\', 't')
+		case '\n':
+			changed = true
+			out = append(out, '\\', 'n')
+		case '\r':
+			changed = true
+			out = append(out, '\\', 'r')
+		default:
+			if b < 0x20 {
+				changed = true
+				out = fmt.Appendf(out, "\\u%04x", b)
+				continue
+			}
+			out = append(out, b)
+		}
+	}
+
+	return out, changed
 }
 
 func StringSliceFromAny(value any) []string {

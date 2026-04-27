@@ -2280,6 +2280,54 @@ func TestHandleSkillRequestDecodesJSONStringTaskPayloadWhenFormatJSON(t *testing
 	}
 }
 
+func TestHandleSkillRequestDecodesJSONStringTaskPayloadWithTabbedPromptWhenFormatJSON(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "code_for_me"})}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	message := hub.PullResponse{
+		DeliveryID:    "delivery-1",
+		FromAgentUUID: "caller-uuid",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_request",
+			SkillName: dispatchSkillName,
+			RequestID: "parent-req",
+			Payload: map[string]any{
+				"target_agent_ref": "worker-a",
+				"skill_name":       "code_for_me",
+				"payload":          "{\"prompt\":\"Review\tlogs\"}",
+				"payload_format":   "json",
+			},
+		},
+	}
+
+	if err := service.handleInboundMessage(context.Background(), message); err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one downstream publish call, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[0].Message.PayloadFormat; got != "json" {
+		t.Fatalf("expected downstream payload format json, got %q", got)
+	}
+	payload, ok := fake.publishCalls[0].Message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected downstream payload map, got %T", fake.publishCalls[0].Message.Payload)
+	}
+	if got := payload["prompt"]; got != "Review\tlogs" {
+		t.Fatalf("unexpected downstream prompt payload: %#v", payload)
+	}
+}
+
 func TestHandleSkillRequestRejectsInvalidJSONStringTaskPayloadWhenFormatJSON(t *testing.T) {
 	t.Parallel()
 
