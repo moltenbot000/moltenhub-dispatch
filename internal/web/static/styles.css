@@ -249,7 +249,6 @@ body::before {
   height: 40rem;
   border-radius: 50%;
   background: var(--body-orb-a);
-  animation: moltenFloatA 18s ease-in-out infinite alternate;
 }
 
 body::after {
@@ -259,7 +258,6 @@ body::after {
   height: 34rem;
   border-radius: 50%;
   background: var(--body-orb-b);
-  animation: moltenFloatB 22s ease-in-out infinite alternate;
 }
 
 body.task-fullscreen-open {
@@ -2250,24 +2248,6 @@ select.prompt-control {
   }
 }
 
-@keyframes moltenFloatA {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(7rem, 5rem, 0) scale(1.08);
-  }
-}
-
-@keyframes moltenFloatB {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(-6rem, -5rem, 0) scale(1.12);
-  }
-}
-
 @media (max-width: 980px) {
   .layout {
     min-height: auto;
@@ -2420,15 +2400,6 @@ select.prompt-control {
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-}
-
-.snowfall-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
 }
 
 .glow {
@@ -3430,7 +3401,6 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
 
   body::before,
   body::after,
-  .snowfall-canvas,
   .grain {
     display: none !important;
   }
@@ -3450,8 +3420,7 @@ html[data-hover-mode="off"] .prompt-visibility-toggle:hover {
   body::before,
   body::after,
   .glow,
-  .grain,
-  .snowfall-canvas {
+  .grain {
     display: none !important;
   }
 
