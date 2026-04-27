@@ -943,6 +943,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `const detectSkillPayloadFormat = (value) => {`) {
 		t.Fatalf("expected automatic payload format detection helper in client script, body=%s", body)
 	}
+	if !strings.Contains(body, `const escapeJSONStringControlWhitespace = (value) => {`) {
+		t.Fatalf("expected JSON payload detection to tolerate prompt whitespace, body=%s", body)
+	}
+	if !strings.Contains(body, `parseSkillPayloadJSON(rawPayload);`) {
+		t.Fatalf("expected JSON payload detection to use tolerant parser, body=%s", body)
+	}
 	if !strings.Contains(body, `Detected JSON payload.`) {
 		t.Fatalf("expected JSON detection status messaging in client script, body=%s", body)
 	}
@@ -1264,6 +1270,43 @@ func TestHandleDispatchAPIAcceptsMultipartFormData(t *testing.T) {
 		t.Fatalf("expected JSON payload map, got %T", stub.lastDispatchReq.Payload)
 	}
 	if got := payload["prompt"]; got != testDispatchPrompt {
+		t.Fatalf("unexpected prompt payload: %#v", payload)
+	}
+}
+
+func TestHandleDispatchAPIAcceptsJSONPayloadWithTabbedPrompt(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{ID: "task-1"},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	form := url.Values{}
+	form.Set("target_agent_ref", "worker-a")
+	form.Set("skill_name", "code_for_me")
+	form.Set("payload_format", "json")
+	form.Set("payload", "{\"prompt\":\"Review\tlogs\"}")
+	req := httptest.NewRequest(http.MethodPost, "/api/dispatch", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	if got := stub.lastDispatchReq.PayloadFormat; got != "json" {
+		t.Fatalf("expected payload format json, got %#v", stub.lastDispatchReq)
+	}
+	payload, ok := stub.lastDispatchReq.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected JSON payload map, got %T", stub.lastDispatchReq.Payload)
+	}
+	if got := payload["prompt"]; got != "Review\tlogs" {
 		t.Fatalf("unexpected prompt payload: %#v", payload)
 	}
 }

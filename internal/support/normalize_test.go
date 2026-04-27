@@ -1,6 +1,9 @@
 package support
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCompactStrings(t *testing.T) {
 	got := CompactStrings([]string{" alpha ", "", "beta", "alpha", "beta ", " gamma "})
@@ -25,6 +28,30 @@ func TestSplitLinesTrimsAndPreservesOrder(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestUnmarshalJSONPayloadAcceptsPromptWhitespace(t *testing.T) {
+	raw := []byte("{\"prompt\":\"review\tlogs\nthen retry\"}")
+	var payload map[string]any
+
+	if err := UnmarshalJSONPayload(raw, &payload); err != nil {
+		t.Fatalf("UnmarshalJSONPayload: %v", err)
+	}
+	if got := payload["prompt"]; got != "review\tlogs\nthen retry" {
+		t.Fatalf("prompt = %#v", got)
+	}
+}
+
+func TestUnmarshalJSONPayloadPreservesStrictJSONErrors(t *testing.T) {
+	var payload map[string]any
+
+	err := UnmarshalJSONPayload([]byte("{\"prompt\":"), &payload)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if !strings.Contains(err.Error(), "unexpected end of JSON input") {
+		t.Fatalf("unexpected parse error: %v", err)
 	}
 }
 
