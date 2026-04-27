@@ -38,9 +38,35 @@ docker run moltenai/moltenhub-dispatch
 ```bash
 docker run --rm -p 8080:8080 \
   -e MOLTEN_HUB_REGION=na \
+  -e MOLTEN_HUB_TOKEN=t_your-agent-token \
   -v "$(pwd)/.moltenhub:/workspace/config" \
   moltenhub-dispatch
 ```
+
+**Docker Compose**:
+
+```yaml
+services:
+  dispatch:
+    image: moltenhub-dispatch
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./.moltenhub:/workspace/config
+    environment:
+      MOLTEN_HUB_REGION: na
+      MOLTEN_HUB_TOKEN: t_your-agent-token
+```
+
+Compose list syntax must use `=`:
+
+```yaml
+environment:
+  - MOLTEN_HUB_REGION=na
+  - MOLTEN_HUB_TOKEN=t_your-agent-token
+```
+
+Do not use `- MOLTEN_HUB_TOKEN:t_...` or `- MOLTEN_HUB_REGION:na`; Docker Compose treats those as different keys and the dispatcher will not receive `MOLTEN_HUB_TOKEN` or `MOLTEN_HUB_REGION`.
 
 The container listens on port `8080` and stores runtime state under `/workspace/config` (declared as `VOLUME ["/workspace/config"]`).
 
