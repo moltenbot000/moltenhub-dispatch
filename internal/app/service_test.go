@@ -1307,6 +1307,12 @@ func TestHandleDownstreamFailureSendsDetailedFailureWithoutFollowUp(t *testing.T
 	if got := failurePayload["message"]; got != "Task failed while dispatching to a connected agent. Error: task execution failed" {
 		t.Fatalf("unexpected caller failure message: %#v", got)
 	}
+	if got := failurePayload["Failure:"]; got != "Task failed while dispatching to a connected agent. Error: task execution failed" {
+		t.Fatalf("unexpected caller Failure: field: %#v", got)
+	}
+	if got := failurePayload["Error details:"]; got == "" {
+		t.Fatalf("expected caller Error details: field, got %#v", got)
+	}
 	if got := failurePayload["retryable"]; got != true {
 		t.Fatalf("unexpected caller retryable field: %#v", got)
 	}

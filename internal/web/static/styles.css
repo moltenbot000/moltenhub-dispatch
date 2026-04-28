@@ -3793,8 +3793,11 @@ legend {
 }
 
 .shell input[readonly],
+.shell textarea[readonly],
 .settings-modal input[readonly],
-.onboarding-modal input[readonly] {
+.settings-modal textarea[readonly],
+.onboarding-modal input[readonly],
+.onboarding-modal textarea[readonly] {
   color: color-mix(in srgb, var(--text) 70%, transparent);
   background: var(--surface-button-bg);
   cursor: default;

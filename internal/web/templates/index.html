@@ -431,6 +431,20 @@
       const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
         ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Describe the task or paste a JSON payload."
         : "Describe the task or paste a JSON payload.";
+      const setSkillPayloadSchemaText = (schemaText) => {
+        if (!(skillPayloadInput instanceof HTMLTextAreaElement)) {
+          return;
+        }
+        const previousSchemaText = trimmedString(skillPayloadInput.dataset.schemaText);
+        const nextSchemaText = trimmedString(schemaText);
+        skillPayloadInput.readOnly = nextSchemaText !== "";
+        skillPayloadInput.dataset.schemaText = nextSchemaText;
+        if (nextSchemaText !== "") {
+          skillPayloadInput.value = nextSchemaText;
+        } else if (previousSchemaText !== "" && trimmedString(skillPayloadInput.value) === previousSchemaText) {
+          skillPayloadInput.value = "";
+        }
+      };
       const defaultSkillPayloadHint = skillPayloadHint instanceof HTMLElement
         ? trimmedString(skillPayloadHint.textContent) || "Markdown and JSON are both supported."
         : "Markdown and JSON are both supported.";
@@ -2180,6 +2194,12 @@
           setSkillPayloadValidationMessage("");
           return true;
         }
+        if (skillPayloadInput.readOnly && trimmedString(skillPayloadInput.dataset.schemaText) !== "") {
+          skillPayloadFormatInput.value = "";
+          skillPayloadInput.setCustomValidity("");
+          setSkillPayloadValidationMessage("");
+          return true;
+        }
 
         const detection = detectSkillPayloadFormat(skillPayloadInput.value);
         skillPayloadFormatInput.value = detection.format;
@@ -2212,16 +2232,16 @@
           if (!selectedSkill) {
             skillPayloadInput.value = "";
             skillPayloadInput.setCustomValidity("");
+            setSkillPayloadSchemaText("");
             skillPayloadInput.placeholder = defaultSkillPayloadPlaceholder;
           } else {
-            skillPayloadInput.placeholder = skillEntry && skillEntry.schemaText
-              ? skillEntry.schemaText
-              : defaultSkillPayloadPlaceholder;
+            setSkillPayloadSchemaText(skillEntry && skillEntry.schemaText ? skillEntry.schemaText : "");
+            skillPayloadInput.placeholder = defaultSkillPayloadPlaceholder;
           }
         }
         if (skillPayloadHint instanceof HTMLElement) {
           skillPayloadHint.textContent = skillEntry && skillEntry.schemaText
-            ? "Required payload schema shown as placeholder. Markdown and JSON are both supported."
+            ? "Required payload schema shown in readonly payload text box. Markdown and JSON are both supported."
             : defaultSkillPayloadHint;
         }
         if (skillPayloadFormatInput instanceof HTMLInputElement && !selectedSkill) {
@@ -2428,6 +2448,7 @@
             : "";
         }
         if (skillPayloadInput instanceof HTMLTextAreaElement) {
+          setSkillPayloadSchemaText("");
           skillPayloadInput.value = "";
           skillPayloadInput.setCustomValidity("");
         }
@@ -3051,6 +3072,10 @@
             } else {
               formData.delete("skill_name");
             }
+            if (skillPayloadInput instanceof HTMLTextAreaElement && skillPayloadInput.readOnly && trimmedString(skillPayloadInput.dataset.schemaText) !== "") {
+              formData.delete("payload");
+              formData.delete("payload_format");
+            }
             const response = await fetch("/api/dispatch", {
               method: "POST",
               headers: { Accept: "application/json" },
@@ -3068,6 +3093,7 @@
               return;
             }
             if (skillPayloadInput instanceof HTMLTextAreaElement) {
+              setSkillPayloadSchemaText("");
               skillPayloadInput.value = "";
             }
             if (skillPayloadFormatInput instanceof HTMLInputElement) {

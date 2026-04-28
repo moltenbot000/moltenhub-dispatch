@@ -1119,7 +1119,7 @@ func TestHandleIndexIncludesSkillSchemaPlaceholderSupport(t *testing.T) {
 
 	body := rec.Body.String()
 	if !strings.Contains(body, `const skillPayloadHint = document.getElementById("skill-payload-hint");`) {
-		t.Fatalf("expected payload hint hook for schema-aware placeholder copy, body=%s", body)
+		t.Fatalf("expected payload hint hook for schema-aware readonly copy, body=%s", body)
 	}
 	if !strings.Contains(body, `const defaultSkillPayloadHint = skillPayloadHint instanceof HTMLElement`) {
 		t.Fatalf("expected default payload hint capture before schema overrides, body=%s", body)
@@ -1131,13 +1131,22 @@ func TestHandleIndexIncludesSkillSchemaPlaceholderSupport(t *testing.T) {
 		t.Fatalf("expected schema alias scan in client script, body=%s", body)
 	}
 	if !strings.Contains(body, `schemaText: trimmedString(schemaText),`) {
-		t.Fatalf("expected skill entries to preserve schema text for placeholders, body=%s", body)
+		t.Fatalf("expected skill entries to preserve schema text for readonly payload text, body=%s", body)
 	}
-	if !strings.Contains(body, `Required payload schema shown as placeholder. Markdown and JSON are both supported.`) {
+	if !strings.Contains(body, `Required payload schema shown in readonly payload text box. Markdown and JSON are both supported.`) {
 		t.Fatalf("expected schema-specific payload hint copy, body=%s", body)
 	}
-	if !strings.Contains(body, `skillPayloadInput.placeholder = skillEntry && skillEntry.schemaText`) {
-		t.Fatalf("expected payload placeholder to switch to selected skill schema, body=%s", body)
+	if !strings.Contains(body, `const setSkillPayloadSchemaText = (schemaText) => {`) {
+		t.Fatalf("expected payload schema text helper in client script, body=%s", body)
+	}
+	if !strings.Contains(body, `skillPayloadInput.readOnly = nextSchemaText !== "";`) {
+		t.Fatalf("expected selected skill schema to make payload text readonly, body=%s", body)
+	}
+	if !strings.Contains(body, `skillPayloadInput.value = nextSchemaText;`) {
+		t.Fatalf("expected selected skill schema to render inside payload text box, body=%s", body)
+	}
+	if !strings.Contains(body, `formData.delete("payload");`) || !strings.Contains(body, `formData.delete("payload_format");`) {
+		t.Fatalf("expected readonly schema reference text to be omitted from dispatch payload, body=%s", body)
 	}
 }
 
