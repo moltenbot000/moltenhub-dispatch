@@ -2385,6 +2385,12 @@ func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	if !strings.Contains(body, `/* Selectable pink theme. */`) || !strings.Contains(body, `html.pink {`) {
 		t.Fatalf("expected pink palette to be available as its own selectable theme, body=%s", body)
 	}
+	if !strings.Contains(body, `--good: #2bb673;`) ||
+		!strings.Contains(body, `--primary: #ec4899;`) ||
+		!strings.Contains(body, `--accent: #db2777;`) ||
+		!strings.Contains(body, `--glass-icon-bg: rgba(255, 255, 255, 0.7);`) {
+		t.Fatalf("expected pink theme to define connected-agent accent colors, body=%s", body)
+	}
 	if !strings.Contains(body, `html.dark {`) || !strings.Contains(body, `--body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);`) {
 		t.Fatalf("expected existing dark theme to remain available separately from pink theme, body=%s", body)
 	}
@@ -2393,6 +2399,64 @@ func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	}
 	if !strings.Contains(body, ".task-result.completed {\n  color: var(--surface-success);\n  background: rgba(43, 182, 115, 0.1);\n}") {
 		t.Fatalf("expected shared completed task result compatibility selector, body=%s", body)
+	}
+}
+
+func TestHandleStylesBaseThemeUsesLogoAccent(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/styles.css", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	pinkThemeIndex := strings.Index(body, `/* Selectable pink theme. */`)
+	if pinkThemeIndex == -1 {
+		t.Fatalf("expected selectable pink theme marker, body=%s", body)
+	}
+
+	baseStyles := body[:pinkThemeIndex]
+	for _, want := range []string{
+		`--hub-running-rgb: 0 145 176;`,
+		`--hub-accent-rgb: 0 119 146;`,
+		`--running: #0091b0;`,
+		`--brand-gradient: linear-gradient(135deg, #7dd7e8 0%, #0091b0 48%, #007792 100%);`,
+	} {
+		if !strings.Contains(baseStyles, want) {
+			t.Fatalf("expected base theme to use logo accent %q, body=%s", want, body)
+		}
+	}
+
+	for _, disallowed := range []string{
+		`236, 72, 153`,
+		`219, 39, 119`,
+		`244, 114, 182`,
+		`249, 168, 212`,
+		`190, 24, 93`,
+		`#ec4899`,
+		`#db2777`,
+		`#f9a8d4`,
+		`#f472b6`,
+		`#be185d`,
+		`#fbcfe8`,
+	} {
+		if strings.Contains(baseStyles, disallowed) {
+			t.Fatalf("expected base theme to avoid pink accent value %q, body=%s", disallowed, body)
+		}
 	}
 }
 
