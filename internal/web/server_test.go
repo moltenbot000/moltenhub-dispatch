@@ -1266,6 +1266,80 @@ func TestHandleDispatchAPIAcceptsSelectedAgentAndSkillAliases(t *testing.T) {
 	}
 }
 
+func TestHandleDispatchAPIAcceptsJSONSchedulePayload(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{
+			ID:     "schedule-1",
+			Status: app.ScheduledMessageStatusActive,
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	body := `{
+		"agent": "worker-a",
+		"skill_name": "run_task",
+		"payload": {"input": "scheduled work"},
+		"schedule": {
+			"after": "10m",
+			"every": "30m"
+		}
+	}`
+	before := time.Now().UTC()
+	req := httptest.NewRequest(http.MethodPost, "/api/dispatch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		OK        bool   `json:"ok"`
+		TaskID    string `json:"task_id"`
+		Status    string `json:"status"`
+		Scheduled bool   `json:"scheduled"`
+		Message   string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.OK || !response.Scheduled || response.Status != app.ScheduledMessageStatusActive {
+		t.Fatalf("unexpected response: %#v", response)
+	}
+	if response.Message != "Scheduled message schedule-1" {
+		t.Fatalf("unexpected response message: %#v", response)
+	}
+
+	if got := stub.lastDispatchReq.TargetAgentRef; got != "worker-a" {
+		t.Fatalf("unexpected target agent ref: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.SkillName; got != "run_task" {
+		t.Fatalf("unexpected skill name: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "json" {
+		t.Fatalf("expected payload format json, got %#v", stub.lastDispatchReq)
+	}
+	payload, ok := stub.lastDispatchReq.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected JSON payload map, got %T", stub.lastDispatchReq.Payload)
+	}
+	if got := payload["input"]; got != "scheduled work" {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+	if got := stub.lastDispatchReq.Frequency; got != 30*time.Minute {
+		t.Fatalf("frequency = %v, want 30m", got)
+	}
+	if stub.lastDispatchReq.ScheduledAt.Before(before.Add(9*time.Minute)) || stub.lastDispatchReq.ScheduledAt.After(before.Add(11*time.Minute)) {
+		t.Fatalf("scheduled_at = %s, want about 10m after %s", stub.lastDispatchReq.ScheduledAt, before)
+	}
+}
+
 func TestHandleDispatchAPIAcceptsMultipartFormData(t *testing.T) {
 	t.Parallel()
 

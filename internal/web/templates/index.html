@@ -3336,7 +3336,10 @@
             }
             setSkillPayloadValidationMessage("");
             const taskID = trimmedString(body && body.task_id);
-            const successMessage = taskID ? `In Queue: ${taskID}` : "In Queue.";
+            const isScheduled = Boolean(body && body.scheduled);
+            const successMessage = taskID
+              ? `${isScheduled ? "Scheduled" : "In Queue"}: ${taskID}`
+              : (isScheduled ? "Scheduled." : "In Queue.");
             setDispatchSubmitStatus(successMessage);
             trackAppEvent("dispatch_result", {
               ...analyticsParams,

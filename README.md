@@ -24,6 +24,25 @@ The bundled UI provides:
 - **Manual skill dispatch**
 - **Live view** of pending dispatches and recent runtime events
 
+## Dispatch Scheduling
+
+Dispatch requests can be sent immediately, scheduled for later, or repeated on an interval. Use `agent` (or `target_agent_ref`), `skill_name`, `payload`, and optional `schedule` fields:
+
+```json
+{
+  "agent": "worker-a",
+  "skill_name": "run_task",
+  "payload": {
+    "input": "Review the latest logs"
+  },
+  "schedule": {
+    "after": "10m",
+    "every": "1h"
+  }
+}
+```
+
+`schedule.after` accepts Go-style durations such as `10m` or `1h`. `schedule.at` accepts RFC3339 timestamps. Use `schedule.every` for recurring delivery; omit it for a one-time scheduled dispatch.
 
 ## Docker
 

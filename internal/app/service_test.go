@@ -2085,6 +2085,65 @@ func TestHandleSkillRequestSchedulesRecurringMessageAndAcknowledgesCaller(t *tes
 	}
 }
 
+func TestHandleSkillRequestAcceptsNestedScheduleObject(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	worker := testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"})
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{worker}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	before := time.Now().UTC()
+	message := hub.PullResponse{
+		DeliveryID:    "delivery-1",
+		FromAgentUUID: "caller-uuid",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_request",
+			SkillName: dispatchSkillName,
+			RequestID: "parent-req",
+			Payload: map[string]any{
+				"agent":      "worker-a",
+				"skill_name": "run_task",
+				"payload": map[string]any{
+					"input": "scheduled work",
+				},
+				"schedule": map[string]any{
+					"after": 900,
+					"every": "45m",
+				},
+			},
+		},
+	}
+
+	if err := service.handleInboundMessage(context.Background(), message); err != nil {
+		t.Fatalf("handle nested schedule inbound message: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected caller schedule ack, got %d publishes", len(fake.publishCalls))
+	}
+	state := service.store.Snapshot()
+	if len(state.ScheduledMessages) != 1 {
+		t.Fatalf("expected one scheduled message, got %d", len(state.ScheduledMessages))
+	}
+	scheduled := state.ScheduledMessages[0]
+	if got := scheduled.Frequency; got != 45*time.Minute {
+		t.Fatalf("frequency = %v, want 45m", got)
+	}
+	if scheduled.NextRunAt.Before(before.Add(14*time.Minute)) || scheduled.NextRunAt.After(before.Add(16*time.Minute)) {
+		t.Fatalf("next run = %s, want about 15m after %s", scheduled.NextRunAt, before)
+	}
+	if got := scheduled.DispatchPayload["input"]; got != "scheduled work" {
+		t.Fatalf("unexpected scheduled payload: %#v", scheduled.DispatchPayload)
+	}
+}
+
 func TestDispatchFromUIRequiresSelectionWhenTargetAndSkillAreBlank(t *testing.T) {
 	t.Parallel()
 
