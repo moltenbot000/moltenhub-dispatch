@@ -5188,6 +5188,9 @@ html.pink {
   --surface-control-bg: linear-gradient(180deg, rgba(64, 24, 47, 0.98), rgba(44, 16, 32, 0.94));
   --surface-control-bg-strong: linear-gradient(180deg, rgba(72, 26, 51, 0.98), rgba(45, 16, 33, 0.96));
   --surface-control-arrow: #f9a8d4;
+  --surface-button-bg: rgba(67, 25, 49, 0.9);
+  --surface-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --surface-task-button-bg: rgba(64, 24, 47, 0.88);
   --surface-library-bg: linear-gradient(155deg, rgba(64, 24, 47, 0.92), rgba(43, 15, 31, 0.88));
   --surface-terminal-bg:
     linear-gradient(180deg, rgba(42, 15, 31, 0.95), rgba(30, 10, 22, 0.98)),
