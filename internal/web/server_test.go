@@ -2382,6 +2382,15 @@ func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	if !strings.Contains(body, ".prompt-mode-mobile-label {\n    position: relative;\n    z-index: 1;\n    display: block;") {
 		t.Fatalf("expected mobile bottom dock labels to render under icons, body=%s", body)
 	}
+	if !strings.Contains(body, ".prompt-mode-link-line {\n  display: none;") {
+		t.Fatalf("expected dock icon top and bottom decorative lines to stay hidden, body=%s", body)
+	}
+	if !strings.Contains(body, ".prompt-mode-link-icon {\n  position: relative;\n  z-index: 1;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 18px;\n  height: 18px;\n  overflow: hidden;\n  border: 0;\n  background: transparent;\n  box-shadow: none;") {
+		t.Fatalf("expected dock link icons to render without circular button chrome, body=%s", body)
+	}
+	if !strings.Contains(body, ".theme-toggle.theme-toggle-dock .theme-toggle-icon {\n  position: relative;\n  z-index: 1;\n  display: inline-flex;\n  width: 18px;\n  height: 18px;\n  align-items: center;\n  justify-content: center;\n  overflow: hidden;\n  border: 0;\n  background: transparent;\n  box-shadow: none;") {
+		t.Fatalf("expected dock theme icon to render without circular button chrome, body=%s", body)
+	}
 	if !strings.Contains(body, `/* Selectable pink theme. */`) || !strings.Contains(body, `html.pink {`) {
 		t.Fatalf("expected pink palette to be available as its own selectable theme, body=%s", body)
 	}

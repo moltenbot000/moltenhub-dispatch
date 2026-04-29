@@ -907,14 +907,13 @@ body .right-col.prompt-collapsed.task-list-hidden {
   width: 18px;
   height: 18px;
   overflow: hidden;
-  border-radius: 999px;
-  border: 1px solid var(--glass-icon-border);
-  background: var(--glass-bg);
-  box-shadow: var(--glass-icon-shadow);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .prompt-mode-link.active .prompt-mode-link-icon {
-  background: var(--glass-icon-bg);
+  background: transparent;
 }
 
 .prompt-mode-link-icon svg,
@@ -939,14 +938,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 .prompt-mode-link-line {
-  position: absolute;
-  left: 50%;
-  width: 16px;
-  height: 1px;
-  transform: translateX(-50%);
-  pointer-events: none;
-  opacity: 0.45;
-  background: var(--glass-icon-border);
+  display: none;
 }
 
 .prompt-mode-link-line-top {
@@ -2978,10 +2970,9 @@ select.prompt-control {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 999px;
-  border: 1px solid var(--glass-icon-border);
-  background: var(--glass-bg);
-  box-shadow: var(--glass-icon-shadow);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .theme-toggle.theme-toggle-dock .theme-toggle-icon svg,
