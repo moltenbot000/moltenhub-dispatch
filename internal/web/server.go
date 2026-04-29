@@ -425,7 +425,7 @@ func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 		s.redirectWithMessage(w, r, "error", err.Error())
 		return
 	}
-	s.redirectWithMessage(w, r, "info", "Dispatched task "+task.ID)
+	s.redirectWithMessage(w, r, "info", dispatchSuccessMessage(task))
 }
 
 func (s *Server) handleDispatchAPI(w http.ResponseWriter, r *http.Request) {
@@ -443,9 +443,11 @@ func (s *Server) handleDispatchAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":      true,
-		"task_id": task.ID,
-		"message": "Dispatched task " + task.ID,
+		"ok":        true,
+		"task_id":   task.ID,
+		"status":    task.Status,
+		"scheduled": task.Status == app.ScheduledMessageStatusActive,
+		"message":   dispatchSuccessMessage(task),
 	})
 }
 
@@ -514,16 +516,53 @@ func parseFormValues(r *http.Request) (url.Values, error) {
 }
 
 func (s *Server) dispatchTaskFromRequest(r *http.Request) (app.PendingTask, error) {
-	values, err := parseFormValues(r)
-	if err != nil {
-		return app.PendingTask{}, err
-	}
-	dispatchReq, err := dispatchRequestFromValues(values)
+	dispatchReq, err := dispatchRequestFromRequest(r)
 	if err != nil {
 		return app.PendingTask{}, err
 	}
 	dispatchReq.RequestID = app.NewID("ui")
 	return s.service.DispatchFromUI(r.Context(), dispatchReq)
+}
+
+func dispatchSuccessMessage(task app.PendingTask) string {
+	if task.Status == app.ScheduledMessageStatusActive {
+		return "Scheduled message " + task.ID
+	}
+	return "Dispatched task " + task.ID
+}
+
+func dispatchRequestFromRequest(r *http.Request) (app.DispatchRequest, error) {
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.HasPrefix(contentType, "application/json") {
+		return dispatchRequestFromJSON(r)
+	}
+	values, err := parseFormValues(r)
+	if err != nil {
+		return app.DispatchRequest{}, err
+	}
+	return dispatchRequestFromValues(values)
+}
+
+func dispatchRequestFromJSON(r *http.Request) (app.DispatchRequest, error) {
+	var values map[string]any
+	decoder := json.NewDecoder(r.Body)
+	decoder.UseNumber()
+	if err := decoder.Decode(&values); err != nil {
+		return app.DispatchRequest{}, fmt.Errorf("decode dispatch payload: %w", err)
+	}
+	dispatchReq, err := app.DispatchRequestFromPayload(values)
+	if err != nil {
+		return app.DispatchRequest{}, fmt.Errorf("decode dispatch payload: %w", err)
+	}
+	if dispatchReq.TargetAgentRef == "" && dispatchReq.SkillName == "" {
+		return app.DispatchRequest{}, errors.New(app.DispatchSelectionRequiredMessage)
+	}
+	payloadFormat, err := normalizeDispatchRequestPayloadFormat(dispatchReq.PayloadFormat, dispatchReq.Payload)
+	if err != nil {
+		return app.DispatchRequest{}, err
+	}
+	dispatchReq.PayloadFormat = payloadFormat
+	return dispatchReq, nil
 }
 
 func decodeStructuredJSONPayload(raw string) (any, bool) {
@@ -575,29 +614,9 @@ func dispatchRequestFromValues(values url.Values) (app.DispatchRequest, error) {
 		return app.DispatchRequest{}, errors.New(app.DispatchSelectionRequiredMessage)
 	}
 
-	payloadText := strings.TrimSpace(values.Get("payload"))
-	payloadFormat := strings.ToLower(strings.TrimSpace(values.Get("payload_format")))
-	var payloadValue any
-	switch {
-	case payloadText == "":
-		// Hub rejects payload_format when payload is omitted.
-		payloadFormat = ""
-	case payloadFormat == "json":
-		var decoded any
-		if err := support.UnmarshalJSONPayload([]byte(payloadText), &decoded); err != nil {
-			return app.DispatchRequest{}, fmt.Errorf("payload JSON is invalid: %w", err)
-		}
-		payloadValue = decoded
-	case payloadFormat == "", payloadFormat == "text", payloadFormat == "markdown":
-		if decoded, ok := decodeStructuredJSONPayload(payloadText); ok {
-			payloadFormat = "json"
-			payloadValue = decoded
-		} else {
-			payloadFormat = "markdown"
-			payloadValue = payloadText
-		}
-	default:
-		return app.DispatchRequest{}, errors.New("payload_format must be one of markdown or json")
+	payloadValue, payloadFormat, err := dispatchPayloadValue(strings.TrimSpace(values.Get("payload")), values.Get("payload_format"))
+	if err != nil {
+		return app.DispatchRequest{}, err
 	}
 
 	timeout := 0 * time.Second
@@ -643,6 +662,63 @@ func dispatchRequestFromValues(values url.Values) (app.DispatchRequest, error) {
 		ScheduledAt:    scheduledAt,
 		Frequency:      frequency,
 	}, nil
+}
+
+func dispatchPayloadValue(value any, format string) (any, string, error) {
+	payloadFormat := strings.ToLower(strings.TrimSpace(format))
+	if value == nil {
+		return nil, "", nil
+	}
+	if typed, ok := value.(string); ok && strings.TrimSpace(typed) == "" {
+		return nil, "", nil
+	}
+
+	switch payloadFormat {
+	case "json":
+		switch typed := value.(type) {
+		case string:
+			var decoded any
+			if err := support.UnmarshalJSONPayload([]byte(strings.TrimSpace(typed)), &decoded); err != nil {
+				return nil, "", fmt.Errorf("payload JSON is invalid: %w", err)
+			}
+			return decoded, "json", nil
+		default:
+			return value, "json", nil
+		}
+	case "", "text", "markdown":
+		if typed, ok := value.(string); ok {
+			trimmed := strings.TrimSpace(typed)
+			if trimmed == "" {
+				return nil, "", nil
+			}
+			if decoded, ok := decodeStructuredJSONPayload(trimmed); ok {
+				return decoded, "json", nil
+			}
+			return trimmed, "markdown", nil
+		}
+		return value, "json", nil
+	default:
+		return nil, "", errors.New("payload_format must be one of markdown or json")
+	}
+}
+
+func normalizeDispatchRequestPayloadFormat(format string, payload any) (string, error) {
+	if payload == nil {
+		return "", nil
+	}
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "json":
+		return "json", nil
+	case "markdown", "md", "text", "text/plain", "plaintext":
+		return "markdown", nil
+	case "":
+		if _, ok := payload.(string); ok {
+			return "markdown", nil
+		}
+		return "json", nil
+	default:
+		return "", errors.New("payload_format must be one of markdown or json")
+	}
 }
 
 func parseScheduleTime(raw string) (time.Time, error) {

@@ -1703,6 +1703,29 @@ type dispatchPayload struct {
 	raw             map[string]any
 }
 
+// DispatchRequestFromPayload converts a dispatch skill payload into the
+// internal request shape shared by OpenClaw and HTTP JSON dispatch entrypoints.
+func DispatchRequestFromPayload(value any) (DispatchRequest, error) {
+	var payload dispatchPayload
+	if err := payload.FromAny(value); err != nil {
+		return DispatchRequest{}, err
+	}
+	taskPayload, err := payload.TaskPayload()
+	if err != nil {
+		return DispatchRequest{}, err
+	}
+	return DispatchRequest{
+		TargetAgentRef: payload.TargetAgentRef(),
+		SkillName:      payload.RequestedSkillName(),
+		Repo:           payload.Repo,
+		LogPaths:       payload.LogPaths,
+		Payload:        taskPayload,
+		PayloadFormat:  payload.PayloadFormat,
+		ScheduledAt:    payload.ScheduledAt,
+		Frequency:      payload.Frequency,
+	}, nil
+}
+
 func (p *dispatchPayload) FromAny(value any) error {
 	if value == nil {
 		*p = dispatchPayload{}
@@ -1780,6 +1803,13 @@ func (p *dispatchPayload) fromMap(raw map[string]any) {
 		Frequency:     durationFromAny(firstMapValue(raw, "frequency", "recurring_frequency", "recurringFrequency", "interval", "every")),
 		raw:           raw,
 	}
+	scheduledAt, frequency := scheduleFromAny(firstMapValue(raw, "schedule", "delivery_schedule", "deliverySchedule"))
+	if p.ScheduledAt.IsZero() {
+		p.ScheduledAt = scheduledAt
+	}
+	if p.Frequency == 0 {
+		p.Frequency = frequency
+	}
 }
 
 func firstMapValue(values map[string]any, keys ...string) any {
@@ -1843,7 +1873,9 @@ func dispatchPayloadControlField(key string) bool {
 		"log_paths", "logpaths",
 		"payload",
 		"message", "messages",
-		"payload_format", "payloadformat":
+		"payload_format", "payloadformat",
+		"schedule",
+		"delivery_schedule", "deliveryschedule":
 		return true
 	case "scheduled_at", "scheduledat",
 		"schedule_at", "scheduleat",
@@ -1855,6 +1887,36 @@ func dispatchPayloadControlField(key string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func scheduleFromAny(value any) (time.Time, time.Duration) {
+	switch typed := value.(type) {
+	case nil:
+		return time.Time{}, 0
+	case map[string]any:
+		scheduledAt := timeFromAny(firstMapValue(
+			typed,
+			"scheduled_at", "scheduledAt",
+			"schedule_at", "scheduleAt",
+			"run_at", "runAt",
+			"start_at", "startAt",
+			"at", "time", "when",
+		))
+		if scheduledAt.IsZero() {
+			if delay := durationFromAny(firstMapValue(typed, "after", "delay", "in")); delay > 0 {
+				scheduledAt = time.Now().UTC().Add(delay)
+			}
+		}
+		return scheduledAt, durationFromAny(firstMapValue(
+			typed,
+			"frequency",
+			"recurring_frequency", "recurringFrequency",
+			"interval",
+			"every",
+		))
+	default:
+		return timeFromAny(value), 0
 	}
 }
 
