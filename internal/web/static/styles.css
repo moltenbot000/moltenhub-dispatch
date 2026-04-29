@@ -1074,6 +1074,7 @@ body .right-col.prompt-collapsed.task-list-hidden {
 }
 
 #moltenbot-hub-link img {
+  filter: none;
   transition: filter 180ms ease, transform 180ms ease;
 }
 

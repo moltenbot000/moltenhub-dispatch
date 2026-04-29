@@ -2360,6 +2360,46 @@ func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	}
 }
 
+func TestHandleStylesKeepsMoltenHubLogoUnfiltered(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/styles.css", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(body, "#moltenbot-hub-link img {\n  filter: none;") {
+		t.Fatalf("expected bundled molten hub logo to avoid theme filters, body=%s", body)
+	}
+}
+
+func TestBundledLogoUsesOriginalFill(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("static/logo.svg")
+	if err != nil {
+		t.Fatalf("read logo.svg: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, `fill="#0091b0"`) || !strings.Contains(content, `data-originalfillcolor="#7b61ff"`) {
+		t.Fatalf("expected bundled logo to keep original colors, content=%s", content)
+	}
+}
+
 func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	t.Parallel()
 
