@@ -5224,11 +5224,11 @@ html.pink {
   --ring: rgba(236, 72, 153, 0.3);
   --glass-bg: rgba(72, 26, 51, 0.56);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-icon-bg: rgba(255, 255, 255, 0.7);
-  --glass-icon-border: rgba(255, 255, 255, 0.8);
+  --glass-icon-bg: rgba(82, 31, 59, 0.82);
+  --glass-icon-border: rgba(244, 114, 182, 0.28);
   --glass-icon-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.06),
-    0 4px 12px rgba(0, 0, 0, 0.04);
+    0 1px 3px rgba(10, 2, 7, 0.28),
+    0 4px 12px rgba(10, 2, 7, 0.18);
   --btn-shadow:
     0 1px 3px rgba(0, 0, 0, 0.4),
     0 4px 12px rgba(236, 72, 153, 0.26),
