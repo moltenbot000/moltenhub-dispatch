@@ -14,6 +14,7 @@
   --hub-text-rgb: 15 27 51;
   --hub-muted-rgb: 90 111 149;
   --hub-good-rgb: 43 182 115;
+  --hub-online-rgb: var(--hub-good-rgb);
   --hub-warn-rgb: 245 158 11;
   --hub-bad-rgb: 239 68 68;
   --hub-running-rgb: 0 145 176;
@@ -32,6 +33,7 @@
   --muted: #5a6f95;
   --meta: #7188b1;
   --good: #2bb673;
+  --online: var(--good);
   --warn: #f59e0b;
   --bad: #ef4444;
   --running: #0091b0;
@@ -448,8 +450,8 @@ textarea {
 }
 
 .status-item-action-online {
-  border-color: rgba(43, 182, 115, 0.26);
-  box-shadow: 0 14px 34px rgba(43, 182, 115, 0.14);
+  border-color: rgb(var(--hub-online-rgb) / 0.26);
+  box-shadow: 0 14px 34px rgb(var(--hub-online-rgb) / 0.14);
 }
 
 .status-item-action-offline {
@@ -607,8 +609,8 @@ textarea {
 }
 
 .dot.online {
-  background: var(--good);
-  box-shadow: 0 0 0 0 rgba(43, 182, 115, 0.3);
+  background: var(--online);
+  box-shadow: 0 0 0 0 rgb(var(--hub-online-rgb) / 0.3);
 }
 
 .dot.http {
@@ -4470,30 +4472,30 @@ body.settings-modal-open {
 
 .connected-agent-card.is-online,
 .connected-agent-card-button.is-online {
-  border-color: color-mix(in srgb, var(--good) 78%, white 22%);
+  border-color: color-mix(in srgb, var(--online) 78%, white 22%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 0 0 1px color-mix(in srgb, var(--good) 28%, transparent),
-    0 0 0 4px color-mix(in srgb, var(--good) 12%, transparent),
-    0 14px 32px color-mix(in srgb, var(--good) 22%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--online) 28%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--online) 12%, transparent),
+    0 14px 32px color-mix(in srgb, var(--online) 22%, transparent);
 }
 
 .connected-agent-card-button.is-online:hover {
-  border-color: color-mix(in srgb, var(--good) 86%, white 14%);
+  border-color: color-mix(in srgb, var(--online) 86%, white 14%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 0 0 1px color-mix(in srgb, var(--good) 34%, transparent),
-    0 0 0 5px color-mix(in srgb, var(--good) 14%, transparent),
-    0 16px 34px color-mix(in srgb, var(--good) 24%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--online) 34%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--online) 14%, transparent),
+    0 16px 34px color-mix(in srgb, var(--online) 24%, transparent);
 }
 
 .connected-agent-card-button.is-online.is-selected {
-  border-color: color-mix(in srgb, var(--good) 76%, white 24%);
+  border-color: color-mix(in srgb, var(--online) 76%, white 24%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 0 0 1px color-mix(in srgb, var(--good) 34%, transparent),
-    0 0 0 5px color-mix(in srgb, var(--good) 15%, transparent),
-    0 16px 36px color-mix(in srgb, var(--good) 24%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--online) 34%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--online) 15%, transparent),
+    0 16px 36px color-mix(in srgb, var(--online) 24%, transparent);
 }
 
 .connected-agent-card-button.is-selected {
@@ -4564,16 +4566,16 @@ body.settings-modal-open {
   height: 12px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--good) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--online) 60%, transparent);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
 .connected-agent-presence.is-online {
-  color: var(--good);
-  background: color-mix(in srgb, var(--good) 92%, white 8%);
+  color: var(--online);
+  background: color-mix(in srgb, var(--online) 92%, white 8%);
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--good) 18%, transparent),
-    0 0 12px color-mix(in srgb, var(--good) 36%, transparent);
+    0 0 0 3px color-mix(in srgb, var(--online) 18%, transparent),
+    0 0 12px color-mix(in srgb, var(--online) 36%, transparent);
 }
 
 .connected-agent-card-button:hover .connected-agent-presence,
@@ -5029,6 +5031,7 @@ html.pink {
   --hub-meta-rgb: 166 91 129;
   --hub-running-rgb: 236 72 153;
   --hub-accent-rgb: 219 39 119;
+  --hub-online-rgb: 236 72 153;
   --bg: #fff1f8;
   --bg-soft: rgba(255, 247, 251, 0.86);
   --bg-elevated: #fffafd;
@@ -5043,6 +5046,7 @@ html.pink {
   --meta: #a65b81;
   --running: #ec4899;
   --accent: #db2777;
+  --online: #ec4899;
   --accent-soft: rgba(236, 72, 153, 0.14);
   --brand-gradient: linear-gradient(135deg, #f9a8d4 0%, #ec4899 48%, #db2777 100%);
   --surface-glass: linear-gradient(160deg, rgba(255, 250, 253, 0.9), rgba(253, 231, 243, 0.78));
@@ -5133,6 +5137,7 @@ html.pink {
   --hub-muted-rgb: 241 164 205;
   --hub-meta-rgb: 214 118 166;
   --hub-good-rgb: 43 182 115;
+  --hub-online-rgb: 236 72 153;
   --hub-warn-rgb: 245 158 11;
   --hub-bad-rgb: 239 68 68;
   --hub-running-rgb: 236 72 153;
@@ -5150,6 +5155,7 @@ html.pink {
   --muted: #e998c2;
   --meta: #d676a6;
   --good: #2bb673;
+  --online: #ec4899;
   --warn: #f59e0b;
   --bad: #ef4444;
   --running: #ec4899;
@@ -5805,26 +5811,26 @@ html.pink .runtime-option:focus-within {
 }
 
 .connected-agent-card-button.is-online {
-  border-color: color-mix(in srgb, var(--good) 40%, var(--glass-border));
+  border-color: color-mix(in srgb, var(--online) 40%, var(--glass-border));
   box-shadow:
     var(--glass-icon-shadow),
-    0 0 0 1px color-mix(in srgb, var(--good) 18%, transparent),
-    0 10px 24px color-mix(in srgb, var(--good) 18%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--online) 18%, transparent),
+    0 10px 24px color-mix(in srgb, var(--online) 18%, transparent);
 }
 
 .connected-agent-card-button.is-online:hover {
   box-shadow:
     var(--btn-shadow),
-    0 0 0 1px color-mix(in srgb, var(--good) 22%, transparent),
-    0 12px 28px color-mix(in srgb, var(--good) 22%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--online) 22%, transparent),
+    0 12px 28px color-mix(in srgb, var(--online) 22%, transparent);
 }
 
 .connected-agent-card-button.is-online.is-selected {
-  border-color: color-mix(in srgb, var(--good) 54%, var(--primary));
+  border-color: color-mix(in srgb, var(--online) 54%, var(--primary));
   box-shadow:
     var(--btn-shadow),
-    0 0 0 1px color-mix(in srgb, var(--good) 24%, transparent),
-    0 12px 28px color-mix(in srgb, var(--good) 22%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--online) 24%, transparent),
+    0 12px 28px color-mix(in srgb, var(--online) 22%, transparent);
 }
 
 .connected-agent-avatar {
