@@ -2385,6 +2385,12 @@ func TestHandleStylesUsesNeutralDefaultForSettingsDockButton(t *testing.T) {
 	if !strings.Contains(body, `/* Selectable pink theme. */`) || !strings.Contains(body, `html.pink {`) {
 		t.Fatalf("expected pink palette to be available as its own selectable theme, body=%s", body)
 	}
+	if !strings.Contains(body, `--good: #2bb673;`) ||
+		!strings.Contains(body, `--primary: #ec4899;`) ||
+		!strings.Contains(body, `--accent: #db2777;`) ||
+		!strings.Contains(body, `--glass-icon-bg: rgba(255, 255, 255, 0.7);`) {
+		t.Fatalf("expected pink theme to define connected-agent accent colors, body=%s", body)
+	}
 	if !strings.Contains(body, `html.dark {`) || !strings.Contains(body, `--body-linear: linear-gradient(180deg, #0d1424, #0a1120 58%, #09101d);`) {
 		t.Fatalf("expected existing dark theme to remain available separately from pink theme, body=%s", body)
 	}

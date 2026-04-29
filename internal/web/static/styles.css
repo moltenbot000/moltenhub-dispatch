@@ -5141,6 +5141,11 @@ html.pink {
   --hub-text-rgb: 255 238 248;
   --hub-muted-rgb: 241 164 205;
   --hub-meta-rgb: 214 118 166;
+  --hub-good-rgb: 43 182 115;
+  --hub-warn-rgb: 245 158 11;
+  --hub-bad-rgb: 239 68 68;
+  --hub-running-rgb: 236 72 153;
+  --hub-accent-rgb: 219 39 119;
   --bg: #2d1020;
   --bg-soft: rgba(50, 18, 36, 0.88);
   --bg-elevated: #3a152a;
@@ -5153,7 +5158,13 @@ html.pink {
   --text-soft: #f5bfd9;
   --muted: #e998c2;
   --meta: #d676a6;
+  --good: #2bb673;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+  --running: #ec4899;
+  --accent: #db2777;
   --accent-soft: rgba(236, 72, 153, 0.24);
+  --brand-gradient: linear-gradient(135deg, #f9a8d4 0%, #ec4899 48%, #db2777 100%);
   --surface-glass: linear-gradient(160deg, rgba(58, 21, 42, 0.92), rgba(40, 14, 29, 0.84));
   --surface-glass-strong: linear-gradient(160deg, rgba(72, 26, 51, 0.95), rgba(47, 17, 34, 0.92));
   --surface-glass-solid: rgba(48, 18, 35, 0.95);
@@ -5206,11 +5217,26 @@ html.pink {
   --background: #2d1020;
   --card: #3a152a;
   --card-foreground: #ffeef8;
+  --primary: #ec4899;
+  --primary-foreground: #ffffff;
   --secondary: #521f3b;
   --secondary-foreground: rgba(255, 238, 248, 0.86);
   --ring: rgba(236, 72, 153, 0.3);
   --glass-bg: rgba(72, 26, 51, 0.56);
   --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-icon-bg: rgba(255, 255, 255, 0.7);
+  --glass-icon-border: rgba(255, 255, 255, 0.8);
+  --glass-icon-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.04);
+  --btn-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(236, 72, 153, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --btn-shadow-hover:
+    0 2px 6px rgba(0, 0, 0, 0.45),
+    0 8px 24px rgba(236, 72, 153, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --theme-dock-border: rgba(244, 114, 182, 0.36);
   --theme-dock-bg: linear-gradient(180deg, rgba(55, 20, 40, 0.95), rgba(36, 13, 27, 0.94));
   --theme-dock-label: #e7a4c7;
