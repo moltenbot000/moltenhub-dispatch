@@ -1023,11 +1023,17 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="skill-payload-format-input" type="hidden" name="payload_format"`) {
 		t.Fatalf("expected manual dispatch payload format field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="dispatch-delay-input"`) || !strings.Contains(body, `name="scheduled_at"`) {
-		t.Fatalf("expected manual dispatch schedule delay field, body=%s", body)
+	if !strings.Contains(body, `id="dispatch-delay-input" type="hidden" name="scheduled_at"`) ||
+		!strings.Contains(body, `id="dispatch-delay-enabled" type="checkbox"`) ||
+		!strings.Contains(body, `id="dispatch-delay-amount"`) ||
+		!strings.Contains(body, `id="dispatch-delay-unit"`) {
+		t.Fatalf("expected manual dispatch structured delay controls, body=%s", body)
 	}
-	if !strings.Contains(body, `id="dispatch-frequency-input"`) || !strings.Contains(body, `name="every"`) {
-		t.Fatalf("expected manual dispatch recurring interval field, body=%s", body)
+	if !strings.Contains(body, `id="dispatch-frequency-input" type="hidden" name="every"`) ||
+		!strings.Contains(body, `id="dispatch-frequency-enabled" type="checkbox"`) ||
+		!strings.Contains(body, `id="dispatch-frequency-amount"`) ||
+		!strings.Contains(body, `id="dispatch-frequency-unit"`) {
+		t.Fatalf("expected manual dispatch structured repeat controls, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden`) {
 		t.Fatalf("expected manual dispatch delay field to be hidden by default, body=%s", body)
@@ -1041,10 +1047,13 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `aria-label="Show scheduling"`) || !strings.Contains(body, `data-lucide="chevron-down"`) || !strings.Contains(body, `data-lucide="chevron-up"`) {
 		t.Fatalf("expected schedule toggle to render show and hide icons, body=%s", body)
 	}
-	if !strings.Contains(body, `const parseClientDispatchDelay = (value) => {`) {
-		t.Fatalf("expected manual dispatch client-side delay parser, body=%s", body)
+	if !strings.Contains(body, `const parseClientDispatchDelay = () => {`) ||
+		!strings.Contains(body, `parseScheduleSelection(dispatchDelayEnabled, dispatchDelayAmount, dispatchDelayUnit, "Delay")`) {
+		t.Fatalf("expected manual dispatch client-side structured delay parser, body=%s", body)
 	}
-	if !strings.Contains(body, `const parseDispatchFrequency = (value) => {`) || !strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) {
+	if !strings.Contains(body, `const parseDispatchFrequency = () => {`) ||
+		!strings.Contains(body, `parseScheduleSelection(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, "Repeat")`) ||
+		!strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) {
 		t.Fatalf("expected manual dispatch recurring interval parser and submit path, body=%s", body)
 	}
 	if !strings.Contains(body, `setDispatchDelayFieldVisible(false, { clear: true });`) {

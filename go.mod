@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/a2aproject/a2a-go/v2 v2.2.0
-	golang.org/x/net v0.48.0
+	golang.org/x/net v0.49.0
 )
 
 require (

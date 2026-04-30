@@ -225,15 +225,39 @@
                   </button>
                 </div>
                 <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
-                  <label class="manual-dispatch-delay-item">
-                    <span class="prompt-label">Delay</span>
-                    <input id="dispatch-delay-input" class="prompt-control" type="text" name="scheduled_at" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
+                  <fieldset class="manual-dispatch-delay-item">
+                    <legend class="prompt-label">Delay</legend>
+                    <input id="dispatch-delay-input" type="hidden" name="scheduled_at" value="">
+                    <label class="manual-dispatch-schedule-switch">
+                      <input id="dispatch-delay-enabled" type="checkbox">
+                      <span>Enable delay</span>
+                    </label>
+                    <div class="manual-dispatch-schedule-value-row">
+                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-describedby="dispatch-delay-hint" disabled>
+                      <select id="dispatch-delay-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Delay unit" disabled>
+                        <option value="m">m</option>
+                        <option value="h">h</option>
+                        <option value="d">d</option>
+                      </select>
+                    </div>
                     <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
-                  </label>
-                  <label class="manual-dispatch-delay-item">
-                    <span class="prompt-label">Repeat</span>
-                    <input id="dispatch-frequency-input" class="prompt-control" type="text" name="every" placeholder="every 30m, every 2h, every 1d" autocomplete="off" aria-describedby="dispatch-delay-hint">
-                  </label>
+                  </fieldset>
+                  <fieldset class="manual-dispatch-delay-item">
+                    <legend class="prompt-label">Repeat</legend>
+                    <input id="dispatch-frequency-input" type="hidden" name="every" value="">
+                    <label class="manual-dispatch-schedule-switch">
+                      <input id="dispatch-frequency-enabled" type="checkbox">
+                      <span>Enable repeat</span>
+                    </label>
+                    <div class="manual-dispatch-schedule-value-row">
+                      <input id="dispatch-frequency-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="30" autocomplete="off" aria-describedby="dispatch-delay-hint" disabled>
+                      <select id="dispatch-frequency-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Repeat unit" disabled>
+                        <option value="m">m</option>
+                        <option value="h">h</option>
+                        <option value="d">d</option>
+                      </select>
+                    </div>
+                  </fieldset>
                 </div>
               </section>
               <div class="prompt-actions manual-dispatch-actions">
@@ -506,7 +530,13 @@
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
       const dispatchDelayField = document.getElementById("dispatch-delay-field");
       const dispatchDelayInput = document.getElementById("dispatch-delay-input");
+      const dispatchDelayEnabled = document.getElementById("dispatch-delay-enabled");
+      const dispatchDelayAmount = document.getElementById("dispatch-delay-amount");
+      const dispatchDelayUnit = document.getElementById("dispatch-delay-unit");
       const dispatchFrequencyInput = document.getElementById("dispatch-frequency-input");
+      const dispatchFrequencyEnabled = document.getElementById("dispatch-frequency-enabled");
+      const dispatchFrequencyAmount = document.getElementById("dispatch-frequency-amount");
+      const dispatchFrequencyUnit = document.getElementById("dispatch-frequency-unit");
       const scheduledDispatchesToggle = document.getElementById("scheduled-dispatches-toggle");
       const scheduledDispatchesField = document.getElementById("scheduled-dispatches-field");
       const scheduledDispatchesList = document.getElementById("scheduled-dispatches-list");
@@ -2116,9 +2146,37 @@
           dispatchDelayInput.value = "";
           dispatchDelayInput.setCustomValidity("");
         }
+        if (options.clear === true) {
+          if (dispatchDelayEnabled instanceof HTMLInputElement) {
+            dispatchDelayEnabled.checked = false;
+          }
+          if (dispatchDelayAmount instanceof HTMLInputElement) {
+            dispatchDelayAmount.value = "";
+            dispatchDelayAmount.disabled = true;
+            dispatchDelayAmount.setCustomValidity("");
+          }
+          if (dispatchDelayUnit instanceof HTMLSelectElement) {
+            dispatchDelayUnit.value = "m";
+            dispatchDelayUnit.disabled = true;
+          }
+        }
         if (options.clear === true && dispatchFrequencyInput instanceof HTMLInputElement) {
           dispatchFrequencyInput.value = "";
           dispatchFrequencyInput.setCustomValidity("");
+        }
+        if (options.clear === true) {
+          if (dispatchFrequencyEnabled instanceof HTMLInputElement) {
+            dispatchFrequencyEnabled.checked = false;
+          }
+          if (dispatchFrequencyAmount instanceof HTMLInputElement) {
+            dispatchFrequencyAmount.value = "";
+            dispatchFrequencyAmount.disabled = true;
+            dispatchFrequencyAmount.setCustomValidity("");
+          }
+          if (dispatchFrequencyUnit instanceof HTMLSelectElement) {
+            dispatchFrequencyUnit.value = "m";
+            dispatchFrequencyUnit.disabled = true;
+          }
         }
       };
 
@@ -2179,42 +2237,47 @@
         }, 12000);
       };
 
-      const parseClientDispatchDelay = (value) => {
-        const raw = trimmedString(value).toLowerCase();
-        if (raw === "" || raw === "0" || raw === "now") {
+      const parseScheduleSelection = (enabledEl, amountEl, unitEl, label) => {
+        const enabled = enabledEl instanceof HTMLInputElement && enabledEl.checked;
+        if (!enabled) {
           return { ok: true, delayMs: 0, label: "" };
         }
-        const match = raw.match(/^(?:in\s+)?(\d+(?:\.\d+)?)\s*([mhd])$/);
-        if (!match) {
-          return { ok: false, message: "Delay must be 10m, 2h, 1d, or blank." };
+        const rawAmount = amountEl instanceof HTMLInputElement ? trimmedString(amountEl.value) : "";
+        if (!/^\d+$/.test(rawAmount)) {
+          return { ok: false, message: `${label} must be a whole number.` };
         }
-        const amount = Number.parseFloat(match[1]);
+        const amount = Number.parseInt(rawAmount, 10);
         if (!Number.isFinite(amount) || amount <= 0) {
-          return { ok: false, message: "Delay must be greater than zero." };
+          return { ok: false, message: `${label} must be greater than zero.` };
         }
-        const unit = match[2];
+        const unit = unitEl instanceof HTMLSelectElement ? unitEl.value : "m";
+        if (!["m", "h", "d"].includes(unit)) {
+          return { ok: false, message: `${label} unit must be m, h, or d.` };
+        }
         const delayMs = amount * (unit === "d" ? 24 * 60 * 60 * 1000 : unit === "h" ? 60 * 60 * 1000 : 60 * 1000);
         if (!Number.isFinite(delayMs)) {
-          return { ok: false, message: "Delay is too large." };
+          return { ok: false, message: `${label} is too large.` };
         }
         return { ok: true, delayMs, label: `${amount}${unit}` };
       };
 
-      const parseDispatchFrequency = (value) => {
-        const raw = trimmedString(value).toLowerCase();
-        if (raw === "") {
-          return { ok: true, duration: "", label: "" };
+      const parseClientDispatchDelay = () => {
+        return parseScheduleSelection(dispatchDelayEnabled, dispatchDelayAmount, dispatchDelayUnit, "Delay");
+      };
+
+      const parseDispatchFrequency = () => {
+        const parsed = parseScheduleSelection(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, "Repeat");
+        if (!parsed.ok) {
+          return parsed;
         }
-        const match = raw.match(/^(?:every\s+)?(\d+(?:\.\d+)?)\s*([mhd])$/);
-        if (!match) {
-          return { ok: false, message: "Repeat must be every 10m, every 2h, every 1d, or blank." };
+        if (parsed.label !== "") {
+          const unit = dispatchFrequencyUnit instanceof HTMLSelectElement ? dispatchFrequencyUnit.value : "m";
+          const amount = dispatchFrequencyAmount instanceof HTMLInputElement ? Number.parseInt(trimmedString(dispatchFrequencyAmount.value), 10) : 0;
+          if ((unit === "m" && amount > 59) || (unit === "h" && amount > 23) || (unit === "d" && amount > 31)) {
+            return { ok: false, message: "Repeat must fit cron: 1-59m, 1-23h, or 1-31d." };
+          }
         }
-        const amount = Number.parseFloat(match[1]);
-        if (!Number.isFinite(amount) || amount <= 0) {
-          return { ok: false, message: "Repeat interval must be greater than zero." };
-        }
-        const unit = match[2];
-        return { ok: true, duration: `${amount}${unit}`, label: `every ${amount}${unit}` };
+        return { ok: true, duration: parsed.label, label: parsed.label === "" ? "" : `every ${parsed.label}` };
       };
 
       const connectedAgentDisplayName = (agent) => {
@@ -2893,6 +2956,14 @@
           dispatchFrequencyInput.value = "";
           dispatchFrequencyInput.setCustomValidity("");
         }
+        if (dispatchDelayEnabled instanceof HTMLInputElement) {
+          dispatchDelayEnabled.checked = false;
+        }
+        if (dispatchFrequencyEnabled instanceof HTMLInputElement) {
+          dispatchFrequencyEnabled.checked = false;
+        }
+        syncScheduleSelectionState(dispatchDelayEnabled, dispatchDelayAmount, dispatchDelayUnit, dispatchDelayInput);
+        syncScheduleSelectionState(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, dispatchFrequencyInput);
         setDispatchDelayFieldVisible(false, { clear: true });
         setSkillPayloadValidationMessage("");
         setDispatchSubmitStatus("");
@@ -2918,7 +2989,7 @@
           has_payload: payload !== "",
           payload_format: payloadFormat || "none",
           has_schema: Boolean(skillEntry && skillEntry.schemaText),
-          has_client_delay: dispatchDelayInput instanceof HTMLInputElement && trimmedString(dispatchDelayInput.value) !== "",
+          has_client_delay: dispatchDelayEnabled instanceof HTMLInputElement && dispatchDelayEnabled.checked,
         };
       };
 
@@ -3793,28 +3864,57 @@
           validateSkillPayload();
         });
       }
-      if (dispatchDelayInput instanceof HTMLInputElement) {
-        dispatchDelayInput.addEventListener("input", () => {
-          dispatchDelayInput.setCustomValidity("");
-        });
-        dispatchDelayInput.addEventListener("change", () => {
+      const syncScheduleSelectionState = (enabledEl, amountEl, unitEl, hiddenEl) => {
+        const enabled = enabledEl instanceof HTMLInputElement && enabledEl.checked;
+        if (amountEl instanceof HTMLInputElement) {
+          amountEl.disabled = !enabled;
+          if (!enabled) {
+            amountEl.value = "";
+            amountEl.setCustomValidity("");
+          }
+        }
+        if (unitEl instanceof HTMLSelectElement) {
+          unitEl.disabled = !enabled;
+        }
+        if (hiddenEl instanceof HTMLInputElement && !enabled) {
+          hiddenEl.value = "";
+        }
+      };
+
+      if (dispatchDelayEnabled instanceof HTMLInputElement) {
+        dispatchDelayEnabled.addEventListener("change", () => {
+          syncScheduleSelectionState(dispatchDelayEnabled, dispatchDelayAmount, dispatchDelayUnit, dispatchDelayInput);
           trackAppEvent("dispatch_schedule_field_change", {
             app_area: "dispatch",
             field_name: "delay",
-            has_value: trimmedString(dispatchDelayInput.value) !== "",
+            has_value: dispatchDelayEnabled.checked,
           });
+          if (dispatchDelayEnabled.checked && dispatchDelayAmount instanceof HTMLInputElement) {
+            dispatchDelayAmount.focus({ preventScroll: true });
+          }
         });
       }
-      if (dispatchFrequencyInput instanceof HTMLInputElement) {
-        dispatchFrequencyInput.addEventListener("input", () => {
-          dispatchFrequencyInput.setCustomValidity("");
+      if (dispatchDelayAmount instanceof HTMLInputElement) {
+        dispatchDelayAmount.addEventListener("input", () => {
+          dispatchDelayAmount.setCustomValidity("");
         });
-        dispatchFrequencyInput.addEventListener("change", () => {
+      }
+      if (dispatchFrequencyEnabled instanceof HTMLInputElement) {
+        dispatchFrequencyEnabled.addEventListener("change", () => {
+          syncScheduleSelectionState(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, dispatchFrequencyInput);
           trackAppEvent("dispatch_schedule_field_change", {
             app_area: "dispatch",
             field_name: "repeat",
-            has_value: trimmedString(dispatchFrequencyInput.value) !== "",
+            has_value: dispatchFrequencyEnabled.checked,
           });
+          if (dispatchFrequencyEnabled.checked && dispatchFrequencyAmount instanceof HTMLInputElement) {
+            dispatchFrequencyAmount.focus({ preventScroll: true });
+          }
+        });
+      }
+      if (dispatchFrequencyAmount instanceof HTMLInputElement) {
+        dispatchFrequencyAmount.addEventListener("input", () => {
+          dispatchFrequencyAmount.setCustomValidity("");
         });
       }
       if (dispatchDelayToggle instanceof HTMLButtonElement) {
@@ -3825,8 +3925,8 @@
             expanded: nextVisible,
           });
           setDispatchDelayFieldVisible(nextVisible);
-          if (nextVisible && dispatchDelayInput instanceof HTMLInputElement) {
-            dispatchDelayInput.focus({ preventScroll: true });
+          if (nextVisible && dispatchDelayEnabled instanceof HTMLInputElement) {
+            dispatchDelayEnabled.focus({ preventScroll: true });
           }
         });
       }
@@ -3901,39 +4001,39 @@
             }
             return;
           }
-          const clientDelay = parseClientDispatchDelay(dispatchDelayInput instanceof HTMLInputElement ? dispatchDelayInput.value : "");
+          const clientDelay = parseClientDispatchDelay();
           if (!clientDelay.ok) {
             setDispatchSubmitStatus(clientDelay.message, true);
             trackAppEvent("dispatch_submit", {
               ...dispatchAnalyticsParams(dispatchState),
               result: "invalid_delay",
             });
-            if (dispatchDelayInput instanceof HTMLInputElement) {
-              dispatchDelayInput.setCustomValidity(clientDelay.message);
-              dispatchDelayInput.reportValidity();
-              dispatchDelayInput.focus({ preventScroll: true });
+            if (dispatchDelayAmount instanceof HTMLInputElement) {
+              dispatchDelayAmount.setCustomValidity(clientDelay.message);
+              dispatchDelayAmount.reportValidity();
+              dispatchDelayAmount.focus({ preventScroll: true });
             }
             return;
           }
-          const dispatchFrequency = parseDispatchFrequency(dispatchFrequencyInput instanceof HTMLInputElement ? dispatchFrequencyInput.value : "");
+          const dispatchFrequency = parseDispatchFrequency();
           if (!dispatchFrequency.ok) {
             setDispatchSubmitStatus(dispatchFrequency.message, true);
             trackAppEvent("dispatch_submit", {
               ...dispatchAnalyticsParams(dispatchState),
               result: "invalid_frequency",
             });
-            if (dispatchFrequencyInput instanceof HTMLInputElement) {
-              dispatchFrequencyInput.setCustomValidity(dispatchFrequency.message);
-              dispatchFrequencyInput.reportValidity();
-              dispatchFrequencyInput.focus({ preventScroll: true });
+            if (dispatchFrequencyAmount instanceof HTMLInputElement) {
+              dispatchFrequencyAmount.setCustomValidity(dispatchFrequency.message);
+              dispatchFrequencyAmount.reportValidity();
+              dispatchFrequencyAmount.focus({ preventScroll: true });
             }
             return;
           }
-          if (dispatchDelayInput instanceof HTMLInputElement) {
-            dispatchDelayInput.setCustomValidity("");
+          if (dispatchDelayAmount instanceof HTMLInputElement) {
+            dispatchDelayAmount.setCustomValidity("");
           }
-          if (dispatchFrequencyInput instanceof HTMLInputElement) {
-            dispatchFrequencyInput.setCustomValidity("");
+          if (dispatchFrequencyAmount instanceof HTMLInputElement) {
+            dispatchFrequencyAmount.setCustomValidity("");
           }
           if (dispatchRequestInFlight) {
             return;

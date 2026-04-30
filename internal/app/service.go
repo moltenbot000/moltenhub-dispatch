@@ -1386,6 +1386,10 @@ func (s *Service) scheduleDispatch(state AppState, target ConnectedAgent, req Di
 	if req.Frequency < 0 {
 		return ScheduledMessage{}, errors.New("schedule frequency must be positive")
 	}
+	cron := cronFromDuration(req.Frequency)
+	if req.Frequency > 0 && cron == "" {
+		return ScheduledMessage{}, errors.New("schedule frequency must be cron-compatible minutes, hours, or days")
+	}
 	payload := normalizePayload(req.Payload, req.Repo, req.LogPaths)
 	payloadFormat := normalizePayloadFormat(req.PayloadFormat, payload)
 	scheduled := ScheduledMessage{
@@ -1406,6 +1410,7 @@ func (s *Service) scheduleDispatch(state AppState, target ConnectedAgent, req Di
 		CreatedAt:              now,
 		NextRunAt:              nextRunAt,
 		Frequency:              req.Frequency,
+		Cron:                   cron,
 		DispatchPayload:        payload,
 		DispatchPayloadFormat:  payloadFormat,
 		Timeout:                req.Timeout,
@@ -1999,6 +2004,61 @@ func scheduleFromAny(value any) (time.Time, time.Duration) {
 	default:
 		return timeFromAny(value), 0
 	}
+}
+
+func cronFromDuration(duration time.Duration) string {
+	if duration <= 0 {
+		return ""
+	}
+	if duration%time.Minute != 0 {
+		return ""
+	}
+	minutes := int(duration / time.Minute)
+	if minutes <= 0 {
+		return ""
+	}
+	if minutes < 60 {
+		return fmt.Sprintf("*/%d * * * *", minutes)
+	}
+	if minutes%(60*24) == 0 {
+		days := minutes / (60 * 24)
+		if days <= 31 {
+			return fmt.Sprintf("0 0 */%d * *", days)
+		}
+		return ""
+	}
+	if minutes%60 == 0 {
+		hours := minutes / 60
+		if hours <= 23 {
+			return fmt.Sprintf("0 */%d * * *", hours)
+		}
+	}
+	return ""
+}
+
+func durationFromCron(raw string) time.Duration {
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) != 5 {
+		return 0
+	}
+	if strings.HasPrefix(fields[0], "*/") && fields[1] == "*" && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
+		return cronStepDuration(fields[0], time.Minute)
+	}
+	if fields[0] == "0" && strings.HasPrefix(fields[1], "*/") && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
+		return cronStepDuration(fields[1], time.Hour)
+	}
+	if fields[0] == "0" && fields[1] == "0" && strings.HasPrefix(fields[2], "*/") && fields[3] == "*" && fields[4] == "*" {
+		return cronStepDuration(fields[2], 24*time.Hour)
+	}
+	return 0
+}
+
+func cronStepDuration(field string, unit time.Duration) time.Duration {
+	step, err := strconv.Atoi(strings.TrimPrefix(field, "*/"))
+	if err != nil || step <= 0 {
+		return 0
+	}
+	return time.Duration(step) * unit
 }
 
 func isScheduledDispatch(req DispatchRequest) bool {

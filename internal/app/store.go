@@ -365,6 +365,7 @@ func normalizeScheduledMessages(messages []ScheduledMessage) []ScheduledMessage 
 		message.CallerRequestID = strings.TrimSpace(message.CallerRequestID)
 		message.Repo = strings.TrimSpace(message.Repo)
 		message.DispatchPayloadFormat = strings.TrimSpace(message.DispatchPayloadFormat)
+		message.Cron = strings.TrimSpace(message.Cron)
 		if !message.CreatedAt.IsZero() {
 			message.CreatedAt = message.CreatedAt.UTC()
 		}
@@ -376,6 +377,12 @@ func normalizeScheduledMessages(messages []ScheduledMessage) []ScheduledMessage 
 		}
 		if message.Frequency < 0 {
 			message.Frequency = 0
+		}
+		if message.Frequency == 0 && message.Cron != "" {
+			message.Frequency = durationFromCron(message.Cron)
+		}
+		if message.Frequency > 0 && message.Cron == "" {
+			message.Cron = cronFromDuration(message.Frequency)
 		}
 		if message.Timeout < 0 {
 			message.Timeout = 0
@@ -469,6 +476,15 @@ func applyPersistedConfig(state *AppState, persisted persistedConfig) {
 }
 
 func persistedConfigFromState(state AppState) persistedConfig {
+	scheduledMessages := normalizeScheduledMessages(state.ScheduledMessages)
+	for i := range scheduledMessages {
+		if scheduledMessages[i].Frequency > 0 && scheduledMessages[i].Cron == "" {
+			scheduledMessages[i].Cron = cronFromDuration(scheduledMessages[i].Frequency)
+		}
+		if scheduledMessages[i].Cron != "" {
+			scheduledMessages[i].Frequency = 0
+		}
+	}
 	return persistedConfig{
 		Settings: persistedSettings{
 			HubURL: normalizeHubRuntimeURL(state.Settings.HubURL),
@@ -476,6 +492,6 @@ func persistedConfigFromState(state AppState) persistedConfig {
 		Session: persistedSession{
 			AgentToken: coalesceTrimmed(state.Session.AgentToken, state.Session.BindToken),
 		},
-		ScheduledMessages: normalizeScheduledMessages(state.ScheduledMessages),
+		ScheduledMessages: scheduledMessages,
 	}
 }

@@ -2008,6 +2008,9 @@ func TestDispatchFromUISchedulesMessageWithoutImmediatePublish(t *testing.T) {
 	if got := state.ScheduledMessages[0].Frequency; got != 15*time.Minute {
 		t.Fatalf("unexpected frequency: %v", got)
 	}
+	if got, want := state.ScheduledMessages[0].Cron, "*/15 * * * *"; got != want {
+		t.Fatalf("unexpected cron: %q, want %q", got, want)
+	}
 	if got := state.ScheduledMessages[0].TargetAgentUUID; got != "worker-uuid" {
 		t.Fatalf("unexpected scheduled target: %#v", state.ScheduledMessages[0])
 	}

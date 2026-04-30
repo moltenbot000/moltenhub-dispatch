@@ -3720,6 +3720,9 @@ p,
   display: grid;
   gap: 6px;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .manual-dispatch-delay-hint {
@@ -3861,6 +3864,33 @@ p,
   align-items: start;
   max-width: 38rem;
   column-gap: 12px;
+}
+
+.manual-dispatch-schedule-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.manual-dispatch-schedule-switch input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.manual-dispatch-schedule-value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.manual-dispatch-schedule-unit {
+  min-width: 0;
 }
 
 label {

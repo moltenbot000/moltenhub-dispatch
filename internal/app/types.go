@@ -138,7 +138,8 @@ type ScheduledMessage struct {
 	CreatedAt              time.Time      `json:"created_at"`
 	NextRunAt              time.Time      `json:"next_run_at"`
 	LastRunAt              time.Time      `json:"last_run_at,omitempty"`
-	Frequency              time.Duration  `json:"frequency"`
+	Frequency              time.Duration  `json:"frequency,omitempty"`
+	Cron                   string         `json:"cron,omitempty"`
 	DispatchPayload        map[string]any `json:"dispatch_payload"`
 	DispatchPayloadFormat  string         `json:"dispatch_payload_format"`
 	Timeout                time.Duration  `json:"timeout"`

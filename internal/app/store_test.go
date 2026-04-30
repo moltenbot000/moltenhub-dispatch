@@ -247,6 +247,12 @@ func TestStorePersistsHubURLAgentTokenAndScheduledMessages(t *testing.T) {
 	if payload, ok := scheduled["dispatch_payload"].(map[string]any); !ok || payload["input"] != "scheduled work" {
 		t.Fatalf("scheduled dispatch payload = %#v", scheduled["dispatch_payload"])
 	}
+	if got, want := scheduled["cron"], "*/15 * * * *"; got != want {
+		t.Fatalf("scheduled cron = %#v, want %q", got, want)
+	}
+	if _, ok := scheduled["frequency"]; ok {
+		t.Fatalf("did not expect frequency in persisted scheduled message: %#v", scheduled)
+	}
 
 	for _, forbidden := range []string{
 		"connection",
@@ -290,7 +296,7 @@ func TestNewStoreLoadsPersistedScheduledMessages(t *testing.T) {
       "target_agent_uuid": "worker-uuid",
       "target_agent_uri": "molten://agent/worker-a",
       "next_run_at": "2030-01-02T03:04:05Z",
-      "frequency": 900000000000,
+        "cron": "*/15 * * * *",
       "dispatch_payload": {
         "input": "scheduled work"
       },

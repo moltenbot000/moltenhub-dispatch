@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -30,17 +29,17 @@ func decodePullResponsePayload(raw json.RawMessage, source string) (PullResponse
 		return PullResponse{}, fmt.Errorf("decode %s: %w", source, err)
 	}
 
-	message, err := decodeOpenClawMessagePayload(delivery.OpenClawMessage)
+	message, ok, err := decodeOpenClawMessage(delivery.OpenClawMessage)
 	if err != nil {
-		return PullResponse{}, err
+		return PullResponse{}, fmt.Errorf("decode %s openclaw_message: %w", source, err)
 	}
-	if message.Kind == "" && message.Type == "" {
-		fallback, fallbackErr := decodeOpenClawMessagePayload(delivery.Message)
-		if fallbackErr != nil {
-			return PullResponse{}, fallbackErr
+	if !ok {
+		message, ok, err = decodeOpenClawMessage(delivery.Message)
+		if err != nil {
+			return PullResponse{}, fmt.Errorf("decode %s message: %w", source, err)
 		}
-		if fallback.Kind != "" || fallback.Type != "" {
-			message = fallback
+		if !ok {
+			message = OpenClawMessage{}
 		}
 	}
 
@@ -60,97 +59,95 @@ func decodePullResponsePayload(raw json.RawMessage, source string) (PullResponse
 	}, nil
 }
 
-func decodeOpenClawMessagePayload(raw json.RawMessage) (OpenClawMessage, error) {
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 {
-		return OpenClawMessage{}, nil
+func decodeOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, error) {
+	if len(strings.TrimSpace(string(raw))) == 0 || string(raw) == "null" {
+		return OpenClawMessage{}, false, nil
 	}
-	if message, ok, err := openClawMessageFromA2AEnvelope(raw); ok || err != nil {
-		return message, err
+
+	if message, ok, err := openClawMessageFromA2AEnvelope(raw); err != nil || ok {
+		return message, ok, err
 	}
 
 	var message OpenClawMessage
 	if err := json.Unmarshal(raw, &message); err != nil {
-		return OpenClawMessage{}, fmt.Errorf("decode openclaw message: %w", err)
+		return OpenClawMessage{}, false, err
 	}
-	return message, nil
+	if !looksLikeOpenClawMessage(message) {
+		return OpenClawMessage{}, false, nil
+	}
+	return message, true, nil
 }
 
 func openClawMessageFromA2AEnvelope(raw json.RawMessage) (OpenClawMessage, bool, error) {
-	var envelope map[string]any
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return OpenClawMessage{}, false, nil
+	var envelope struct {
+		Protocol string `json:"protocol"`
+		Message  struct {
+			Parts []struct {
+				Data json.RawMessage `json:"data"`
+				Text *string         `json:"text"`
+			} `json:"parts"`
+		} `json:"message"`
 	}
-	if strings.TrimSpace(stringFromAny(envelope["protocol"])) != "a2a.v1" {
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return OpenClawMessage{}, false, err
+	}
+	if strings.TrimSpace(envelope.Protocol) != a2aProtocolAdapter || len(envelope.Message.Parts) == 0 {
 		return OpenClawMessage{}, false, nil
 	}
 
-	message, ok := envelope["message"].(map[string]any)
-	if !ok {
-		return OpenClawMessage{}, false, nil
-	}
-	parts, ok := message["parts"].([]any)
-	if !ok {
-		return OpenClawMessage{}, false, nil
-	}
-	for _, item := range parts {
-		part, ok := item.(map[string]any)
-		if !ok {
-			continue
+	for _, part := range envelope.Message.Parts {
+		if len(strings.TrimSpace(string(part.Data))) > 0 && string(part.Data) != "null" {
+			message, ok, err := decodeOpenClawMessageFromJSON(part.Data)
+			if err != nil || ok {
+				return message, ok, err
+			}
 		}
-		data, ok := part["data"].(map[string]any)
-		if !ok || !looksLikeOpenClawMessage(data) {
-			continue
+		if part.Text != nil {
+			text := strings.TrimSpace(*part.Text)
+			if strings.HasPrefix(text, "{") {
+				message, ok, err := decodeOpenClawMessageFromJSON(json.RawMessage(text))
+				if err != nil || ok {
+					return message, ok, err
+				}
+			}
 		}
-		if strings.TrimSpace(stringFromAny(data["protocol"])) == "" {
-			data["protocol"] = "openclaw.http.v1"
-		}
-		payload, err := json.Marshal(data)
-		if err != nil {
-			return OpenClawMessage{}, true, fmt.Errorf("decode a2a openclaw data part: %w", err)
-		}
-		var out OpenClawMessage
-		if err := json.Unmarshal(payload, &out); err != nil {
-			return OpenClawMessage{}, true, fmt.Errorf("decode a2a openclaw data part: %w", err)
-		}
-		return out, true, nil
 	}
 	return OpenClawMessage{}, false, nil
 }
 
-func looksLikeOpenClawMessage(message map[string]any) bool {
-	if len(message) == 0 {
-		return false
+func decodeOpenClawMessageFromJSON(raw json.RawMessage) (OpenClawMessage, bool, error) {
+	var wrapped struct {
+		OpenClawMessage *OpenClawMessage `json:"openclaw_message"`
+		Message         *OpenClawMessage `json:"message"`
 	}
-	if strings.TrimSpace(stringFromAny(message["protocol"])) == "openclaw.http.v1" {
-		return true
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return OpenClawMessage{}, false, err
 	}
-	for _, key := range []string{
-		"kind",
-		"type",
-		"request_id",
-		"reply_to_request_id",
-		"reply_target",
-		"skill_name",
-		"payload_format",
-		"status",
-	} {
-		if strings.TrimSpace(stringFromAny(message[key])) != "" {
-			return true
+	for _, candidate := range []*OpenClawMessage{wrapped.OpenClawMessage, wrapped.Message} {
+		if candidate != nil && looksLikeOpenClawMessage(*candidate) {
+			return *candidate, true, nil
 		}
 	}
-	if _, ok := message["ok"]; ok {
-		return true
+
+	var message OpenClawMessage
+	if err := json.Unmarshal(raw, &message); err != nil {
+		return OpenClawMessage{}, false, err
 	}
-	if _, ok := message["error"]; ok {
-		return true
+	if !looksLikeOpenClawMessage(message) {
+		return OpenClawMessage{}, false, nil
 	}
-	return false
+	return message, true, nil
 }
 
-func stringFromAny(value any) string {
-	if text, ok := value.(string); ok {
-		return text
-	}
-	return ""
+func looksLikeOpenClawMessage(message OpenClawMessage) bool {
+	return strings.TrimSpace(message.Protocol) == openClawProtocol ||
+		strings.TrimSpace(message.Kind) != "" ||
+		strings.TrimSpace(message.Type) != "" ||
+		strings.TrimSpace(message.SkillName) != "" ||
+		strings.TrimSpace(message.RequestID) != "" ||
+		strings.TrimSpace(message.ReplyTo) != "" ||
+		strings.TrimSpace(message.Status) != "" ||
+		strings.TrimSpace(message.Error) != "" ||
+		message.Payload != nil ||
+		message.Input != nil
 }

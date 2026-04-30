@@ -236,18 +236,27 @@ func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]
 
 func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	if req.PreferA2A {
-		out, a2aErr := c.publishOpenClawA2A(ctx, token, req)
-		if a2aErr == nil {
+		out, err := c.publishOpenClawA2A(ctx, token, req)
+		if err == nil {
 			return out, nil
 		}
-		var fallbackOut PublishResponse
-		err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &fallbackOut)
-		if err != nil {
-			return PublishResponse{}, errors.Join(fmt.Errorf("a2a publish: %w", a2aErr), err)
+		if !shouldFallbackOpenClawPublish(err) {
+			return PublishResponse{}, fmt.Errorf("a2a publish: %w", err)
 		}
-		return fallbackOut, nil
 	}
+	if c.canPublishOpenClawViaA2A(req) {
+		out, err := c.publishOpenClawViaA2A(ctx, token, req)
+		if err == nil {
+			return out, nil
+		}
+		if !shouldFallbackOpenClawPublish(err) {
+			return PublishResponse{}, fmt.Errorf("a2a publish: %w", err)
+		}
+	}
+	return c.publishOpenClawHTTP(ctx, token, req)
+}
 
+func (c *Client) publishOpenClawHTTP(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	var out PublishResponse
 	err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &out)
 	return out, err
