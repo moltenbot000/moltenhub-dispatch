@@ -3,7 +3,9 @@ package support
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func FirstNonEmptyString(values ...string) string {
@@ -86,6 +88,31 @@ func SplitLines(raw string) []string {
 		}
 	}
 	return out
+}
+
+func ParseDuration(value string) (time.Duration, error) {
+	raw := strings.TrimSpace(strings.ToLower(value))
+	raw = strings.TrimPrefix(raw, "every ")
+	raw = strings.TrimPrefix(raw, "in ")
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, strconv.ErrSyntax
+	}
+	if duration, err := time.ParseDuration(raw); err == nil {
+		return duration, nil
+	}
+	if strings.HasSuffix(raw, "d") {
+		amount, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(raw, "d")), 64)
+		if err != nil {
+			return 0, err
+		}
+		return time.Duration(amount * float64(24*time.Hour)), nil
+	}
+	seconds, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(seconds * float64(time.Second)), nil
 }
 
 // UnmarshalJSONPayload keeps strict JSON behavior, but tolerates raw control

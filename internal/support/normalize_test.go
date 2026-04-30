@@ -3,6 +3,7 @@ package support
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCompactStrings(t *testing.T) {
@@ -64,6 +65,27 @@ func TestStringSliceFromAny(t *testing.T) {
 	fromAny := StringSliceFromAny([]any{"a", 42, "b"})
 	if len(fromAny) != 2 || fromAny[0] != "a" || fromAny[1] != "b" {
 		t.Fatalf("unexpected []any conversion: %#v", fromAny)
+	}
+}
+
+func TestParseDurationAcceptsMinutesHoursDaysAndSeconds(t *testing.T) {
+	tests := map[string]time.Duration{
+		"15m":      15 * time.Minute,
+		"2h":       2 * time.Hour,
+		"3d":       72 * time.Hour,
+		"every 4d": 96 * time.Hour,
+		"in 30m":   30 * time.Minute,
+		"90":       90 * time.Second,
+	}
+
+	for raw, want := range tests {
+		got, err := ParseDuration(raw)
+		if err != nil {
+			t.Fatalf("ParseDuration(%q): %v", raw, err)
+		}
+		if got != want {
+			t.Fatalf("ParseDuration(%q) = %v, want %v", raw, got, want)
+		}
 	}
 }
 

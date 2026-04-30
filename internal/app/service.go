@@ -1978,7 +1978,7 @@ func durationFromAny(value any) time.Duration {
 		if trimmed == "" {
 			return 0
 		}
-		if duration, err := time.ParseDuration(trimmed); err == nil {
+		if duration, err := support.ParseDuration(trimmed); err == nil {
 			return duration
 		}
 		seconds, err := strconv.ParseFloat(trimmed, 64)

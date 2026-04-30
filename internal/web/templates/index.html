@@ -164,7 +164,9 @@
               <label id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
                 <span class="prompt-label">Delay</span>
                 <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
-                <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes or hours. Delayed sends run in this browser.</span>
+                <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
+                <span class="prompt-label">Repeat</span>
+                <input id="dispatch-frequency-input" class="prompt-control" type="text" name="every" placeholder="every 30m, every 2h, every 1d" autocomplete="off" aria-describedby="dispatch-delay-hint">
               </label>
               <div class="prompt-actions manual-dispatch-actions">
                 <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
@@ -446,6 +448,7 @@
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
       const dispatchDelayField = document.getElementById("dispatch-delay-field");
       const dispatchDelayInput = document.getElementById("dispatch-delay-input");
+      const dispatchFrequencyInput = document.getElementById("dispatch-frequency-input");
       const trimmedString = (value) => String(value || "").trim();
       const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
         ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Describe the task or paste a JSON payload."
@@ -1943,6 +1946,10 @@
           dispatchDelayInput.value = "";
           dispatchDelayInput.setCustomValidity("");
         }
+        if (options.clear === true && dispatchFrequencyInput instanceof HTMLInputElement) {
+          dispatchFrequencyInput.value = "";
+          dispatchFrequencyInput.setCustomValidity("");
+        }
       };
 
       const setDispatchSubmitStatus = (status, isError = false) => {
@@ -1971,20 +1978,37 @@
         if (raw === "" || raw === "0" || raw === "now") {
           return { ok: true, delayMs: 0, label: "" };
         }
-        const match = raw.match(/^(?:in\s+)?(\d+(?:\.\d+)?)\s*([mh])$/);
+        const match = raw.match(/^(?:in\s+)?(\d+(?:\.\d+)?)\s*([mhd])$/);
         if (!match) {
-          return { ok: false, message: "Delay must be 10m, 2h, or blank." };
+          return { ok: false, message: "Delay must be 10m, 2h, 1d, or blank." };
         }
         const amount = Number.parseFloat(match[1]);
         if (!Number.isFinite(amount) || amount <= 0) {
           return { ok: false, message: "Delay must be greater than zero." };
         }
         const unit = match[2];
-        const delayMs = amount * (unit === "h" ? 60 * 60 * 1000 : 60 * 1000);
+        const delayMs = amount * (unit === "d" ? 24 * 60 * 60 * 1000 : unit === "h" ? 60 * 60 * 1000 : 60 * 1000);
         if (!Number.isFinite(delayMs) || delayMs > MAX_CLIENT_DISPATCH_DELAY_MS) {
           return { ok: false, message: "Delay must be less than 24 days." };
         }
         return { ok: true, delayMs, label: `${amount}${unit}` };
+      };
+
+      const parseDispatchFrequency = (value) => {
+        const raw = trimmedString(value).toLowerCase();
+        if (raw === "") {
+          return { ok: true, duration: "", label: "" };
+        }
+        const match = raw.match(/^(?:every\s+)?(\d+(?:\.\d+)?)\s*([mhd])$/);
+        if (!match) {
+          return { ok: false, message: "Repeat must be every 10m, every 2h, every 1d, or blank." };
+        }
+        const amount = Number.parseFloat(match[1]);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          return { ok: false, message: "Repeat interval must be greater than zero." };
+        }
+        const unit = match[2];
+        return { ok: true, duration: `${amount}${unit}`, label: `every ${amount}${unit}` };
       };
 
       const connectedAgentDisplayName = (agent) => {
@@ -2658,6 +2682,10 @@
         if (dispatchDelayInput instanceof HTMLInputElement) {
           dispatchDelayInput.value = "";
           dispatchDelayInput.setCustomValidity("");
+        }
+        if (dispatchFrequencyInput instanceof HTMLInputElement) {
+          dispatchFrequencyInput.value = "";
+          dispatchFrequencyInput.setCustomValidity("");
         }
         setDispatchDelayFieldVisible(false, { clear: true });
         setSkillPayloadValidationMessage("");
@@ -3354,6 +3382,11 @@
           dispatchDelayInput.setCustomValidity("");
         });
       }
+      if (dispatchFrequencyInput instanceof HTMLInputElement) {
+        dispatchFrequencyInput.addEventListener("input", () => {
+          dispatchFrequencyInput.setCustomValidity("");
+        });
+      }
       if (dispatchDelayToggle instanceof HTMLButtonElement) {
         dispatchDelayToggle.addEventListener("click", () => {
           const nextVisible = !(dispatchDelayField instanceof HTMLElement) || dispatchDelayField.hidden;
@@ -3424,8 +3457,25 @@
             }
             return;
           }
+          const dispatchFrequency = parseDispatchFrequency(dispatchFrequencyInput instanceof HTMLInputElement ? dispatchFrequencyInput.value : "");
+          if (!dispatchFrequency.ok) {
+            setDispatchSubmitStatus(dispatchFrequency.message, true);
+            trackAppEvent("dispatch_submit", {
+              ...dispatchAnalyticsParams(dispatchState),
+              result: "invalid_frequency",
+            });
+            if (dispatchFrequencyInput instanceof HTMLInputElement) {
+              dispatchFrequencyInput.setCustomValidity(dispatchFrequency.message);
+              dispatchFrequencyInput.reportValidity();
+              dispatchFrequencyInput.focus({ preventScroll: true });
+            }
+            return;
+          }
           if (dispatchDelayInput instanceof HTMLInputElement) {
             dispatchDelayInput.setCustomValidity("");
+          }
+          if (dispatchFrequencyInput instanceof HTMLInputElement) {
+            dispatchFrequencyInput.setCustomValidity("");
           }
           if (dispatchRequestInFlight) {
             return;
@@ -3439,6 +3489,14 @@
             const formData = new FormData(manualDispatchForm);
             formData.set("target_agent_ref", dispatchState.targetRef);
             formData.delete("client_delay");
+            if (dispatchFrequency.duration !== "") {
+              formData.set("every", dispatchFrequency.duration);
+              if (clientDelay.delayMs > 0) {
+                formData.set("scheduled_at", clientDelay.label);
+              }
+            } else {
+              formData.delete("every");
+            }
             if (dispatchState.skillName !== "") {
               formData.set("skill_name", dispatchState.skillName);
             } else {
@@ -3448,7 +3506,7 @@
               formData.delete("payload");
               formData.delete("payload_format");
             }
-            if (clientDelay.delayMs > 0) {
+            if (clientDelay.delayMs > 0 && dispatchFrequency.duration === "") {
               clientScheduledDispatchCount += 1;
               const scheduledNumber = clientScheduledDispatchCount;
               window.setTimeout(() => {

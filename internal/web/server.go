@@ -731,7 +731,7 @@ func parseScheduleTime(raw string) (time.Time, error) {
 			return parsed.UTC(), nil
 		}
 	}
-	duration, err := time.ParseDuration(raw)
+	duration, err := support.ParseDuration(raw)
 	if err == nil {
 		return time.Now().UTC().Add(duration), nil
 	}
@@ -743,21 +743,14 @@ func parseScheduleDuration(raw string) (time.Duration, error) {
 	if raw == "" {
 		return 0, nil
 	}
-	duration, err := time.ParseDuration(raw)
+	duration, err := support.ParseDuration(raw)
 	if err == nil {
 		if duration < 0 {
 			return 0, errors.New("frequency must be positive")
 		}
 		return duration, nil
 	}
-	seconds, err := time.ParseDuration(raw + "s")
-	if err != nil {
-		return 0, errors.New("frequency must be a duration or numeric seconds")
-	}
-	if seconds < 0 {
-		return 0, errors.New("frequency must be positive")
-	}
-	return seconds, nil
+	return 0, errors.New("frequency must be a duration or numeric seconds")
 }
 
 func parseSkills(raw string) []app.Skill {

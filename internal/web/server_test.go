@@ -979,6 +979,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-delay-input"`) || !strings.Contains(body, `name="client_delay"`) {
 		t.Fatalf("expected manual dispatch client-side delay field, body=%s", body)
 	}
+	if !strings.Contains(body, `id="dispatch-frequency-input"`) || !strings.Contains(body, `name="every"`) {
+		t.Fatalf("expected manual dispatch recurring interval field, body=%s", body)
+	}
 	if !strings.Contains(body, `id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden`) {
 		t.Fatalf("expected manual dispatch delay field to be hidden by default, body=%s", body)
 	}
@@ -987,6 +990,9 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `const parseClientDispatchDelay = (value) => {`) {
 		t.Fatalf("expected manual dispatch client-side delay parser, body=%s", body)
+	}
+	if !strings.Contains(body, `const parseDispatchFrequency = (value) => {`) || !strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) {
+		t.Fatalf("expected manual dispatch recurring interval parser and submit path, body=%s", body)
 	}
 	if !strings.Contains(body, `setDispatchDelayFieldVisible(false, { clear: true });`) {
 		t.Fatalf("expected manual dispatch delay field to auto-hide after send or schedule, body=%s", body)
@@ -1310,7 +1316,7 @@ func TestHandleDispatchAPIAcceptsJSONSchedulePayload(t *testing.T) {
 		"payload": {"input": "scheduled work"},
 		"schedule": {
 			"after": "10m",
-			"every": "30m"
+			"every": "2d"
 		}
 	}`
 	before := time.Now().UTC()
@@ -1356,8 +1362,8 @@ func TestHandleDispatchAPIAcceptsJSONSchedulePayload(t *testing.T) {
 	if got := payload["input"]; got != "scheduled work" {
 		t.Fatalf("unexpected payload: %#v", payload)
 	}
-	if got := stub.lastDispatchReq.Frequency; got != 30*time.Minute {
-		t.Fatalf("frequency = %v, want 30m", got)
+	if got := stub.lastDispatchReq.Frequency; got != 48*time.Hour {
+		t.Fatalf("frequency = %v, want 2d", got)
 	}
 	if stub.lastDispatchReq.ScheduledAt.Before(before.Add(9*time.Minute)) || stub.lastDispatchReq.ScheduledAt.After(before.Add(11*time.Minute)) {
 		t.Fatalf("scheduled_at = %s, want about 10m after %s", stub.lastDispatchReq.ScheduledAt, before)

@@ -42,7 +42,7 @@ Dispatch requests can be sent immediately, scheduled for later, or repeated on a
 }
 ```
 
-`schedule.after` accepts Go-style durations such as `10m` or `1h`. `schedule.at` accepts RFC3339 timestamps. Use `schedule.every` for recurring delivery; omit it for a one-time scheduled dispatch.
+`schedule.after` accepts durations such as `10m`, `1h`, or `1d`. `schedule.at` accepts RFC3339 timestamps. Use `schedule.every` for recurring delivery with intervals like `15m`, `2h`, or `1d`; omit it for a one-time scheduled dispatch.
 
 ## Docker
 
