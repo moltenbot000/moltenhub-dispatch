@@ -39,6 +39,7 @@ type service interface {
 	AddConnectedAgent(agent app.ConnectedAgent) error
 	RefreshConnectedAgents(ctx context.Context) ([]app.ConnectedAgent, error)
 	DispatchFromUI(ctx context.Context, req app.DispatchRequest) (app.PendingTask, error)
+	DeleteScheduledMessage(scheduleID string) error
 	UpdateSettings(mutator func(*app.Settings) error) error
 	SetFlash(level, message string) error
 	ConsumeFlash() (app.FlashMessage, error)
@@ -104,11 +105,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/profile", s.handleProfileAPI)
 	s.mux.HandleFunc("/api/connected-agents", s.handleConnectedAgents)
 	s.mux.HandleFunc("/api/dispatch", s.handleDispatchAPI)
+	s.mux.HandleFunc("/api/schedules/delete", s.handleDeleteScheduleAPI)
 	s.mux.HandleFunc("/bind", s.handleBind)
 	s.mux.HandleFunc("/profile", s.handleProfile)
 	s.mux.HandleFunc("/disconnect", s.handleDisconnect)
 	s.mux.HandleFunc("/agents", s.handleAgents)
 	s.mux.HandleFunc("/dispatch", s.handleDispatch)
+	s.mux.HandleFunc("/schedules/delete", s.handleDeleteSchedule)
 	s.mux.HandleFunc("/settings", s.handleSettings)
 	s.mux.HandleFunc("/styles.css", s.handleStyles)
 	s.mux.Handle("/static/", s.staticHandler)
@@ -454,6 +457,45 @@ func (s *Server) handleDispatchAPI(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	scheduleID, err := scheduleIDFromRequest(r)
+	if err == nil {
+		err = s.service.DeleteScheduledMessage(scheduleID)
+	}
+	if err != nil {
+		s.redirectWithMessage(w, r, "error", err.Error())
+		return
+	}
+	s.redirectWithMessage(w, r, "info", "Scheduled dispatch deleted.")
+}
+
+func (s *Server) handleDeleteScheduleAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	scheduleID, err := scheduleIDFromRequest(r)
+	if err == nil {
+		err = s.service.DeleteScheduledMessage(scheduleID)
+	}
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"message": "Scheduled dispatch deleted.",
+	})
+}
+
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
@@ -566,6 +608,37 @@ func dispatchRequestFromJSON(r *http.Request) (app.DispatchRequest, error) {
 	}
 	dispatchReq.PayloadFormat = payloadFormat
 	return dispatchReq, nil
+}
+
+func scheduleIDFromRequest(r *http.Request) (string, error) {
+	contentType := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if strings.HasPrefix(contentType, "application/json") {
+		var values map[string]any
+		decoder := json.NewDecoder(r.Body)
+		decoder.UseNumber()
+		if err := decoder.Decode(&values); err != nil {
+			return "", fmt.Errorf("decode schedule delete payload: %w", err)
+		}
+		scheduleID := support.StringFromMap(values, "schedule_id", "scheduleID", "scheduleId", "id")
+		if scheduleID == "" {
+			return "", errors.New("schedule_id is required")
+		}
+		return scheduleID, nil
+	}
+	values, err := parseFormValues(r)
+	if err != nil {
+		return "", err
+	}
+	scheduleID := support.FirstNonEmptyString(
+		values.Get("schedule_id"),
+		values.Get("scheduleID"),
+		values.Get("scheduleId"),
+		values.Get("id"),
+	)
+	if strings.TrimSpace(scheduleID) == "" {
+		return "", errors.New("schedule_id is required")
+	}
+	return scheduleID, nil
 }
 
 func decodeStructuredJSONPayload(raw string) (any, bool) {
@@ -727,6 +800,9 @@ func normalizeDispatchRequestPayloadFormat(format string, payload any) (string, 
 func parseScheduleTime(raw string) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
+		return time.Time{}, nil
+	}
+	if strings.EqualFold(raw, "now") {
 		return time.Time{}, nil
 	}
 	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05", "2006-01-02 15:04"} {

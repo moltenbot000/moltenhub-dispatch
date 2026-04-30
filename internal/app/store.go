@@ -27,8 +27,9 @@ type Store struct {
 }
 
 type persistedConfig struct {
-	Settings persistedSettings `json:"settings,omitempty"`
-	Session  persistedSession  `json:"session,omitempty"`
+	Settings          persistedSettings  `json:"settings,omitempty"`
+	Session           persistedSession   `json:"session,omitempty"`
+	ScheduledMessages []ScheduledMessage `json:"scheduled_messages,omitempty"`
 }
 
 type persistedSettings struct {
@@ -277,6 +278,7 @@ func normalizeStateAliases(state *AppState) {
 	normalizeSessionAliases(&state.Session)
 	normalizeConnectionAliases(&state.Connection, state.Session, state.Settings)
 	normalizeFlash(&state.Flash)
+	state.ScheduledMessages = normalizeScheduledMessages(state.ScheduledMessages)
 }
 
 func normalizeSettingsAliases(settings *Settings) {
@@ -335,6 +337,52 @@ func normalizeFlash(flash *FlashMessage) {
 			flash.Level = "info"
 		}
 	}
+}
+
+func normalizeScheduledMessages(messages []ScheduledMessage) []ScheduledMessage {
+	if len(messages) == 0 {
+		return nil
+	}
+	out := make([]ScheduledMessage, 0, len(messages))
+	for _, message := range messages {
+		message.ID = strings.TrimSpace(message.ID)
+		if message.ID == "" {
+			continue
+		}
+		message.Status = strings.TrimSpace(message.Status)
+		if message.Status == "" {
+			message.Status = ScheduledMessageStatusActive
+		}
+		message.ParentRequestID = strings.TrimSpace(message.ParentRequestID)
+		message.OriginalSkillName = strings.TrimSpace(message.OriginalSkillName)
+		message.TargetAgentRef = strings.TrimSpace(message.TargetAgentRef)
+		message.TargetAgentDisplayName = strings.TrimSpace(message.TargetAgentDisplayName)
+		message.TargetAgentEmoji = strings.TrimSpace(message.TargetAgentEmoji)
+		message.TargetAgentUUID = strings.TrimSpace(message.TargetAgentUUID)
+		message.TargetAgentURI = strings.TrimSpace(message.TargetAgentURI)
+		message.CallerAgentUUID = strings.TrimSpace(message.CallerAgentUUID)
+		message.CallerAgentURI = strings.TrimSpace(message.CallerAgentURI)
+		message.CallerRequestID = strings.TrimSpace(message.CallerRequestID)
+		message.Repo = strings.TrimSpace(message.Repo)
+		message.DispatchPayloadFormat = strings.TrimSpace(message.DispatchPayloadFormat)
+		if !message.CreatedAt.IsZero() {
+			message.CreatedAt = message.CreatedAt.UTC()
+		}
+		if !message.NextRunAt.IsZero() {
+			message.NextRunAt = message.NextRunAt.UTC()
+		}
+		if !message.LastRunAt.IsZero() {
+			message.LastRunAt = message.LastRunAt.UTC()
+		}
+		if message.Frequency < 0 {
+			message.Frequency = 0
+		}
+		if message.Timeout < 0 {
+			message.Timeout = 0
+		}
+		out = append(out, message)
+	}
+	return out
 }
 
 func cloneState(state AppState) AppState {
@@ -417,6 +465,7 @@ func applyPersistedConfig(state *AppState, persisted persistedConfig) {
 	token := coalesceTrimmed(persisted.Session.AgentToken, persisted.Session.BindToken)
 	state.Session.AgentToken = token
 	state.Session.BindToken = token
+	state.ScheduledMessages = normalizeScheduledMessages(persisted.ScheduledMessages)
 }
 
 func persistedConfigFromState(state AppState) persistedConfig {
@@ -427,5 +476,6 @@ func persistedConfigFromState(state AppState) persistedConfig {
 		Session: persistedSession{
 			AgentToken: coalesceTrimmed(state.Session.AgentToken, state.Session.BindToken),
 		},
+		ScheduledMessages: normalizeScheduledMessages(state.ScheduledMessages),
 	}
 }

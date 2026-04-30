@@ -458,6 +458,35 @@ func (s *Service) DisconnectAgent(ctx context.Context) error {
 	})
 }
 
+func (s *Service) DeleteScheduledMessage(scheduleID string) error {
+	scheduleID = strings.TrimSpace(scheduleID)
+	if scheduleID == "" {
+		return errors.New("schedule_id is required")
+	}
+
+	var deleted ScheduledMessage
+	if err := s.store.Update(func(current *AppState) error {
+		filtered := current.ScheduledMessages[:0]
+		for _, scheduled := range current.ScheduledMessages {
+			if scheduled.ID == scheduleID {
+				deleted = scheduled
+				continue
+			}
+			filtered = append(filtered, scheduled)
+		}
+		if deleted.ID == "" {
+			return fmt.Errorf("scheduled message %q not found", scheduleID)
+		}
+		current.ScheduledMessages = filtered
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	_ = s.logEvent("info", "Scheduled message deleted", scheduledMessageSummary(deleted), deleted.ID, "")
+	return nil
+}
+
 func (s *Service) AddConnectedAgent(agent ConnectedAgent) error {
 	agent = normalizeConnectedAgent(agent)
 	if connectedAgentIdentityKey(agent) == "" {
@@ -1417,8 +1446,16 @@ func (s *Service) dispatchScheduledMessage(ctx context.Context, state AppState, 
 		PayloadFormat:  scheduled.DispatchPayloadFormat,
 		Timeout:        scheduled.Timeout,
 	}
-	target, req, err := s.prepareDispatchRequest(state, req)
+	target, err := scheduledDispatchTarget(state, scheduled)
 	if err != nil {
+		pending := pendingFromScheduledMessage(scheduled, state)
+		if failureErr := s.handleTaskFailure(ctx, state, pending, failureFromError("Scheduled message dispatch failed before it reached a connected agent.", err)); failureErr != nil {
+			err = errors.Join(err, failureErr)
+		}
+		return errors.Join(err, s.advanceScheduledMessage(scheduled.ID, now))
+	}
+	if strings.TrimSpace(req.SkillName) == "" {
+		err := errors.New("scheduled message missing skill_name")
 		pending := pendingFromScheduledMessage(scheduled, state)
 		if failureErr := s.handleTaskFailure(ctx, state, pending, failureFromError("Scheduled message dispatch failed before it reached a connected agent.", err)); failureErr != nil {
 			err = errors.Join(err, failureErr)
@@ -1454,6 +1491,31 @@ func (s *Service) dispatchScheduledMessage(ctx context.Context, state AppState, 
 		return err
 	}
 	return s.logTaskEvent("info", "Scheduled message dispatched", fmt.Sprintf("Queued %s for %s", req.SkillName, connectedAgentNameOrRef(target)), task)
+}
+
+func scheduledDispatchTarget(state AppState, scheduled ScheduledMessage) (ConnectedAgent, error) {
+	for _, ref := range []string{scheduled.TargetAgentUUID, scheduled.TargetAgentURI, scheduled.TargetAgentRef} {
+		if agent, ok := FindConnectedAgent(state.ConnectedAgents, ref); ok {
+			return agent, nil
+		}
+	}
+
+	target := ConnectedAgent{
+		AgentUUID:   strings.TrimSpace(scheduled.TargetAgentUUID),
+		URI:         strings.TrimSpace(scheduled.TargetAgentURI),
+		DisplayName: strings.TrimSpace(scheduled.TargetAgentDisplayName),
+		Emoji:       strings.TrimSpace(scheduled.TargetAgentEmoji),
+	}
+	if target.AgentUUID == "" && target.URI == "" {
+		targetRef := strings.TrimSpace(scheduled.TargetAgentRef)
+		if strings.HasPrefix(targetRef, "molten://") {
+			target.URI = targetRef
+		}
+	}
+	if connectedAgentIdentityKey(target) == "" {
+		return ConnectedAgent{}, fmt.Errorf("no connected agent matched scheduled target %q", strings.TrimSpace(scheduled.TargetAgentRef))
+	}
+	return target, nil
 }
 
 func pendingFromScheduledMessage(scheduled ScheduledMessage, state AppState) PendingTask {

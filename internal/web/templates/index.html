@@ -89,6 +89,49 @@
       </p>
     </section>
 
+    <section class="grid scheduled-dispatches-grid">
+      <article id="scheduled-dispatches-panel" class="panel prompt-wrap scheduled-dispatches-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
+        <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
+          <div class="panel-header-copy">
+            <span id="scheduled-dispatches-label" class="panel-section-title">Scheduled Dispatches</span>
+            <p id="scheduled-dispatches-count" class="panel-section-copy">{{len .State.ScheduledMessages}} active</p>
+          </div>
+          <button
+            id="scheduled-dispatches-toggle"
+            type="button"
+            class="prompt-action-button scheduled-dispatches-toggle"
+            aria-label="{{if .State.ScheduledMessages}}Hide scheduled dispatches{{else}}Show scheduled dispatches{{end}}"
+            aria-expanded="{{if .State.ScheduledMessages}}true{{else}}false{{end}}"
+            aria-controls="scheduled-dispatches-field"
+            title="{{if .State.ScheduledMessages}}Hide scheduled dispatches{{else}}Show scheduled dispatches{{end}}"
+          >
+            <i data-lucide="chevron-down" class="scheduled-dispatches-toggle-show" aria-hidden="true"></i>
+            <i data-lucide="chevron-up" class="scheduled-dispatches-toggle-hide" aria-hidden="true"></i>
+            <span class="sr-only">{{if .State.ScheduledMessages}}Hide scheduled dispatches{{else}}Show scheduled dispatches{{end}}</span>
+          </button>
+        </div>
+        <div id="scheduled-dispatches-field" class="dispatch-panel-body scheduled-dispatches-body" {{if not .State.ScheduledMessages}}hidden{{end}}>
+          <div id="scheduled-dispatches-list" class="list scheduled-dispatches-list" {{if not .State.ScheduledMessages}}hidden{{end}}>
+            {{range .State.ScheduledMessages}}
+            <form method="post" action="/schedules/delete" class="scheduled-dispatch-row" data-scheduled-dispatch-row data-scheduled-dispatch-id="{{.ID}}">
+              <input type="hidden" name="schedule_id" value="{{.ID}}">
+              <div class="scheduled-dispatch-copy">
+                <h3><span class="scheduled-dispatch-emoji">{{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🙂{{end}}</span><span>{{if .TargetAgentDisplayName}}{{.TargetAgentDisplayName}}{{else if .TargetAgentRef}}{{.TargetAgentRef}}{{else if .TargetAgentURI}}{{.TargetAgentURI}}{{else}}{{.TargetAgentUUID}}{{end}}</span></h3>
+                <p>{{.OriginalSkillName}} • Next {{formatTime .NextRunAt}}{{if .Frequency}} • Every {{.Frequency}}{{end}}</p>
+              </div>
+              <button type="submit" class="prompt-action-button scheduled-dispatch-delete" data-scheduled-dispatch-delete aria-label="Delete scheduled dispatch {{.ID}}" title="Delete scheduled dispatch">
+                <i data-lucide="trash-2" aria-hidden="true"></i>
+                <span class="sr-only">Delete scheduled dispatch</span>
+              </button>
+            </form>
+            {{end}}
+          </div>
+          <p id="scheduled-dispatches-empty" class="empty" {{if .State.ScheduledMessages}}hidden{{end}}>No scheduled dispatches.</p>
+          <p id="scheduled-dispatches-status" class="connected-agents-refresh-status" aria-live="polite"></p>
+        </div>
+      </article>
+    </section>
+
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
       <section class="grid manual-dispatch-grid">
         <article class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
@@ -184,7 +227,7 @@
                 <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
                   <label class="manual-dispatch-delay-item">
                     <span class="prompt-label">Delay</span>
-                    <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
+                    <input id="dispatch-delay-input" class="prompt-control" type="text" name="scheduled_at" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
                     <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
                   </label>
                   <label class="manual-dispatch-delay-item">
@@ -437,6 +480,7 @@
   <script src="/static/lucide.min.js"></script>
   <script id="initial-connected-agents-data" type="application/json">{{toJSON .State.ConnectedAgents}}</script>
   <script id="initial-pending-tasks-data" type="application/json">{{toJSON .State.PendingTasks}}</script>
+  <script id="initial-scheduled-messages-data" type="application/json">{{toJSON .State.ScheduledMessages}}</script>
   <script id="initial-recent-events-data" type="application/json">{{toJSON .State.RecentEvents}}</script>
   <script>
     (() => {
@@ -463,6 +507,12 @@
       const dispatchDelayField = document.getElementById("dispatch-delay-field");
       const dispatchDelayInput = document.getElementById("dispatch-delay-input");
       const dispatchFrequencyInput = document.getElementById("dispatch-frequency-input");
+      const scheduledDispatchesToggle = document.getElementById("scheduled-dispatches-toggle");
+      const scheduledDispatchesField = document.getElementById("scheduled-dispatches-field");
+      const scheduledDispatchesList = document.getElementById("scheduled-dispatches-list");
+      const scheduledDispatchesEmpty = document.getElementById("scheduled-dispatches-empty");
+      const scheduledDispatchesCount = document.getElementById("scheduled-dispatches-count");
+      const scheduledDispatchesStatus = document.getElementById("scheduled-dispatches-status");
       const trimmedString = (value) => String(value || "").trim();
       const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
         ? trimmedString(skillPayloadInput.getAttribute("data-default-placeholder")) || "Describe the task or paste a JSON payload."
@@ -523,6 +573,7 @@
       const themeToggleTooltip = document.getElementById("theme-toggle-tooltip");
       const initialConnectedAgentsData = document.getElementById("initial-connected-agents-data");
       const initialPendingTasksData = document.getElementById("initial-pending-tasks-data");
+      const initialScheduledMessagesData = document.getElementById("initial-scheduled-messages-data");
       const initialRecentEventsData = document.getElementById("initial-recent-events-data");
       const googleAnalyticsMeasurementID = String(window.__hubAnalyticsMeasurementID || "").trim();
 
@@ -1883,6 +1934,7 @@
       let latestConnectedAgents = [];
       let latestConnectedAgentsSignature = "";
       let latestPendingTasks = [];
+      let latestScheduledMessages = [];
       let latestRecentEvents = [];
       let activityFeedExpandedKeys = new Set();
       const parseInitialArrayData = (node) => {
@@ -1899,6 +1951,7 @@
 
       const parseInitialConnectedAgents = () => parseInitialArrayData(initialConnectedAgentsData);
       const parseInitialPendingTasks = () => parseInitialArrayData(initialPendingTasksData);
+      const parseInitialScheduledMessages = () => parseInitialArrayData(initialScheduledMessagesData);
       const parseInitialRecentEvents = () => parseInitialArrayData(initialRecentEventsData);
 
       const isHubConnectedState = (state = latestHubConnectionState) => {
@@ -2025,8 +2078,7 @@
       };
       let dispatchRequestInFlight = false;
       let dispatchStatusClearTimer = 0;
-      let clientScheduledDispatchCount = 0;
-      const MAX_CLIENT_DISPATCH_DELAY_MS = 2147483647;
+      let scheduledDispatchStatusClearTimer = 0;
 
       const setDispatchSubmitBusy = (busy) => {
         if (dispatchTaskClear instanceof HTMLButtonElement) {
@@ -2070,6 +2122,21 @@
         }
       };
 
+      const setScheduledDispatchesVisible = (visible) => {
+        if (scheduledDispatchesField instanceof HTMLElement) {
+          scheduledDispatchesField.hidden = !visible;
+        }
+        if (scheduledDispatchesToggle instanceof HTMLButtonElement) {
+          scheduledDispatchesToggle.setAttribute("aria-expanded", visible ? "true" : "false");
+          scheduledDispatchesToggle.setAttribute("aria-label", visible ? "Hide scheduled dispatches" : "Show scheduled dispatches");
+          scheduledDispatchesToggle.setAttribute("title", visible ? "Hide scheduled dispatches" : "Show scheduled dispatches");
+          const hiddenLabel = scheduledDispatchesToggle.querySelector(".sr-only");
+          if (hiddenLabel instanceof HTMLElement) {
+            hiddenLabel.textContent = visible ? "Hide scheduled dispatches" : "Show scheduled dispatches";
+          }
+        }
+      };
+
       const setDispatchSubmitStatus = (status, isError = false) => {
         if (!(dispatchSubmitStatus instanceof HTMLElement)) {
           return;
@@ -2091,6 +2158,27 @@
         }, 12000);
       };
 
+      const setScheduledDispatchStatus = (status, isError = false) => {
+        if (!(scheduledDispatchesStatus instanceof HTMLElement)) {
+          return;
+        }
+        if (scheduledDispatchStatusClearTimer) {
+          window.clearTimeout(scheduledDispatchStatusClearTimer);
+          scheduledDispatchStatusClearTimer = 0;
+        }
+        const text = trimmedString(status);
+        scheduledDispatchesStatus.classList.toggle("is-error", Boolean(isError) && text !== "");
+        scheduledDispatchesStatus.textContent = text;
+        if (text === "") {
+          return;
+        }
+        scheduledDispatchStatusClearTimer = window.setTimeout(() => {
+          scheduledDispatchesStatus.textContent = "";
+          scheduledDispatchesStatus.classList.remove("is-error");
+          scheduledDispatchStatusClearTimer = 0;
+        }, 12000);
+      };
+
       const parseClientDispatchDelay = (value) => {
         const raw = trimmedString(value).toLowerCase();
         if (raw === "" || raw === "0" || raw === "now") {
@@ -2106,8 +2194,8 @@
         }
         const unit = match[2];
         const delayMs = amount * (unit === "d" ? 24 * 60 * 60 * 1000 : unit === "h" ? 60 * 60 * 1000 : 60 * 1000);
-        if (!Number.isFinite(delayMs) || delayMs > MAX_CLIENT_DISPATCH_DELAY_MS) {
-          return { ok: false, message: "Delay must be less than 24 days." };
+        if (!Number.isFinite(delayMs)) {
+          return { ok: false, message: "Delay is too large." };
         }
         return { ok: true, delayMs, label: `${amount}${unit}` };
       };
@@ -2879,6 +2967,7 @@
           result: "success",
           http_status: response.status,
         });
+        void refreshState();
         return true;
       };
 
@@ -3106,6 +3195,186 @@
           return fallbackTitle;
         }
         return "Runtime activity";
+      };
+
+      const scheduledMessageID = (schedule) => trimmedString(schedule && schedule.id);
+
+      const scheduledMessageTargetLabel = (schedule) => {
+        return trimmedString(schedule && schedule.target_agent_display_name)
+          || trimmedString(schedule && schedule.target_agent_ref)
+          || trimmedString(schedule && schedule.target_agent_uri)
+          || trimmedString(schedule && schedule.target_agent_uuid)
+          || "Scheduled dispatch";
+      };
+
+      const scheduledMessageEmoji = (schedule) => {
+        return trimmedString(schedule && schedule.target_agent_emoji) || DEFAULT_EMOJI;
+      };
+
+      const formatScheduleDuration = (value) => {
+        if (typeof value === "string") {
+          return trimmedString(value);
+        }
+        if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+          return "";
+        }
+        const seconds = Math.round(value / 1000000000);
+        if (seconds <= 0) {
+          return "";
+        }
+        const units = [
+          ["d", 86400],
+          ["h", 3600],
+          ["m", 60],
+          ["s", 1],
+        ];
+        for (const [label, unitSeconds] of units) {
+          if (seconds >= unitSeconds && seconds % unitSeconds === 0) {
+            return `${seconds / unitSeconds}${label}`;
+          }
+        }
+        return `${seconds}s`;
+      };
+
+      const createScheduledDispatchRow = (schedule) => {
+        const scheduleID = scheduledMessageID(schedule);
+        const row = document.createElement("form");
+        row.method = "post";
+        row.action = "/schedules/delete";
+        row.className = "scheduled-dispatch-row";
+        row.setAttribute("data-scheduled-dispatch-row", "");
+        row.dataset.scheduledDispatchId = scheduleID;
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "schedule_id";
+        input.value = scheduleID;
+        row.appendChild(input);
+
+        const copy = document.createElement("div");
+        copy.className = "scheduled-dispatch-copy";
+        const title = document.createElement("h3");
+        const emoji = document.createElement("span");
+        emoji.className = "scheduled-dispatch-emoji";
+        emoji.textContent = scheduledMessageEmoji(schedule);
+        const target = document.createElement("span");
+        target.textContent = scheduledMessageTargetLabel(schedule);
+        title.appendChild(emoji);
+        title.appendChild(target);
+        copy.appendChild(title);
+
+        const details = document.createElement("p");
+        const detailParts = [];
+        const skillName = trimmedString(schedule && schedule.original_skill_name);
+        if (skillName !== "") {
+          detailParts.push(skillName);
+        }
+        const nextRun = formatRuntimeTimestamp(schedule && schedule.next_run_at);
+        if (nextRun !== "-") {
+          detailParts.push(`Next ${nextRun}`);
+        }
+        const frequency = formatScheduleDuration(schedule && schedule.frequency);
+        if (frequency !== "") {
+          detailParts.push(`Every ${frequency}`);
+        }
+        details.textContent = detailParts.join(" • ") || scheduleID;
+        copy.appendChild(details);
+        row.appendChild(copy);
+
+        const button = document.createElement("button");
+        button.type = "submit";
+        button.className = "prompt-action-button scheduled-dispatch-delete";
+        button.setAttribute("data-scheduled-dispatch-delete", "");
+        button.setAttribute("aria-label", scheduleID === "" ? "Delete scheduled dispatch" : `Delete scheduled dispatch ${scheduleID}`);
+        button.title = "Delete scheduled dispatch";
+        const icon = createLucideIconPlaceholder("trash-2", []);
+        if (icon) {
+          button.appendChild(icon);
+        }
+        const hiddenLabel = document.createElement("span");
+        hiddenLabel.className = "sr-only";
+        hiddenLabel.textContent = "Delete scheduled dispatch";
+        button.appendChild(hiddenLabel);
+        row.appendChild(button);
+        return row;
+      };
+
+      const renderScheduledMessages = (messages) => {
+        const nextSchedules = Array.isArray(messages)
+          ? messages.filter((schedule) => scheduledMessageID(schedule) !== "")
+          : [];
+        const hadSchedules = latestScheduledMessages.length > 0;
+        latestScheduledMessages = nextSchedules;
+        if (scheduledDispatchesCount instanceof HTMLElement) {
+          const count = nextSchedules.length;
+          scheduledDispatchesCount.textContent = `${count} active`;
+        }
+        if (!(scheduledDispatchesList instanceof HTMLElement) || !(scheduledDispatchesEmpty instanceof HTMLElement)) {
+          return;
+        }
+        scheduledDispatchesList.innerHTML = "";
+        nextSchedules.forEach((schedule) => {
+          scheduledDispatchesList.appendChild(createScheduledDispatchRow(schedule));
+        });
+        scheduledDispatchesList.hidden = nextSchedules.length === 0;
+        scheduledDispatchesEmpty.hidden = nextSchedules.length > 0;
+        if (nextSchedules.length === 0) {
+          setScheduledDispatchesVisible(false);
+        } else if (!hadSchedules) {
+          setScheduledDispatchesVisible(true);
+        }
+        hydrateLucideIcons(scheduledDispatchesList);
+      };
+
+      const deleteScheduledDispatch = async (scheduleID, button = null) => {
+        const id = trimmedString(scheduleID);
+        if (id === "") {
+          setScheduledDispatchStatus("Missing schedule id.", true);
+          return;
+        }
+        if (button instanceof HTMLButtonElement) {
+          button.disabled = true;
+        }
+        setScheduledDispatchStatus("Deleting scheduled dispatch...");
+        try {
+          const response = await fetch("/api/schedules/delete", {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ schedule_id: id }),
+          });
+          let body = null;
+          try {
+            body = await response.json();
+          } catch (_parseError) {
+            body = null;
+          }
+          if (!response.ok || !body || body.ok !== true) {
+            const message = trimmedString(body && body.error) || `schedule delete failed with ${response.status}`;
+            throw new Error(message);
+          }
+          renderScheduledMessages(latestScheduledMessages.filter((schedule) => scheduledMessageID(schedule) !== id));
+          setScheduledDispatchStatus("Scheduled dispatch deleted.");
+          trackAppEvent("scheduled_dispatch_delete", {
+            app_area: "schedules",
+            result: "success",
+            http_status: response.status,
+          });
+          void refreshState();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unable to delete scheduled dispatch.";
+          setScheduledDispatchStatus(message, true);
+          trackAppEvent("scheduled_dispatch_delete", {
+            app_area: "schedules",
+            result: "failure",
+          });
+        } finally {
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = false;
+          }
+        }
       };
 
       const renderActivityFeed = (tasks, events) => {
@@ -3446,9 +3715,13 @@
           const pendingTasks = Array.isArray(snapshot && snapshot.pending_tasks)
             ? snapshot.pending_tasks
             : [];
+          const scheduledMessages = Array.isArray(snapshot && snapshot.scheduled_messages)
+            ? snapshot.scheduled_messages
+            : [];
           const recentEvents = Array.isArray(snapshot && snapshot.recent_events)
             ? snapshot.recent_events
             : [];
+          renderScheduledMessages(scheduledMessages);
           renderActivityFeed(pendingTasks, recentEvents);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh hub status.";
@@ -3557,6 +3830,30 @@
           }
         });
       }
+      if (scheduledDispatchesToggle instanceof HTMLButtonElement) {
+        scheduledDispatchesToggle.addEventListener("click", () => {
+          const nextVisible = !(scheduledDispatchesField instanceof HTMLElement) || scheduledDispatchesField.hidden;
+          trackAppEvent("scheduled_dispatch_toggle", {
+            app_area: "schedules",
+            expanded: nextVisible,
+            scheduled_dispatch_count: latestScheduledMessages.length,
+          });
+          setScheduledDispatchesVisible(nextVisible);
+        });
+      }
+      if (scheduledDispatchesList instanceof HTMLElement) {
+        scheduledDispatchesList.addEventListener("submit", (event) => {
+          const form = event.target;
+          if (!(form instanceof HTMLFormElement) || !form.matches("[data-scheduled-dispatch-row]")) {
+            return;
+          }
+          event.preventDefault();
+          const formData = new FormData(form);
+          const scheduleID = trimmedString(formData.get("schedule_id")) || trimmedString(form.dataset.scheduledDispatchId);
+          const button = form.querySelector("[data-scheduled-dispatch-delete]");
+          void deleteScheduledDispatch(scheduleID, button instanceof HTMLButtonElement ? button : null);
+        });
+      }
       if (dispatchTaskClear instanceof HTMLButtonElement) {
         dispatchTaskClear.addEventListener("click", () => {
           trackAppEvent("dispatch_clear", dispatchAnalyticsParams());
@@ -3649,12 +3946,13 @@
           try {
             const formData = new FormData(manualDispatchForm);
             formData.set("target_agent_ref", dispatchState.targetRef);
-            formData.delete("client_delay");
+            if (clientDelay.delayMs > 0) {
+              formData.set("scheduled_at", clientDelay.label);
+            } else {
+              formData.delete("scheduled_at");
+            }
             if (dispatchFrequency.duration !== "") {
               formData.set("every", dispatchFrequency.duration);
-              if (clientDelay.delayMs > 0) {
-                formData.set("scheduled_at", clientDelay.label);
-              }
             } else {
               formData.delete("every");
             }
@@ -3666,28 +3964,6 @@
             if (skillPayloadInput instanceof HTMLTextAreaElement && skillPayloadInput.readOnly && trimmedString(skillPayloadInput.dataset.schemaText) !== "") {
               formData.delete("payload");
               formData.delete("payload_format");
-            }
-            if (clientDelay.delayMs > 0 && dispatchFrequency.duration === "") {
-              clientScheduledDispatchCount += 1;
-              const scheduledNumber = clientScheduledDispatchCount;
-              window.setTimeout(() => {
-                setDispatchSubmitStatus(`Sending delayed dispatch #${scheduledNumber}...`);
-                void submitDispatchFormData(formData, analyticsParams, { clearForm: false }).catch((error) => {
-                  const message = error instanceof Error ? error.message : "Unable to dispatch task.";
-                  setDispatchSubmitStatus(message, true);
-                  trackAppEvent("dispatch_result", {
-                    ...analyticsParams,
-                    result: "network_error",
-                  });
-                });
-              }, clientDelay.delayMs);
-              setDispatchSubmitStatus(`Dispatch #${scheduledNumber} scheduled in ${clientDelay.label}. Keep this page open.`);
-              setDispatchDelayFieldVisible(false, { clear: true });
-              trackAppEvent("dispatch_result", {
-                ...analyticsParams,
-                result: "scheduled_client",
-              });
-              return;
             }
             dispatchRequestInFlight = true;
             setDispatchSubmitBusy(true);
@@ -3717,6 +3993,7 @@
         });
       }
       initRuntimeEventCards();
+      renderScheduledMessages(parseInitialScheduledMessages());
       renderActivityFeed(parseInitialPendingTasks(), parseInitialRecentEvents());
       renderConnectedAgents(parseInitialConnectedAgents());
 

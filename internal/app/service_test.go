@@ -2031,6 +2031,107 @@ func TestProcessDueScheduledMessagesPublishesAndAdvancesRecurringSchedule(t *tes
 	}
 }
 
+func TestProcessDueScheduledMessagesUsesPersistedTargetAfterRestart(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	settings := DefaultSettings()
+	settings.DataDir = dir
+	store, err := NewStore(filepath.Join(dir, "config.json"), settings)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
+		t.Fatalf("create logs dir: %v", err)
+	}
+	err = store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ScheduledMessages = []ScheduledMessage{
+			{
+				ID:                     "schedule-1",
+				Status:                 ScheduledMessageStatusActive,
+				ParentRequestID:        "parent-req",
+				OriginalSkillName:      "run_task",
+				TargetAgentRef:         "worker-a",
+				TargetAgentDisplayName: "Worker A",
+				TargetAgentEmoji:       "🛠",
+				TargetAgentUUID:        "worker-uuid",
+				TargetAgentURI:         "molten://agent/worker-a",
+				CallerRequestID:        "parent-req",
+				NextRunAt:              time.Now().UTC().Add(-time.Minute),
+				DispatchPayload:        map[string]any{"input": "scheduled work"},
+				DispatchPayloadFormat:  "json",
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	reloadedStore, err := NewStore(filepath.Join(dir, "config.json"), settings)
+	if err != nil {
+		t.Fatalf("reload store: %v", err)
+	}
+	fake := &fakeHubClient{}
+	service := NewService(reloadedStore, fake)
+
+	if err := service.processDueScheduledMessages(context.Background()); err != nil {
+		t.Fatalf("process scheduled messages: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one scheduled publish, got %d", len(fake.publishCalls))
+	}
+	if got := fake.publishCalls[0].ToAgentUUID; got != "worker-uuid" {
+		t.Fatalf("unexpected publish target uuid: %#v", fake.publishCalls[0])
+	}
+	if got := fake.publishCalls[0].ToAgentURI; got != "molten://agent/worker-a" {
+		t.Fatalf("unexpected publish target uri: %#v", fake.publishCalls[0])
+	}
+	state := service.store.Snapshot()
+	if len(state.ScheduledMessages) != 0 {
+		t.Fatalf("expected one-time schedule to be removed, got %d", len(state.ScheduledMessages))
+	}
+	if len(state.PendingTasks) != 1 {
+		t.Fatalf("expected pending task for scheduled dispatch, got %d", len(state.PendingTasks))
+	}
+	if got := state.PendingTasks[0].TargetAgentDisplayName; got != "Worker A" {
+		t.Fatalf("expected stored target display name, got %#v", state.PendingTasks[0])
+	}
+}
+
+func TestDeleteScheduledMessageRemovesSchedule(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.ScheduledMessages = []ScheduledMessage{
+			{ID: "schedule-1", OriginalSkillName: "run_task", TargetAgentDisplayName: "Worker A", NextRunAt: time.Now().UTC().Add(time.Hour)},
+			{ID: "schedule-2", OriginalSkillName: "run_task", TargetAgentDisplayName: "Worker B", NextRunAt: time.Now().UTC().Add(time.Hour)},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.DeleteScheduledMessage("schedule-1"); err != nil {
+		t.Fatalf("delete schedule: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if len(state.ScheduledMessages) != 1 || state.ScheduledMessages[0].ID != "schedule-2" {
+		t.Fatalf("unexpected schedules after delete: %#v", state.ScheduledMessages)
+	}
+	if len(state.RecentEvents) == 0 || state.RecentEvents[0].Title != "Scheduled message deleted" {
+		t.Fatalf("expected delete event, got %#v", state.RecentEvents)
+	}
+	if err := service.DeleteScheduledMessage("missing-schedule"); err == nil {
+		t.Fatal("expected missing schedule error")
+	}
+}
+
 func TestHandleSkillRequestSchedulesRecurringMessageAndAcknowledgesCaller(t *testing.T) {
 	t.Parallel()
 

@@ -28,7 +28,9 @@ type stubService struct {
 	setFlashErr       error
 	refreshAgentsErr  error
 	dispatchErr       error
+	deleteScheduleErr error
 	dispatchTask      app.PendingTask
+	deletedScheduleID string
 	lastDispatchReq   app.DispatchRequest
 	lastProfile       app.AgentProfile
 	bindStateOnError  bool
@@ -114,6 +116,22 @@ func (s *stubService) RefreshConnectedAgents(_ context.Context) ([]app.Connected
 func (s *stubService) DispatchFromUI(_ context.Context, req app.DispatchRequest) (app.PendingTask, error) {
 	s.lastDispatchReq = req
 	return s.dispatchTask, s.dispatchErr
+}
+
+func (s *stubService) DeleteScheduledMessage(scheduleID string) error {
+	s.deletedScheduleID = strings.TrimSpace(scheduleID)
+	if s.deleteScheduleErr != nil {
+		return s.deleteScheduleErr
+	}
+	filtered := s.state.ScheduledMessages[:0]
+	for _, scheduled := range s.state.ScheduledMessages {
+		if scheduled.ID == s.deletedScheduleID {
+			continue
+		}
+		filtered = append(filtered, scheduled)
+	}
+	s.state.ScheduledMessages = filtered
+	return nil
 }
 
 func (s *stubService) UpdateSettings(mutator func(*app.Settings) error) error {
@@ -1005,8 +1023,8 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="skill-payload-format-input" type="hidden" name="payload_format"`) {
 		t.Fatalf("expected manual dispatch payload format field, body=%s", body)
 	}
-	if !strings.Contains(body, `id="dispatch-delay-input"`) || !strings.Contains(body, `name="client_delay"`) {
-		t.Fatalf("expected manual dispatch client-side delay field, body=%s", body)
+	if !strings.Contains(body, `id="dispatch-delay-input"`) || !strings.Contains(body, `name="scheduled_at"`) {
+		t.Fatalf("expected manual dispatch schedule delay field, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-frequency-input"`) || !strings.Contains(body, `name="every"`) {
 		t.Fatalf("expected manual dispatch recurring interval field, body=%s", body)
@@ -1032,8 +1050,14 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `setDispatchDelayFieldVisible(false, { clear: true });`) {
 		t.Fatalf("expected manual dispatch delay field to auto-hide after send or schedule, body=%s", body)
 	}
-	if !strings.Contains(body, `window.setTimeout(() => {`) || !strings.Contains(body, `result: "scheduled_client"`) {
-		t.Fatalf("expected manual dispatch client-side scheduled submit path, body=%s", body)
+	if !strings.Contains(body, `formData.set("scheduled_at", clientDelay.label);`) || strings.Contains(body, `result: "scheduled_client"`) {
+		t.Fatalf("expected manual dispatch delay to use server-side schedule path, body=%s", body)
+	}
+	if !strings.Contains(body, `id="scheduled-dispatches-toggle"`) || !strings.Contains(body, `id="scheduled-dispatches-list"`) {
+		t.Fatalf("expected scheduled dispatch dropdown hooks, body=%s", body)
+	}
+	if !strings.Contains(body, `fetch("/api/schedules/delete"`) || !strings.Contains(body, `data-scheduled-dispatch-delete`) {
+		t.Fatalf("expected scheduled dispatch delete controls, body=%s", body)
 	}
 	if !strings.Contains(body, `const detectSkillPayloadFormat = (value) => {`) {
 		t.Fatalf("expected automatic payload format detection helper in client script, body=%s", body)
@@ -1691,6 +1715,38 @@ func TestHandleDispatchAPIAcceptsJSONSchedulePayload(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteScheduleAPI(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			ScheduledMessages: []app.ScheduledMessage{
+				{ID: "schedule-1"},
+			},
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/schedules/delete", strings.NewReader(`{"schedule_id":"schedule-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := stub.deletedScheduleID; got != "schedule-1" {
+		t.Fatalf("deleted schedule id = %q, want schedule-1", got)
+	}
+	if len(stub.state.ScheduledMessages) != 0 {
+		t.Fatalf("expected schedule removed, got %#v", stub.state.ScheduledMessages)
+	}
+}
+
 func TestHandleDispatchAPIAcceptsMultipartFormData(t *testing.T) {
 	t.Parallel()
 
@@ -2174,6 +2230,55 @@ func TestHandleIndexRendersPendingTasksPanelInMainUI(t *testing.T) {
 	}
 }
 
+func TestHandleIndexRendersScheduledDispatchDropdown(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			ScheduledMessages: []app.ScheduledMessage{
+				{
+					ID:                     "schedule-1",
+					Status:                 app.ScheduledMessageStatusActive,
+					OriginalSkillName:      "run_task",
+					TargetAgentDisplayName: "Worker A",
+					TargetAgentEmoji:       "🛠",
+					NextRunAt:              time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC),
+					Frequency:              15 * time.Minute,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+	if !strings.Contains(body, `id="scheduled-dispatches-toggle"`) || !strings.Contains(body, `aria-expanded="true"`) {
+		t.Fatalf("expected open scheduled dispatch dropdown, body=%s", body)
+	}
+	if !strings.Contains(body, `data-scheduled-dispatch-id="schedule-1"`) || !strings.Contains(body, `name="schedule_id" value="schedule-1"`) {
+		t.Fatalf("expected scheduled dispatch row and delete form, body=%s", body)
+	}
+	if !strings.Contains(body, "Worker A") || !strings.Contains(body, "run_task") || !strings.Contains(body, "Every 15m0s") {
+		t.Fatalf("expected scheduled dispatch details, body=%s", body)
+	}
+}
+
 func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	t.Parallel()
 
@@ -2213,6 +2318,9 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `id="initial-pending-tasks-data" type="application/json"`) {
 		t.Fatalf("expected initial pending-tasks bootstrap payload script, body=%s", body)
 	}
+	if !strings.Contains(body, `id="initial-scheduled-messages-data" type="application/json"`) {
+		t.Fatalf("expected initial scheduled-messages bootstrap payload script, body=%s", body)
+	}
 	if !strings.Contains(body, `id="initial-recent-events-data" type="application/json"`) {
 		t.Fatalf("expected initial recent-events bootstrap payload script, body=%s", body)
 	}
@@ -2221,6 +2329,12 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	}
 	if !strings.Contains(body, `const recentEvents = Array.isArray(snapshot && snapshot.recent_events)`) {
 		t.Fatalf("expected status polling to extract recent events from /status payload, body=%s", body)
+	}
+	if !strings.Contains(body, `const scheduledMessages = Array.isArray(snapshot && snapshot.scheduled_messages)`) {
+		t.Fatalf("expected status polling to extract scheduled messages from /status payload, body=%s", body)
+	}
+	if !strings.Contains(body, `renderScheduledMessages(scheduledMessages);`) {
+		t.Fatalf("expected status polling to rerender scheduled dispatches, body=%s", body)
 	}
 	if !strings.Contains(body, `renderActivityFeed(pendingTasks, recentEvents);`) {
 		t.Fatalf("expected status polling to rerender consolidated activity feed, body=%s", body)

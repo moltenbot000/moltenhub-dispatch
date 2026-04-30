@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestResolveStorePathReturnsConfigJSONByDefault(t *testing.T) {
@@ -156,11 +157,12 @@ func TestNewStoreNormalizesLegacySessionAliases(t *testing.T) {
 	}
 }
 
-func TestStorePersistsOnlyHubURLAndAgentToken(t *testing.T) {
+func TestStorePersistsHubURLAgentTokenAndScheduledMessages(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
+	nextRunAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
 
 	store, err := NewStore(path, DefaultSettings())
 	if err != nil {
@@ -174,6 +176,22 @@ func TestStorePersistsOnlyHubURLAndAgentToken(t *testing.T) {
 		state.Session.APIBase = "https://runtime.eu.hub.molten.bot"
 		state.Connection.Error = "temporary disconnect"
 		state.PendingTasks = []PendingTask{{ID: "task-1"}}
+		state.ScheduledMessages = []ScheduledMessage{
+			{
+				ID:                     "schedule-1",
+				Status:                 ScheduledMessageStatusActive,
+				ParentRequestID:        "parent-req",
+				OriginalSkillName:      "run_task",
+				TargetAgentRef:         "worker-a",
+				TargetAgentUUID:        "worker-uuid",
+				TargetAgentURI:         "molten://agent/worker-a",
+				TargetAgentDisplayName: "Worker A",
+				NextRunAt:              nextRunAt,
+				Frequency:              15 * time.Minute,
+				DispatchPayload:        map[string]any{"input": "scheduled work"},
+				DispatchPayloadFormat:  "json",
+			},
+		}
 		state.RecentEvents = []RuntimeEvent{{Title: "Task failed"}}
 		return nil
 	}); err != nil {
@@ -212,6 +230,24 @@ func TestStorePersistsOnlyHubURLAndAgentToken(t *testing.T) {
 		t.Fatalf("did not expect bind_token alias in persisted config: %#v", session)
 	}
 
+	scheduledMessages, ok := persisted["scheduled_messages"].([]any)
+	if !ok || len(scheduledMessages) != 1 {
+		t.Fatalf("expected one persisted scheduled message: %#v", persisted["scheduled_messages"])
+	}
+	scheduled, ok := scheduledMessages[0].(map[string]any)
+	if !ok {
+		t.Fatalf("scheduled message payload missing: %#v", scheduledMessages[0])
+	}
+	if got, want := scheduled["id"], "schedule-1"; got != want {
+		t.Fatalf("scheduled id = %#v, want %q", got, want)
+	}
+	if got, want := scheduled["target_agent_uuid"], "worker-uuid"; got != want {
+		t.Fatalf("scheduled target_agent_uuid = %#v, want %q", got, want)
+	}
+	if payload, ok := scheduled["dispatch_payload"].(map[string]any); !ok || payload["input"] != "scheduled work" {
+		t.Fatalf("scheduled dispatch payload = %#v", scheduled["dispatch_payload"])
+	}
+
 	for _, forbidden := range []string{
 		"connection",
 		"pending_tasks",
@@ -229,6 +265,64 @@ func TestStorePersistsOnlyHubURLAndAgentToken(t *testing.T) {
 		if strings.Contains(string(raw), "\""+forbidden+"\"") {
 			t.Fatalf("did not expect %q in persisted config: %s", forbidden, string(raw))
 		}
+	}
+}
+
+func TestNewStoreLoadsPersistedScheduledMessages(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "settings": {
+    "hub_url": "https://na.hub.molten.bot"
+  },
+  "session": {
+    "agent_token": "agent-token"
+  },
+  "scheduled_messages": [
+    {
+      "id": "schedule-1",
+      "status": "active",
+      "parent_request_id": "parent-req",
+      "original_skill_name": "run_task",
+      "target_agent_ref": "worker-a",
+      "target_agent_uuid": "worker-uuid",
+      "target_agent_uri": "molten://agent/worker-a",
+      "next_run_at": "2030-01-02T03:04:05Z",
+      "frequency": 900000000000,
+      "dispatch_payload": {
+        "input": "scheduled work"
+      },
+      "dispatch_payload_format": "json"
+    }
+  ]
+}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	state := store.Snapshot()
+	if len(state.ScheduledMessages) != 1 {
+		t.Fatalf("scheduled messages = %d, want 1", len(state.ScheduledMessages))
+	}
+	scheduled := state.ScheduledMessages[0]
+	if got, want := scheduled.ID, "schedule-1"; got != want {
+		t.Fatalf("id = %q, want %q", got, want)
+	}
+	if got, want := scheduled.TargetAgentUUID, "worker-uuid"; got != want {
+		t.Fatalf("target_agent_uuid = %q, want %q", got, want)
+	}
+	if got, want := scheduled.Frequency, 15*time.Minute; got != want {
+		t.Fatalf("frequency = %v, want %v", got, want)
+	}
+	if got := scheduled.DispatchPayload["input"]; got != "scheduled work" {
+		t.Fatalf("dispatch payload = %#v", scheduled.DispatchPayload)
 	}
 }
 
