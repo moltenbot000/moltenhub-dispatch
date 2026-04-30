@@ -3763,20 +3763,23 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if strings.Contains(body, "PERSONAL · YOU") {
 		t.Fatalf("did not expect invalid personal-context badge in connected agent card, body=%s", body)
 	}
-	if !strings.Contains(body, `const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;`) {
-		t.Fatalf("expected 30s connected agents refresh interval constant, body=%s", body)
+	if !strings.Contains(body, `const AGENT_PROFILE_REFRESH_INTERVAL_MS = 60000;`) {
+		t.Fatalf("expected 60s agent profile refresh interval constant, body=%s", body)
+	}
+	if !strings.Contains(body, `const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 60000;`) {
+		t.Fatalf("expected 60s connected agents refresh interval constant, body=%s", body)
 	}
 	if !strings.Contains(body, `const shouldPollConnectedAgents = () => {`) {
 		t.Fatalf("expected connected agents polling guard helper, body=%s", body)
 	}
-	if !strings.Contains(body, `return bound && connectedAgentsCount === 0;`) {
-		t.Fatalf("expected polling guard to stop once agents exist, body=%s", body)
+	if !strings.Contains(body, `return bound;`) {
+		t.Fatalf("expected polling guard to continue while bound, body=%s", body)
 	}
 	if !strings.Contains(body, `const scheduleConnectedAgentsAutoRefresh = (delayMs = CONNECTED_AGENTS_REFRESH_INTERVAL_MS) => {`) {
 		t.Fatalf("expected connected agents auto-refresh scheduler, body=%s", body)
 	}
-	if !strings.Contains(body, `Auto-refresh paused while agents are connected.`) {
-		t.Fatalf("expected paused auto-refresh copy once agents exist, body=%s", body)
+	if strings.Contains(body, `Auto-refresh paused while agents are connected.`) {
+		t.Fatalf("did not expect polling to pause once agents exist, body=%s", body)
 	}
 	if !strings.Contains(body, `const syncConnectedAgentSelection = (options = {}) => {`) {
 		t.Fatalf("expected connected agent card selection sync helper, body=%s", body)
@@ -3853,8 +3856,17 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `setConnectedAgentsRefreshState(false, "");`) {
 		t.Fatalf("expected refresh completion to clear the status text, body=%s", body)
 	}
-	if !strings.Contains(body, "void refreshConnectedAgents(\"initial\");\n        if (shouldPollConnectedAgents()) {\n          startConnectedAgentsRefreshTicker();") {
-		t.Fatalf("expected bound-session bootstrapping to perform an initial API refresh before deciding whether to continue polling, body=%s", body)
+	if !strings.Contains(body, `const stableJSONStringify = (value) => {`) {
+		t.Fatalf("expected stable signature helper for unchanged profile and peer refreshes, body=%s", body)
+	}
+	if !strings.Contains(body, `if (nextSignature !== "" && nextSignature === latestConnectedAgentsSignature) {`) {
+		t.Fatalf("expected connected-agents refresh to skip unchanged UI updates, body=%s", body)
+	}
+	if !strings.Contains(body, `if (nextSignature !== "" && nextSignature !== latestAgentProfileSignature && !agentProfileChanged()) {`) {
+		t.Fatalf("expected profile refresh to skip unchanged or locally edited UI updates, body=%s", body)
+	}
+	if !strings.Contains(body, "void refreshAgentSettingsProfile(\"initial\");\n        startAgentProfileAutoRefresh();\n        void refreshConnectedAgents(\"initial\");\n        startConnectedAgentsRefreshTicker();") {
+		t.Fatalf("expected bound-session bootstrapping to poll profile and connected agents, body=%s", body)
 	}
 	if strings.Contains(body, "toLocaleTimeString") {
 		t.Fatalf("did not expect connected agents refresh timestamp formatting, body=%s", body)

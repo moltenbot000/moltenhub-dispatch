@@ -528,7 +528,8 @@
       const THEME_KEY = "hubui.theme";
       const THEME_MODES = ["light", "dark", "night", "pink"];
       const DEFAULT_THEME_MODE = "dark";
-      const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 30000;
+      const AGENT_PROFILE_REFRESH_INTERVAL_MS = 60000;
+      const CONNECTED_AGENTS_REFRESH_INTERVAL_MS = 60000;
       const CONNECTED_AGENTS_REFRESH_TICK_MS = 250;
       const LUCIDE_ICON_ATTR = "data-lucide";
       const ANALYTICS_APP_NAME = "moltenhub_dispatch";
@@ -735,6 +736,28 @@
 
       let closeActiveEmojiPicker = null;
       let agentProfileRefreshInFlight = false;
+      let agentProfileAutoRefreshTimer = 0;
+      let latestAgentProfileSignature = "";
+
+      const stableJSONStringify = (value) => {
+        const normalize = (entry) => {
+          if (Array.isArray(entry)) {
+            return entry.map(normalize);
+          }
+          if (entry && typeof entry === "object") {
+            return Object.keys(entry).sort().reduce((out, key) => {
+              out[key] = normalize(entry[key]);
+              return out;
+            }, {});
+          }
+          return entry;
+        };
+        try {
+          return JSON.stringify(normalize(value));
+        } catch (_error) {
+          return "";
+        }
+      };
 
       const syncHubEmojiPickerValue = (root, value) => {
         if (!(root instanceof HTMLElement)) {
@@ -763,6 +786,13 @@
         profileMarkdown: agentSettingsProfileMarkdown instanceof HTMLTextAreaElement ? trimmedString(agentSettingsProfileMarkdown.value) : "",
       });
 
+      const normalizedAgentProfileForSignature = (profile) => ({
+        handle: trimmedString(profile && profile.handle),
+        display_name: trimmedString(profile && profile.display_name),
+        emoji: trimmedString(profile && profile.emoji),
+        profile_markdown: trimmedString(profile && profile.profile_markdown),
+      });
+
       const agentProfileChanged = () => {
         if (!agentProfileBaseline) {
           return false;
@@ -783,6 +813,12 @@
 
       const resetAgentProfileBaseline = () => {
         agentProfileBaseline = agentProfileSnapshot();
+        latestAgentProfileSignature = stableJSONStringify({
+          handle: agentProfileBaseline.handle,
+          display_name: agentProfileBaseline.displayName,
+          emoji: agentProfileBaseline.emoji,
+          profile_markdown: agentProfileBaseline.profileMarkdown,
+        });
         syncAgentProfileSaveState();
       };
 
@@ -807,10 +843,11 @@
         resetAgentProfileBaseline();
       };
 
-      const refreshAgentSettingsProfile = async () => {
+      const refreshAgentSettingsProfile = async (_reason = "manual") => {
         if (agentProfileRefreshInFlight) {
           return;
         }
+        const reason = analyticsSlug(_reason, "manual");
         agentProfileRefreshInFlight = true;
         try {
           const response = await fetch("/api/profile", {
@@ -824,6 +861,16 @@
             body = null;
           }
           if (body && body.profile) {
+            const nextSignature = stableJSONStringify(normalizedAgentProfileForSignature(body.profile));
+            if (nextSignature !== "" && nextSignature !== latestAgentProfileSignature && !agentProfileChanged()) {
+              latestAgentProfileSignature = nextSignature;
+              applyAgentProfileToSettingsForm(body.profile);
+            }
+            if (nextSignature !== "" && latestAgentProfileSignature === "") {
+              latestAgentProfileSignature = nextSignature;
+            }
+          }
+          if (body && body.profile && reason === "manual" && latestAgentProfileSignature === "") {
             applyAgentProfileToSettingsForm(body.profile);
           }
           if (!response.ok) {
@@ -838,6 +885,15 @@
         } finally {
           agentProfileRefreshInFlight = false;
         }
+      };
+
+      const startAgentProfileAutoRefresh = () => {
+        if (!bound || agentProfileAutoRefreshTimer) {
+          return;
+        }
+        agentProfileAutoRefreshTimer = window.setInterval(() => {
+          void refreshAgentSettingsProfile("auto");
+        }, AGENT_PROFILE_REFRESH_INTERVAL_MS);
       };
 
       const setAgentSettingsModalOpen = (open, returnFocus = false) => {
@@ -1783,6 +1839,7 @@
         transport: String(hubConnItem && hubConnItem.dataset.transport || "").trim() || "offline",
       };
       let latestConnectedAgents = [];
+      let latestConnectedAgentsSignature = "";
       let latestPendingTasks = [];
       let latestRecentEvents = [];
       let activityFeedExpandedKeys = new Set();
@@ -2792,7 +2849,7 @@
       };
 
       const shouldPollConnectedAgents = () => {
-        return bound && connectedAgentsCount === 0;
+        return bound;
       };
 
       const runtimeTargetAgentLabel = (value) => {
@@ -3085,6 +3142,11 @@
 
       const renderConnectedAgents = (agents) => {
         const nextAgents = Array.isArray(agents) ? agents : [];
+        const nextSignature = stableJSONStringify(nextAgents);
+        if (nextSignature !== "" && nextSignature === latestConnectedAgentsSignature) {
+          return false;
+        }
+        latestConnectedAgentsSignature = nextSignature;
         latestConnectedAgents = nextAgents;
         connectedAgentsCount = nextAgents.length;
         if (shell instanceof HTMLElement) {
@@ -3109,11 +3171,10 @@
         hydrateLucideIcons(connectedAgentsList);
         if (shouldPollConnectedAgents()) {
           scheduleConnectedAgentsAutoRefresh();
-          return;
+          return true;
         }
-        if (bound) {
-          stopConnectedAgentsAutoRefresh("Auto-refresh paused while agents are connected.");
-        }
+        stopConnectedAgentsAutoRefresh("Bind to Molten Hub to refresh connected agents.");
+        return true;
               };
 
       const setConnectedAgentsRefreshProgress = (ratio) => {
@@ -3153,7 +3214,7 @@
 
       const scheduleConnectedAgentsAutoRefresh = (delayMs = CONNECTED_AGENTS_REFRESH_INTERVAL_MS) => {
         if (!shouldPollConnectedAgents()) {
-          stopConnectedAgentsAutoRefresh(bound ? "Auto-refresh paused while agents are connected." : "Bind to Molten Hub to refresh connected agents.");
+          stopConnectedAgentsAutoRefresh("Bind to Molten Hub to refresh connected agents.");
           return;
         }
         if (connectedAgentsAutoRefreshTimer) {
@@ -3187,13 +3248,16 @@
           return;
         }
         const reason = analyticsSlug(_reason, "manual");
+        const showRefreshUI = reason === "manual";
         connectedAgentsRefreshInFlight = true;
         if (connectedAgentsAutoRefreshTimer) {
           window.clearTimeout(connectedAgentsAutoRefreshTimer);
           connectedAgentsAutoRefreshTimer = 0;
         }
-        setConnectedAgentsRefreshProgress(1);
-        setConnectedAgentsRefreshState(true, "Refreshing connected agents...");
+        if (showRefreshUI) {
+          setConnectedAgentsRefreshProgress(1);
+          setConnectedAgentsRefreshState(true, "Refreshing connected agents...");
+        }
         try {
           const response = await fetch("/api/connected-agents", {
             method: "GET",
@@ -3210,7 +3274,10 @@
               ? body.connected_agents
               : null;
             if (staleAgents) {
-              renderConnectedAgents(staleAgents);
+              const staleSignature = stableJSONStringify(staleAgents);
+              if (staleSignature !== "" && staleSignature !== latestConnectedAgentsSignature) {
+                renderConnectedAgents(staleAgents);
+              }
             }
             const detail = trimmedString(body && body.detail)
               || trimmedString(body && body.error)
@@ -3221,7 +3288,9 @@
             ? body.connected_agents
             : [];
           renderConnectedAgents(agents);
-          setConnectedAgentsRefreshState(false, "");
+          if (showRefreshUI) {
+            setConnectedAgentsRefreshState(false, "");
+          }
           if (reason === "manual") {
             trackAppEvent("connected_agents_refresh_result", {
               app_area: "connected_agents",
@@ -3233,7 +3302,9 @@
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unable to refresh connected agents.";
-          setConnectedAgentsRefreshState(false, message, true);
+          if (showRefreshUI) {
+            setConnectedAgentsRefreshState(false, message, true);
+          }
           if (reason === "manual") {
             trackAppEvent("connected_agents_refresh_result", {
               app_area: "connected_agents",
@@ -3246,8 +3317,8 @@
           connectedAgentsRefreshInFlight = false;
           if (shouldPollConnectedAgents()) {
             scheduleConnectedAgentsAutoRefresh();
-          } else if (bound) {
-            stopConnectedAgentsAutoRefresh("Auto-refresh paused while agents are connected.");
+          } else {
+            stopConnectedAgentsAutoRefresh("Bind to Molten Hub to refresh connected agents.");
           }
         }
       };
@@ -3582,10 +3653,10 @@
       if (!bound) {
         setConnectedAgentsRefreshState(false, "Bind to Molten Hub to refresh connected agents.");
       } else {
+        void refreshAgentSettingsProfile("initial");
+        startAgentProfileAutoRefresh();
         void refreshConnectedAgents("initial");
-        if (shouldPollConnectedAgents()) {
-          startConnectedAgentsRefreshTicker();
-        }
+        startConnectedAgentsRefreshTicker();
       }
     })();
   </script>
