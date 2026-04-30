@@ -161,32 +161,41 @@
                 <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
               </label>
               <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
-              <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
-                <label class="manual-dispatch-delay-item">
-                  <span class="prompt-label">Delay</span>
-                  <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
-                  <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
-                </label>
-                <label class="manual-dispatch-delay-item">
-                  <span class="prompt-label">Repeat</span>
-                  <input id="dispatch-frequency-input" class="prompt-control" type="text" name="every" placeholder="every 30m, every 2h, every 1d" autocomplete="off" aria-describedby="dispatch-delay-hint">
-                </label>
-              </div>
-              <div class="prompt-actions manual-dispatch-actions">
-                <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
-                <div class="prompt-actions-end">
+              <section class="manual-dispatch-schedule-panel" aria-labelledby="dispatch-schedule-label">
+                <div class="manual-dispatch-schedule-header">
+                  <div class="manual-dispatch-schedule-copy">
+                    <span id="dispatch-schedule-label" class="prompt-label">Scheduling</span>
+                    <span class="manual-dispatch-delay-hint">Send later or repeat this dispatch.</span>
+                  </div>
                   <button
                     id="dispatch-delay-toggle"
                     type="button"
-                    class="prompt-action-button prompt-action-delay"
-                    aria-label="Set delay"
+                    class="prompt-action-button prompt-action-delay manual-dispatch-schedule-toggle"
+                    aria-label="Show scheduling"
                     aria-expanded="false"
                     aria-controls="dispatch-delay-field"
-                    title="Set delay"
+                    title="Show scheduling"
                   >
-                    <i data-lucide="clock-3" class="dispatch-task-delay-icon" aria-hidden="true"></i>
-                    <span class="sr-only">Set delay</span>
+                    <i data-lucide="chevron-down" class="dispatch-task-delay-icon manual-dispatch-schedule-toggle-show" aria-hidden="true"></i>
+                    <i data-lucide="chevron-up" class="dispatch-task-delay-icon manual-dispatch-schedule-toggle-hide" aria-hidden="true"></i>
+                    <span class="sr-only">Show scheduling</span>
                   </button>
+                </div>
+                <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
+                  <label class="manual-dispatch-delay-item">
+                    <span class="prompt-label">Delay</span>
+                    <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
+                    <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
+                  </label>
+                  <label class="manual-dispatch-delay-item">
+                    <span class="prompt-label">Repeat</span>
+                    <input id="dispatch-frequency-input" class="prompt-control" type="text" name="every" placeholder="every 30m, every 2h, every 1d" autocomplete="off" aria-describedby="dispatch-delay-hint">
+                  </label>
+                </div>
+              </section>
+              <div class="prompt-actions manual-dispatch-actions">
+                <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
+                <div class="prompt-actions-end">
                   <button
                     id="dispatch-task-clear"
                     type="button"
@@ -1945,6 +1954,12 @@
         }
         if (dispatchDelayToggle instanceof HTMLButtonElement) {
           dispatchDelayToggle.setAttribute("aria-expanded", visible ? "true" : "false");
+          dispatchDelayToggle.setAttribute("aria-label", visible ? "Hide scheduling" : "Show scheduling");
+          dispatchDelayToggle.setAttribute("title", visible ? "Hide scheduling" : "Show scheduling");
+          const hiddenLabel = dispatchDelayToggle.querySelector(".sr-only");
+          if (hiddenLabel instanceof HTMLElement) {
+            hiddenLabel.textContent = visible ? "Hide scheduling" : "Show scheduling";
+          }
         }
         if (options.clear === true && dispatchDelayInput instanceof HTMLInputElement) {
           dispatchDelayInput.value = "";

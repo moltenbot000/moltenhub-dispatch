@@ -3712,13 +3712,6 @@ p,
   color: var(--surface-danger);
 }
 
-.manual-dispatch-delay-field {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  max-width: 38rem;
-  column-gap: 12px;
-}
-
 .manual-dispatch-delay-item {
   display: grid;
   gap: 6px;
@@ -3730,6 +3723,53 @@ p,
   color: var(--meta);
   font-size: 0.79rem;
   line-height: 1.4;
+}
+
+.manual-dispatch-schedule-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-control-bg);
+}
+
+.manual-dispatch-schedule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.manual-dispatch-schedule-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.manual-dispatch-schedule-toggle {
+  width: 34px;
+  min-width: 34px;
+  min-inline-size: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.manual-dispatch-schedule-toggle .manual-dispatch-schedule-toggle-hide,
+.manual-dispatch-schedule-toggle[aria-expanded="true"] .manual-dispatch-schedule-toggle-show {
+  display: none;
+}
+
+.manual-dispatch-schedule-toggle[aria-expanded="true"] .manual-dispatch-schedule-toggle-hide {
+  display: block;
+}
+
+.manual-dispatch-delay-field {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  max-width: 38rem;
+  column-gap: 12px;
 }
 
 label {

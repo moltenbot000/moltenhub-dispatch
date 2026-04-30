@@ -985,8 +985,14 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden`) {
 		t.Fatalf("expected manual dispatch delay field to be hidden by default, body=%s", body)
 	}
+	if !strings.Contains(body, `class="manual-dispatch-schedule-panel"`) || !strings.Contains(body, `id="dispatch-schedule-label" class="prompt-label">Scheduling</span>`) {
+		t.Fatalf("expected manual dispatch schedule controls to render inside a schedule panel, body=%s", body)
+	}
 	if !strings.Contains(body, `id="dispatch-delay-toggle"`) || !strings.Contains(body, `aria-controls="dispatch-delay-field"`) {
 		t.Fatalf("expected manual dispatch delay toggle control, body=%s", body)
+	}
+	if !strings.Contains(body, `aria-label="Show scheduling"`) || !strings.Contains(body, `data-lucide="chevron-down"`) || !strings.Contains(body, `data-lucide="chevron-up"`) {
+		t.Fatalf("expected schedule toggle to render show and hide icons, body=%s", body)
 	}
 	if !strings.Contains(body, `const parseClientDispatchDelay = (value) => {`) {
 		t.Fatalf("expected manual dispatch client-side delay parser, body=%s", body)
