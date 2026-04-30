@@ -180,6 +180,28 @@ func skillMetadata(skills ...app.Skill) []map[string]any {
 	return out
 }
 
+func decodeJSONMap(t *testing.T, data []byte) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("decode JSON object: %v\nbody=%s", err, string(data))
+	}
+	return payload
+}
+
+func readStringPath(root map[string]any, path ...string) string {
+	var current any = root
+	for _, key := range path {
+		mapped, ok := current.(map[string]any)
+		if !ok {
+			return ""
+		}
+		current = mapped[key]
+	}
+	value, _ := current.(string)
+	return value
+}
+
 func TestHandleBindRedirectsOnFailure(t *testing.T) {
 	t.Parallel()
 
@@ -1271,6 +1293,292 @@ func TestHandleDispatchAPIAcceptsMinimalTargetOnlyForm(t *testing.T) {
 	}
 	if got := stub.lastDispatchReq.PayloadFormat; got != "" {
 		t.Fatalf("expected empty payload format for target-only dispatch, got %#v", stub.lastDispatchReq)
+	}
+}
+
+func TestA2AAgentCardAdvertisesA2AGoCompatibleInterfaces(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		state: app.AppState{
+			Session: app.Session{
+				DisplayName: "Dispatch Agent",
+			},
+			ConnectedAgents: []app.ConnectedAgent{
+				testConnectedAgent("worker-a", "Worker A", "worker-uuid", "molten://agent/worker-a", app.Skill{Name: "run_task", Description: "Run a task."}),
+			},
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/agent-card.json", nil)
+	req.Host = "dispatch.example"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	card := decodeJSONMap(t, rec.Body.Bytes())
+	if got := card["name"]; got != "Dispatch Agent" {
+		t.Fatalf("unexpected card name: %#v", card)
+	}
+	interfaces, _ := card["supportedInterfaces"].([]any)
+	if len(interfaces) != 2 {
+		t.Fatalf("expected JSONRPC and HTTP+JSON interfaces, got %#v", card["supportedInterfaces"])
+	}
+	bindings := map[string]string{}
+	for _, raw := range interfaces {
+		item, _ := raw.(map[string]any)
+		binding, _ := item["protocolBinding"].(string)
+		bindings[binding], _ = item["url"].(string)
+		if got := item["protocolVersion"]; got != a2aProtocolVersion {
+			t.Fatalf("protocolVersion = %v, want %q", got, a2aProtocolVersion)
+		}
+	}
+	if bindings["JSONRPC"] != "https://dispatch.example/v1/a2a" {
+		t.Fatalf("unexpected JSONRPC interface URL: %#v", bindings)
+	}
+	if bindings["HTTP+JSON"] != "https://dispatch.example/v1/a2a" {
+		t.Fatalf("unexpected HTTP+JSON interface URL: %#v", bindings)
+	}
+	skills, _ := card["skills"].([]any)
+	if len(skills) < 2 {
+		t.Fatalf("expected dispatch and connected-agent skills, got %#v", card["skills"])
+	}
+}
+
+func TestA2AJSONRPCSendMessageDispatchesToService(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{
+			ID:                    "task-1",
+			Status:                app.PendingTaskStatusInQueue,
+			ParentRequestID:       "a2a-msg-1",
+			ChildRequestID:        "dispatch-1",
+			OriginalSkillName:     "run_task",
+			CreatedAt:             time.Now().UTC(),
+			DispatchPayload:       map[string]any{"input": testDispatchPrompt},
+			DispatchPayloadFormat: "markdown",
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/a2a", strings.NewReader(`{
+		"jsonrpc": "2.0",
+		"id": "rpc-send-1",
+		"method": "SendMessage",
+		"params": {
+			"message": {
+				"messageId": "a2a-msg-1",
+				"role": "ROLE_USER",
+				"metadata": {
+					"target_agent_ref": "worker-a",
+					"skill_name": "run_task"
+				},
+				"parts": [{"text": "Review the Hub API integration behavior."}]
+			}
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeJSONMap(t, rec.Body.Bytes())
+	if body["error"] != nil {
+		t.Fatalf("expected JSON-RPC success, got %#v", body)
+	}
+	result, _ := body["result"].(map[string]any)
+	task, _ := result["task"].(map[string]any)
+	if task["id"] != "task-1" {
+		t.Fatalf("expected A2A task response, got %#v", body)
+	}
+	if got := readStringPath(task, "status", "state"); got != "TASK_STATE_SUBMITTED" {
+		t.Fatalf("unexpected task state: %q task=%#v", got, task)
+	}
+	if got := stub.lastDispatchReq.RequestID; got != "a2a-msg-1" {
+		t.Fatalf("unexpected request id: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.TargetAgentRef; got != "worker-a" {
+		t.Fatalf("unexpected target agent ref: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.SkillName; got != "run_task" {
+		t.Fatalf("unexpected skill name: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "markdown" {
+		t.Fatalf("unexpected payload format: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.Payload; got != testDispatchPrompt {
+		t.Fatalf("unexpected payload: %#v", stub.lastDispatchReq.Payload)
+	}
+}
+
+func TestA2ARESTSendMessageDispatchesStructuredDataPart(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchTask: app.PendingTask{
+			ID:                    "task-1",
+			Status:                app.PendingTaskStatusInQueue,
+			ParentRequestID:       "a2a-msg-1",
+			OriginalSkillName:     "run_task",
+			CreatedAt:             time.Now().UTC(),
+			DispatchPayload:       map[string]any{"input": "structured work"},
+			DispatchPayloadFormat: "json",
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/a2a/message:send", strings.NewReader(`{
+		"message": {
+			"messageId": "a2a-msg-1",
+			"role": "ROLE_USER",
+			"parts": [{
+				"data": {
+					"agent": "worker-a",
+					"skill_name": "run_task",
+					"payload": {"input": "structured work"},
+					"payload_format": "json"
+				}
+			}]
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeJSONMap(t, rec.Body.Bytes())
+	if _, ok := body["task"].(map[string]any); !ok {
+		t.Fatalf("expected REST A2A task wrapper, got %#v", body)
+	}
+	if got := stub.lastDispatchReq.TargetAgentRef; got != "worker-a" {
+		t.Fatalf("unexpected target agent ref: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.SkillName; got != "run_task" {
+		t.Fatalf("unexpected skill name: %#v", stub.lastDispatchReq)
+	}
+	if got := stub.lastDispatchReq.PayloadFormat; got != "json" {
+		t.Fatalf("unexpected payload format: %#v", stub.lastDispatchReq)
+	}
+	payload, ok := stub.lastDispatchReq.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected structured payload, got %T", stub.lastDispatchReq.Payload)
+	}
+	if got := payload["input"]; got != "structured work" {
+		t.Fatalf("unexpected structured payload: %#v", payload)
+	}
+}
+
+func TestA2AGetTaskReadsPendingTask(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		state: app.AppState{
+			PendingTasks: []app.PendingTask{
+				{
+					ID:                     "task-1",
+					Status:                 app.PendingTaskStatusInQueue,
+					ParentRequestID:        "a2a-msg-1",
+					ChildRequestID:         "dispatch-1",
+					OriginalSkillName:      "run_task",
+					TargetAgentDisplayName: "Worker A",
+					TargetAgentUUID:        "worker-uuid",
+					CreatedAt:              time.Now().UTC(),
+					DispatchPayload:        map[string]any{"input": testDispatchPrompt},
+					DispatchPayloadFormat:  "markdown",
+				},
+			},
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/a2a/tasks/task-1", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	task := decodeJSONMap(t, rec.Body.Bytes())
+	if task["id"] != "task-1" {
+		t.Fatalf("unexpected task payload: %#v", task)
+	}
+	if got := readStringPath(task, "status", "state"); got != "TASK_STATE_SUBMITTED" {
+		t.Fatalf("unexpected task state: %q task=%#v", got, task)
+	}
+	metadata, _ := task["metadata"].(map[string]any)
+	dispatchMetadata, _ := metadata["moltenhub_dispatch"].(map[string]any)
+	if dispatchMetadata["target_agent_uuid"] != "worker-uuid" {
+		t.Fatalf("expected dispatch metadata, got %#v", metadata)
+	}
+}
+
+func TestA2AJSONRPCDispatchFailureIncludesFailureDetails(t *testing.T) {
+	t.Parallel()
+
+	stub := &stubService{
+		dispatchErr: errors.New(`no connected agent matched "worker-a"`),
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/a2a", strings.NewReader(`{
+		"jsonrpc": "2.0",
+		"id": "rpc-send-failure",
+		"method": "SendMessage",
+		"params": {
+			"message": {
+				"messageId": "a2a-msg-1",
+				"role": "ROLE_USER",
+				"metadata": {"target_agent_ref": "worker-a"},
+				"parts": [{"text": "Review the Hub API integration behavior."}]
+			}
+		}
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected JSON-RPC 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeJSONMap(t, rec.Body.Bytes())
+	errObj, _ := body["error"].(map[string]any)
+	if errObj["code"] != float64(a2aCodeInvalidParams) {
+		t.Fatalf("expected invalid params error, got %#v", body)
+	}
+	data, _ := errObj["data"].([]any)
+	if len(data) < 2 {
+		t.Fatalf("expected typed error details, got %#v", errObj)
+	}
+	structDetail, _ := data[1].(map[string]any)
+	if structDetail["Failure:"] != "dispatch request failed" {
+		t.Fatalf("expected Failure: detail, got %#v", structDetail)
+	}
+	if !strings.Contains(structDetail["Error details:"].(string), "no connected agent matched") {
+		t.Fatalf("expected Error details: detail, got %#v", structDetail)
 	}
 }
 

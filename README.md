@@ -24,6 +24,36 @@ The bundled UI provides:
 - **Manual skill dispatch**
 - **Live view** of pending dispatches and recent runtime events
 
+## A2A Interface
+
+The dispatcher exposes an A2A-compatible adapter for non-streaming clients:
+
+- `GET /.well-known/agent-card.json`
+- `GET /v1/a2a` for the generic Agent Card
+- `POST /v1/a2a` for JSON-RPC `SendMessage`, `GetTask`, `ListTasks`, and `GetExtendedAgentCard`
+- `POST /v1/a2a/message:send` for HTTP+JSON `SendMessage`
+- `GET /v1/a2a/tasks` and `GET /v1/a2a/tasks/{task_id}` for dispatch task status
+
+`SendMessage` accepts the dispatch target and skill through request metadata, message metadata, or a structured data part:
+
+```json
+{
+  "message": {
+    "messageId": "a2a-msg-1",
+    "role": "ROLE_USER",
+    "metadata": {
+      "target_agent_ref": "worker-a",
+      "skill_name": "run_task"
+    },
+    "parts": [
+      {
+        "text": "Review the latest logs"
+      }
+    ]
+  }
+}
+```
+
 ## Dispatch Scheduling
 
 Dispatch requests can be sent immediately, scheduled for later, or repeated on an interval. Use `agent` (or `target_agent_ref`), `skill_name`, `payload`, and optional `schedule` fields:

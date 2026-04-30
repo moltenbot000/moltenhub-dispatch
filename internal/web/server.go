@@ -95,6 +95,9 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) routes() {
+	s.mux.HandleFunc("/.well-known/agent-card.json", s.handleA2AWellKnownAgentCard)
+	s.mux.HandleFunc("/v1/a2a", s.handleA2ARoot)
+	s.mux.HandleFunc("/v1/a2a/", s.handleA2ASubroutes)
 	s.mux.HandleFunc("/", s.handleIndex)
 	s.mux.HandleFunc("/status", s.handleStatus)
 	s.mux.HandleFunc("/api/onboarding", s.handleOnboarding)
