@@ -1930,6 +1930,43 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	}
 }
 
+func TestDispatchFromUIPassesA2APreferenceToHubPublish(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{
+			testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"}),
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	task, err := service.DispatchFromUI(context.Background(), DispatchRequest{
+		RequestID:      "a2a-msg-1",
+		TargetAgentRef: "worker-a",
+		SkillName:      "run_task",
+		Payload:        testDispatchPrompt,
+		PayloadFormat:  "markdown",
+		PreferA2A:      true,
+	})
+	if err != nil {
+		t.Fatalf("dispatch from ui: %v", err)
+	}
+	if !task.PreferA2A {
+		t.Fatal("expected task to retain A2A preference")
+	}
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one publish call, got %d", len(fake.publishCalls))
+	}
+	if !fake.publishCalls[0].PreferA2A {
+		t.Fatal("expected hub publish to prefer A2A")
+	}
+}
+
 func TestDispatchFromUISchedulesMessageWithoutImmediatePublish(t *testing.T) {
 	t.Parallel()
 

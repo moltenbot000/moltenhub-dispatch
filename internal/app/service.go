@@ -1356,6 +1356,7 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 		ExpiresAt:              now.Add(timeout),
 		DispatchPayload:        payload,
 		DispatchPayloadFormat:  payloadFormat,
+		PreferA2A:              req.PreferA2A,
 	}
 
 	message := newSkillRequestMessage(
@@ -1372,6 +1373,7 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 		ToAgentURI:  target.URI,
 		ClientMsgID: childRequestID,
 		Message:     message,
+		PreferA2A:   req.PreferA2A,
 	}
 }
 
@@ -1407,6 +1409,7 @@ func (s *Service) scheduleDispatch(state AppState, target ConnectedAgent, req Di
 		DispatchPayload:        payload,
 		DispatchPayloadFormat:  payloadFormat,
 		Timeout:                req.Timeout,
+		PreferA2A:              req.PreferA2A,
 	}
 	if err := s.store.Update(func(current *AppState) error {
 		current.ScheduledMessages = append(current.ScheduledMessages, scheduled)
@@ -1445,6 +1448,7 @@ func (s *Service) dispatchScheduledMessage(ctx context.Context, state AppState, 
 		Payload:        scheduled.DispatchPayload,
 		PayloadFormat:  scheduled.DispatchPayloadFormat,
 		Timeout:        scheduled.Timeout,
+		PreferA2A:      scheduled.PreferA2A,
 	}
 	target, err := scheduledDispatchTarget(state, scheduled)
 	if err != nil {
@@ -1537,6 +1541,7 @@ func pendingFromScheduledMessage(scheduled ScheduledMessage, state AppState) Pen
 		CreatedAt:              time.Now().UTC(),
 		DispatchPayload:        scheduled.DispatchPayload,
 		DispatchPayloadFormat:  scheduled.DispatchPayloadFormat,
+		PreferA2A:              scheduled.PreferA2A,
 	}
 }
 

@@ -94,6 +94,7 @@ type PublishRequest struct {
 	ToAgentURI  string          `json:"to_agent_uri,omitempty"`
 	ClientMsgID string          `json:"client_msg_id,omitempty"`
 	Message     OpenClawMessage `json:"message"`
+	PreferA2A   bool            `json:"-"`
 }
 
 type PublishResponse struct {
@@ -234,6 +235,19 @@ func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]
 }
 
 func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+	if req.PreferA2A {
+		out, a2aErr := c.publishOpenClawA2A(ctx, token, req)
+		if a2aErr == nil {
+			return out, nil
+		}
+		var fallbackOut PublishResponse
+		err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &fallbackOut)
+		if err != nil {
+			return PublishResponse{}, errors.Join(fmt.Errorf("a2a publish: %w", a2aErr), err)
+		}
+		return fallbackOut, nil
+	}
+
 	var out PublishResponse
 	err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &out)
 	return out, err
