@@ -271,6 +271,7 @@
                   {{if .Skill}}<p class="runtime-event-detail-row"><i data-lucide="sparkles" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Skill:</strong> {{.Skill}}</span></p>{{end}}
                   {{if .TargetAgent}}<p class="runtime-event-detail-row"><i data-lucide="bot" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Target agent:</strong> {{.TargetAgent}}</span></p>{{end}}
                   {{if .TaskID}}<p class="runtime-event-detail-row"><i data-lucide="clipboard-list" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Task:</strong> {{.TaskID}}</span></p>{{end}}
+                  {{if .HubTaskID}}<p class="runtime-event-detail-row"><i data-lucide="network" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Hub task:</strong> {{.HubTaskID}}</span></p>{{end}}
                   {{if .ChildRequestID}}<p class="runtime-event-detail-row"><i data-lucide="git-branch" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Child request:</strong> {{.ChildRequestID}}</span></p>{{end}}
                   {{if .Repo}}<p class="runtime-event-detail-row"><i data-lucide="git-fork" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Repo:</strong> {{.Repo}}</span></p>{{end}}
                   {{if .LogPath}}<p class="runtime-event-detail-row"><i data-lucide="file-text" class="runtime-event-detail-icon" aria-hidden="true"></i><span><strong>Log:</strong> {{.LogPath}}</span></p>{{end}}
@@ -2982,6 +2983,7 @@
             skill: skillName,
             targetAgent: target,
             taskID: trimmedString(task && task.id),
+            hubTaskID: trimmedString(task && task.hub_task_id),
             childRequestID: trimmedString(task && task.child_request_id),
             repo: trimmedString(task && task.repo),
             logPath: trimmedString(task && task.log_path),
@@ -3149,6 +3151,7 @@
               appendRuntimeRow(body, "Skill", item.skill);
               appendRuntimeRow(body, "Target agent", item.targetAgent);
               appendRuntimeRow(body, "Task", item.taskID);
+              appendRuntimeRow(body, "Hub task", item.hubTaskID);
               appendRuntimeRow(body, "Child request", item.childRequestID);
               appendRuntimeRow(body, "Repo", item.repo);
               appendRuntimeRow(body, "Log", item.logPath);

@@ -99,6 +99,7 @@ type FlashMessage struct {
 type PendingTask struct {
 	ID                     string         `json:"id"`
 	Status                 string         `json:"status"`
+	HubTaskID              string         `json:"hub_task_id,omitempty"`
 	ParentRequestID        string         `json:"parent_request_id"`
 	ChildRequestID         string         `json:"child_request_id"`
 	OriginalSkillName      string         `json:"original_skill_name"`

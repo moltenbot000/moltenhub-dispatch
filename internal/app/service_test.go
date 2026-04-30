@@ -1893,6 +1893,9 @@ func TestDispatchFromUIInfersDefaultSkillForTargetAgent(t *testing.T) {
 	if got := task.Status; got != PendingTaskStatusInQueue {
 		t.Fatalf("expected task status %q, got %#v", PendingTaskStatusInQueue, task)
 	}
+	if got := task.HubTaskID; got != "message-1" {
+		t.Fatalf("expected hub task id message-1, got %#v", task)
+	}
 	if got := task.TargetAgentDisplayName; got != "Worker A" {
 		t.Fatalf("expected target display name, got %#v", task)
 	}
@@ -2228,6 +2231,9 @@ func TestHandleSkillRequestAcceptsTargetAgentRefViaInput(t *testing.T) {
 	}
 	if got := state.PendingTasks[0].Status; got != PendingTaskStatusInQueue {
 		t.Fatalf("unexpected pending task status: %#v", state.PendingTasks[0])
+	}
+	if got := state.PendingTasks[0].HubTaskID; got != "message-1" {
+		t.Fatalf("unexpected pending task hub task id: %#v", state.PendingTasks[0])
 	}
 	if got := state.PendingTasks[0].TargetAgentDisplayName; got != "Worker A" {
 		t.Fatalf("unexpected pending task display name: %#v", state.PendingTasks[0])
