@@ -5559,6 +5559,7 @@ legend {
   gap: 4px;
 }
 
+#dispatch-delay-toggle,
 #dispatch-task-clear {
   width: 38px;
   min-width: 38px;
@@ -5568,6 +5569,7 @@ legend {
   flex: 0 0 auto;
 }
 
+#dispatch-delay-toggle .dispatch-task-delay-icon,
 #dispatch-task-clear .dispatch-task-clear-icon {
   width: 14px;
   height: 14px;

@@ -979,8 +979,17 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-delay-input"`) || !strings.Contains(body, `name="client_delay"`) {
 		t.Fatalf("expected manual dispatch client-side delay field, body=%s", body)
 	}
+	if !strings.Contains(body, `id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden`) {
+		t.Fatalf("expected manual dispatch delay field to be hidden by default, body=%s", body)
+	}
+	if !strings.Contains(body, `id="dispatch-delay-toggle"`) || !strings.Contains(body, `aria-controls="dispatch-delay-field"`) {
+		t.Fatalf("expected manual dispatch delay toggle control, body=%s", body)
+	}
 	if !strings.Contains(body, `const parseClientDispatchDelay = (value) => {`) {
 		t.Fatalf("expected manual dispatch client-side delay parser, body=%s", body)
+	}
+	if !strings.Contains(body, `setDispatchDelayFieldVisible(false, { clear: true });`) {
+		t.Fatalf("expected manual dispatch delay field to auto-hide after send or schedule, body=%s", body)
 	}
 	if !strings.Contains(body, `window.setTimeout(() => {`) || !strings.Contains(body, `result: "scheduled_client"`) {
 		t.Fatalf("expected manual dispatch client-side scheduled submit path, body=%s", body)
@@ -1030,11 +1039,17 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `const dispatchTaskClear = document.getElementById("dispatch-task-clear");`) {
 		t.Fatalf("expected clear button hook in client script, body=%s", body)
 	}
+	if !strings.Contains(body, `const dispatchDelayToggle = document.getElementById("dispatch-delay-toggle");`) {
+		t.Fatalf("expected delay toggle hook in client script, body=%s", body)
+	}
 	if strings.Contains(body, `dispatchOverview`) || strings.Contains(body, `DISPATCH_OVERVIEW_STORAGE_KEY`) || strings.Contains(body, `dismissDispatchOverview`) {
 		t.Fatalf("did not expect removed dispatch overview client hooks, body=%s", body)
 	}
 	if !strings.Contains(body, `dispatchTaskClear.disabled = busy;`) {
 		t.Fatalf("expected dispatch busy state to disable the clear action, body=%s", body)
+	}
+	if !strings.Contains(body, `dispatchDelayToggle.disabled = busy;`) {
+		t.Fatalf("expected dispatch busy state to disable the delay action, body=%s", body)
 	}
 	if !strings.Contains(body, `const dispatchLabel = dispatchTaskSubmit.querySelector("[data-dispatch-submit-label]");`) {
 		t.Fatalf("expected dispatch submit busy helper to target the inline label span first, body=%s", body)

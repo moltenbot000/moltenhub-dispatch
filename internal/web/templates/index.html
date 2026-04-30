@@ -161,7 +161,7 @@
                 <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
               </label>
               <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
-              <label class="prompt-field manual-dispatch-delay-field">
+              <label id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
                 <span class="prompt-label">Delay</span>
                 <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
                 <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes or hours. Delayed sends run in this browser.</span>
@@ -169,6 +169,18 @@
               <div class="prompt-actions manual-dispatch-actions">
                 <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
                 <div class="prompt-actions-end">
+                  <button
+                    id="dispatch-delay-toggle"
+                    type="button"
+                    class="prompt-action-button prompt-action-delay"
+                    aria-label="Set delay"
+                    aria-expanded="false"
+                    aria-controls="dispatch-delay-field"
+                    title="Set delay"
+                  >
+                    <i data-lucide="clock-3" class="dispatch-task-delay-icon" aria-hidden="true"></i>
+                    <span class="sr-only">Set delay</span>
+                  </button>
                   <button
                     id="dispatch-task-clear"
                     type="button"
@@ -432,6 +444,7 @@
       const skillPayloadHint = document.getElementById("skill-payload-hint");
       const skillPayloadValidation = document.getElementById("skill-payload-validation");
       const skillPayloadFormatInput = document.getElementById("skill-payload-format-input");
+      const dispatchDelayField = document.getElementById("dispatch-delay-field");
       const dispatchDelayInput = document.getElementById("dispatch-delay-input");
       const trimmedString = (value) => String(value || "").trim();
       const defaultSkillPayloadPlaceholder = skillPayloadInput instanceof HTMLTextAreaElement
@@ -455,6 +468,7 @@
         ? trimmedString(skillPayloadHint.textContent) || "Markdown and JSON are both supported."
         : "Markdown and JSON are both supported.";
       const dispatchTaskClear = document.getElementById("dispatch-task-clear");
+      const dispatchDelayToggle = document.getElementById("dispatch-delay-toggle");
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
       const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
@@ -1903,6 +1917,9 @@
         if (dispatchTaskClear instanceof HTMLButtonElement) {
           dispatchTaskClear.disabled = busy;
         }
+        if (dispatchDelayToggle instanceof HTMLButtonElement) {
+          dispatchDelayToggle.disabled = busy;
+        }
         if (!(dispatchTaskSubmit instanceof HTMLButtonElement)) {
           return;
         }
@@ -1913,6 +1930,19 @@
           return;
         }
         dispatchTaskSubmit.textContent = busy ? "Dispatching..." : "Dispatch";
+      };
+
+      const setDispatchDelayFieldVisible = (visible, options = {}) => {
+        if (dispatchDelayField instanceof HTMLElement) {
+          dispatchDelayField.hidden = !visible;
+        }
+        if (dispatchDelayToggle instanceof HTMLButtonElement) {
+          dispatchDelayToggle.setAttribute("aria-expanded", visible ? "true" : "false");
+        }
+        if (options.clear === true && dispatchDelayInput instanceof HTMLInputElement) {
+          dispatchDelayInput.value = "";
+          dispatchDelayInput.setCustomValidity("");
+        }
       };
 
       const setDispatchSubmitStatus = (status, isError = false) => {
@@ -2629,6 +2659,7 @@
           dispatchDelayInput.value = "";
           dispatchDelayInput.setCustomValidity("");
         }
+        setDispatchDelayFieldVisible(false, { clear: true });
         setSkillPayloadValidationMessage("");
         setDispatchSubmitStatus("");
         syncConnectedAgentSelection({ forceFirstSkill: true });
@@ -2689,6 +2720,7 @@
         }
         if (clearForm) {
           setSkillPayloadValidationMessage("");
+          setDispatchDelayFieldVisible(false, { clear: true });
         }
         const taskID = trimmedString(body && body.task_id);
         const isScheduled = Boolean(body && body.scheduled);
@@ -3322,6 +3354,15 @@
           dispatchDelayInput.setCustomValidity("");
         });
       }
+      if (dispatchDelayToggle instanceof HTMLButtonElement) {
+        dispatchDelayToggle.addEventListener("click", () => {
+          const nextVisible = !(dispatchDelayField instanceof HTMLElement) || dispatchDelayField.hidden;
+          setDispatchDelayFieldVisible(nextVisible);
+          if (nextVisible && dispatchDelayInput instanceof HTMLInputElement) {
+            dispatchDelayInput.focus({ preventScroll: true });
+          }
+        });
+      }
       if (dispatchTaskClear instanceof HTMLButtonElement) {
         dispatchTaskClear.addEventListener("click", () => {
           trackAppEvent("dispatch_clear", dispatchAnalyticsParams());
@@ -3422,6 +3463,7 @@
                 });
               }, clientDelay.delayMs);
               setDispatchSubmitStatus(`Dispatch #${scheduledNumber} scheduled in ${clientDelay.label}. Keep this page open.`);
+              setDispatchDelayFieldVisible(false, { clear: true });
               trackAppEvent("dispatch_result", {
                 ...analyticsParams,
                 result: "scheduled_client",
