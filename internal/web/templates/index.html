@@ -581,6 +581,17 @@
         window.gtag("event", name, eventParams);
       };
 
+      const trackOnce = (eventName, paramsFactory = () => ({})) => {
+        let tracked = false;
+        return () => {
+          if (tracked) {
+            return;
+          }
+          tracked = true;
+          trackAppEvent(eventName, typeof paramsFactory === "function" ? paramsFactory() : {});
+        };
+      };
+
       const lucideAvailable = () => {
         return typeof window.lucide === "object"
           && window.lucide !== null
@@ -1567,6 +1578,17 @@
         ].forEach((field) => {
           if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
             field.addEventListener("input", syncAgentProfileSaveState);
+            const fieldName = field === agentSettingsHandle
+              ? "handle"
+              : field === agentSettingsDisplayName
+                ? "display_name"
+                : field === agentSettingsProfileMarkdown
+                  ? "profile_markdown"
+                  : "emoji";
+            field.addEventListener("input", trackOnce("agent_profile_field_edit", () => ({
+              app_area: "agent_settings",
+              field_name: fieldName,
+            })));
           }
         });
         bindForm.addEventListener("submit", (event) => {
@@ -1697,10 +1719,29 @@
           ? onboardingModeFromToken(onboardingTokenInput.value)
           : currentOnboardingMode(), { track: false });
         if (onboardingTokenInput instanceof HTMLInputElement) {
+          onboardingTokenInput.addEventListener("input", trackOnce("onboarding_token_input", () => ({
+            app_area: "onboarding",
+            agent_mode: currentOnboardingMode(),
+            has_token: trimmedString(onboardingTokenInput.value) !== "",
+          })));
           onboardingTokenInput.addEventListener("input", () => {
             applyOnboardingMode(onboardingModeFromToken(onboardingTokenInput.value));
           });
         }
+        document.querySelectorAll("input[name=\"hub_region\"]").forEach((field) => {
+          if (!(field instanceof HTMLInputElement)) {
+            return;
+          }
+          field.addEventListener("change", () => {
+            if (!field.checked) {
+              return;
+            }
+            trackAppEvent("onboarding_region_change", {
+              app_area: "onboarding",
+              hub_region: analyticsSlug(field.value, "default"),
+            });
+          });
+        });
         if (onboardingExistingAgentToggle instanceof HTMLButtonElement) {
           onboardingExistingAgentToggle.addEventListener("click", () => {
             applyOnboardingMode("existing");
@@ -3463,6 +3504,15 @@
         }
       });
       if (skillPayloadInput instanceof HTMLTextAreaElement) {
+        skillPayloadInput.addEventListener("input", trackOnce("dispatch_payload_edit", () => {
+          const skillEntry = selectedSkillEntry();
+          return {
+            app_area: "dispatch",
+            has_target: targetAgentRefInput instanceof HTMLInputElement && trimmedString(targetAgentRefInput.value) !== "",
+            has_skill: hasSelectedSkill(),
+            has_schema: Boolean(skillEntry && skillEntry.schemaText),
+          };
+        }));
         skillPayloadInput.addEventListener("input", () => {
           validateSkillPayload();
         });
@@ -3471,15 +3521,33 @@
         dispatchDelayInput.addEventListener("input", () => {
           dispatchDelayInput.setCustomValidity("");
         });
+        dispatchDelayInput.addEventListener("change", () => {
+          trackAppEvent("dispatch_schedule_field_change", {
+            app_area: "dispatch",
+            field_name: "delay",
+            has_value: trimmedString(dispatchDelayInput.value) !== "",
+          });
+        });
       }
       if (dispatchFrequencyInput instanceof HTMLInputElement) {
         dispatchFrequencyInput.addEventListener("input", () => {
           dispatchFrequencyInput.setCustomValidity("");
         });
+        dispatchFrequencyInput.addEventListener("change", () => {
+          trackAppEvent("dispatch_schedule_field_change", {
+            app_area: "dispatch",
+            field_name: "repeat",
+            has_value: trimmedString(dispatchFrequencyInput.value) !== "",
+          });
+        });
       }
       if (dispatchDelayToggle instanceof HTMLButtonElement) {
         dispatchDelayToggle.addEventListener("click", () => {
           const nextVisible = !(dispatchDelayField instanceof HTMLElement) || dispatchDelayField.hidden;
+          trackAppEvent("dispatch_schedule_toggle", {
+            app_area: "dispatch",
+            expanded: nextVisible,
+          });
           setDispatchDelayFieldVisible(nextVisible);
           if (nextVisible && dispatchDelayInput instanceof HTMLInputElement) {
             dispatchDelayInput.focus({ preventScroll: true });
