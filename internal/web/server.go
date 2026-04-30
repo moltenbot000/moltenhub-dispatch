@@ -889,6 +889,7 @@ type activityFeedItem struct {
 	Skill          string
 	TargetAgent    string
 	TaskID         string
+	HubTaskID      string
 	ChildRequestID string
 	LogPath        string
 	Repo           string
@@ -994,6 +995,7 @@ func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []ac
 			Skill:          skill,
 			TargetAgent:    target,
 			TaskID:         strings.TrimSpace(task.ID),
+			HubTaskID:      strings.TrimSpace(task.HubTaskID),
 			ChildRequestID: strings.TrimSpace(task.ChildRequestID),
 			LogPath:        strings.TrimSpace(task.LogPath),
 			Repo:           strings.TrimSpace(task.Repo),

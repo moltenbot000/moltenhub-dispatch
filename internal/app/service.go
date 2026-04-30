@@ -566,15 +566,17 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 		return PendingTask{}, err
 	}
 
-	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
+	publishResp, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq)
+	if err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		failureErr := s.failUIRequest(ctx, state, task, err)
 		removeErr := s.removePendingTask(task.ChildRequestID)
 		return PendingTask{}, errors.Join(failureErr, removeErr)
 	}
 	s.noteHubInteraction(nil, ConnectionTransportHTTP)
+	task.HubTaskID = strings.TrimSpace(publishResp.MessageID)
 	task.Status = PendingTaskStatusInQueue
-	if err := s.setPendingTaskStatus(task.ChildRequestID, task.Status); err != nil {
+	if err := s.setPendingTaskHubState(task.ChildRequestID, task.Status, task.HubTaskID); err != nil {
 		return PendingTask{}, err
 	}
 	_ = s.logTaskEvent("info", "Task dispatched", fmt.Sprintf("Queued %s for %s", req.SkillName, connectedAgentNameOrRef(target)), task)
@@ -1088,14 +1090,16 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 		return err
 	}
 
-	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
+	publishResp, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq)
+	if err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		failureErr := s.handleTaskFailure(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
 		removeErr := s.removePendingTask(task.ChildRequestID)
 		return errors.Join(failureErr, removeErr)
 	}
 	s.noteHubInteraction(nil, ConnectionTransportHTTP)
-	if err := s.setPendingTaskStatus(task.ChildRequestID, PendingTaskStatusInQueue); err != nil {
+	task.HubTaskID = strings.TrimSpace(publishResp.MessageID)
+	if err := s.setPendingTaskHubState(task.ChildRequestID, PendingTaskStatusInQueue, task.HubTaskID); err != nil {
 		return err
 	}
 	return s.logTaskEvent("info", "Forwarded request", fmt.Sprintf("Forwarded %s to %s", req.SkillName, connectedAgentNameOrRef(target)), task)
@@ -1173,15 +1177,25 @@ func (s *Service) removePendingTask(childRequestID string) error {
 }
 
 func (s *Service) setPendingTaskStatus(childRequestID, status string) error {
+	return s.setPendingTaskHubState(childRequestID, status, "")
+}
+
+func (s *Service) setPendingTaskHubState(childRequestID, status, hubTaskID string) error {
 	childRequestID = strings.TrimSpace(childRequestID)
 	status = normalizePendingTaskStatus(status)
-	if childRequestID == "" || status == "" {
+	hubTaskID = strings.TrimSpace(hubTaskID)
+	if childRequestID == "" || (status == "" && hubTaskID == "") {
 		return nil
 	}
 	return s.store.Update(func(current *AppState) error {
 		for i := range current.PendingTasks {
 			if current.PendingTasks[i].ChildRequestID == childRequestID {
-				current.PendingTasks[i].Status = status
+				if status != "" {
+					current.PendingTasks[i].Status = status
+				}
+				if hubTaskID != "" {
+					current.PendingTasks[i].HubTaskID = hubTaskID
+				}
 				return nil
 			}
 		}

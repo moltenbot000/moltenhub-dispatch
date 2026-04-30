@@ -2205,6 +2205,7 @@ func TestHandleIndexKeepsPendingTasksClosedByDefault(t *testing.T) {
 				{
 					ID:                     "task-1",
 					Status:                 app.PendingTaskStatusSending,
+					HubTaskID:              "message-1",
 					OriginalSkillName:      "run_task",
 					ChildRequestID:         "child-1",
 					TargetAgentDisplayName: "Worker A",
@@ -2246,6 +2247,9 @@ func TestHandleIndexKeepsPendingTasksClosedByDefault(t *testing.T) {
 	}
 	if !strings.Contains(body, "Sending") {
 		t.Fatalf("expected pending task status label to render sending state, body=%s", body)
+	}
+	if !strings.Contains(body, "Hub task:</strong> message-1") {
+		t.Fatalf("expected pending task details to render hub task id, body=%s", body)
 	}
 	if !strings.Contains(body, `data-lucide="send" class="runtime-event-detail-icon"`) || !strings.Contains(body, `data-lucide="git-fork" class="runtime-event-detail-icon"`) {
 		t.Fatalf("expected pending task details to render status and repo icons, body=%s", body)
