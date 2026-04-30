@@ -89,49 +89,6 @@
       </p>
     </section>
 
-    <section class="grid scheduled-dispatches-grid">
-      <article id="scheduled-dispatches-panel" class="panel prompt-wrap scheduled-dispatches-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-        <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
-          <div class="panel-header-copy">
-            <span id="scheduled-dispatches-label" class="panel-section-title">Scheduled Dispatches</span>
-            <p id="scheduled-dispatches-count" class="panel-section-copy">{{len .State.ScheduledMessages}} active</p>
-          </div>
-          <button
-            id="scheduled-dispatches-toggle"
-            type="button"
-            class="prompt-action-button scheduled-dispatches-toggle"
-            aria-label="{{if .State.ScheduledMessages}}Hide scheduled dispatches{{else}}Show scheduled dispatches{{end}}"
-            aria-expanded="{{if .State.ScheduledMessages}}true{{else}}false{{end}}"
-            aria-controls="scheduled-dispatches-field"
-            title="{{if .State.ScheduledMessages}}Hide scheduled dispatches{{else}}Show scheduled dispatches{{end}}"
-          >
-            <i data-lucide="chevron-down" class="scheduled-dispatches-toggle-show" aria-hidden="true"></i>
-            <i data-lucide="chevron-up" class="scheduled-dispatches-toggle-hide" aria-hidden="true"></i>
-            <span class="sr-only">{{if .State.ScheduledMessages}}Hide scheduled dispatches{{else}}Show scheduled dispatches{{end}}</span>
-          </button>
-        </div>
-        <div id="scheduled-dispatches-field" class="dispatch-panel-body scheduled-dispatches-body" {{if not .State.ScheduledMessages}}hidden{{end}}>
-          <div id="scheduled-dispatches-list" class="list scheduled-dispatches-list" {{if not .State.ScheduledMessages}}hidden{{end}}>
-            {{range .State.ScheduledMessages}}
-            <form method="post" action="/schedules/delete" class="scheduled-dispatch-row" data-scheduled-dispatch-row data-scheduled-dispatch-id="{{.ID}}">
-              <input type="hidden" name="schedule_id" value="{{.ID}}">
-              <div class="scheduled-dispatch-copy">
-                <h3><span class="scheduled-dispatch-emoji">{{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🙂{{end}}</span><span>{{if .TargetAgentDisplayName}}{{.TargetAgentDisplayName}}{{else if .TargetAgentRef}}{{.TargetAgentRef}}{{else if .TargetAgentURI}}{{.TargetAgentURI}}{{else}}{{.TargetAgentUUID}}{{end}}</span></h3>
-                <p>{{.OriginalSkillName}} • Next {{formatTime .NextRunAt}}{{if .Frequency}} • Every {{.Frequency}}{{end}}</p>
-              </div>
-              <button type="submit" class="prompt-action-button scheduled-dispatch-delete" data-scheduled-dispatch-delete aria-label="Delete scheduled dispatch {{.ID}}" title="Delete scheduled dispatch">
-                <i data-lucide="trash-2" aria-hidden="true"></i>
-                <span class="sr-only">Delete scheduled dispatch</span>
-              </button>
-            </form>
-            {{end}}
-          </div>
-          <p id="scheduled-dispatches-empty" class="empty" {{if .State.ScheduledMessages}}hidden{{end}}>No scheduled dispatches.</p>
-          <p id="scheduled-dispatches-status" class="connected-agents-refresh-status" aria-live="polite"></p>
-        </div>
-      </article>
-    </section>
-
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
       <section class="grid manual-dispatch-grid">
         <article class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
@@ -333,6 +290,23 @@
   {{if .State.Session.AgentToken}}
   <div class="page-bottom-dock" aria-hidden="false">
     <div class="prompt-mode-tabs prompt-mode-tabs-dock" aria-label="Dispatch menu">
+      <button
+        id="scheduled-dispatches-dock-button"
+        class="prompt-mode-link prompt-mode-link-logo scheduled-dispatches-dock-button"
+        type="button"
+        aria-label="Open scheduled dispatches"
+        title="Open scheduled dispatches">
+        <span class="prompt-mode-link-shell" aria-hidden="true"></span>
+        <span class="prompt-mode-link-icon" aria-hidden="true">
+          <i data-lucide="clock-3" aria-hidden="true"></i>
+        </span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-top" aria-hidden="true"></span>
+        <span class="prompt-mode-link-line prompt-mode-link-line-bottom" aria-hidden="true"></span>
+        <span class="prompt-mode-mobile-label" aria-hidden="true">Schedules</span>
+        <span class="prompt-mode-link-tooltip" aria-hidden="true">Scheduled Dispatches</span>
+        <span class="sr-only">Open scheduled dispatches</span>
+      </button>
+      <span class="prompt-mode-divider prompt-mode-divider-core" aria-hidden="true"></span>
       <a
         id="moltenbot-hub-link"
         class="prompt-mode-link prompt-mode-link-logo"
@@ -379,6 +353,49 @@
         <span id="theme-toggle-label">Dark</span>
       </button>
     </div>
+  </div>
+  {{end}}
+  {{if .State.Session.AgentToken}}
+  <div
+    class="settings-modal-backdrop scheduled-dispatches-modal-backdrop"
+    id="scheduled-dispatches-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="scheduled-dispatches-label"
+    aria-describedby="scheduled-dispatches-count"
+    hidden
+  >
+    <section id="scheduled-dispatches-panel" class="settings-modal scheduled-dispatches-modal form-surface">
+      <header class="settings-modal-header">
+        <div class="settings-modal-copy">
+          <h2 id="scheduled-dispatches-label">Scheduled Dispatches</h2>
+          <p id="scheduled-dispatches-count">{{len .State.ScheduledMessages}} active</p>
+        </div>
+        <button type="button" class="settings-modal-close" id="scheduled-dispatches-modal-close" aria-label="Close scheduled dispatches" title="Close scheduled dispatches">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </header>
+      <div id="scheduled-dispatches-field" class="dispatch-panel-body scheduled-dispatches-body">
+        <div id="scheduled-dispatches-list" class="list scheduled-dispatches-list" {{if not .State.ScheduledMessages}}hidden{{end}}>
+          {{range .State.ScheduledMessages}}
+          <form method="post" action="/schedules/delete" class="scheduled-dispatch-row" data-scheduled-dispatch-row data-scheduled-dispatch-id="{{.ID}}">
+            <input type="hidden" name="schedule_id" value="{{.ID}}">
+            <div class="scheduled-dispatch-copy">
+              <h3><span class="scheduled-dispatch-emoji">{{if .TargetAgentEmoji}}{{.TargetAgentEmoji}}{{else}}🙂{{end}}</span><span>{{if .TargetAgentDisplayName}}{{.TargetAgentDisplayName}}{{else if .TargetAgentRef}}{{.TargetAgentRef}}{{else if .TargetAgentURI}}{{.TargetAgentURI}}{{else}}{{.TargetAgentUUID}}{{end}}</span></h3>
+              <p>{{.OriginalSkillName}} • Next {{formatTime .NextRunAt}}{{if .Frequency}} • Every {{.Frequency}}{{end}}</p>
+            </div>
+            <button type="submit" class="prompt-action-button scheduled-dispatch-delete" data-scheduled-dispatch-delete aria-label="Delete scheduled dispatch {{.ID}}" title="Delete scheduled dispatch">
+              <i data-lucide="trash-2" aria-hidden="true"></i>
+              <span class="sr-only">Delete scheduled dispatch</span>
+            </button>
+          </form>
+          {{end}}
+        </div>
+        <p id="scheduled-dispatches-empty" class="empty" {{if .State.ScheduledMessages}}hidden{{end}}>No scheduled dispatches.</p>
+        <p id="scheduled-dispatches-status" class="connected-agents-refresh-status" aria-live="polite"></p>
+      </div>
+    </section>
   </div>
   {{end}}
   <div
@@ -508,6 +525,9 @@
       const dispatchDelayInput = document.getElementById("dispatch-delay-input");
       const dispatchFrequencyInput = document.getElementById("dispatch-frequency-input");
       const scheduledDispatchesToggle = document.getElementById("scheduled-dispatches-toggle");
+      const scheduledDispatchesDockButton = document.getElementById("scheduled-dispatches-dock-button");
+      const scheduledDispatchesModalBackdrop = document.getElementById("scheduled-dispatches-modal-backdrop");
+      const scheduledDispatchesModalClose = document.getElementById("scheduled-dispatches-modal-close");
       const scheduledDispatchesField = document.getElementById("scheduled-dispatches-field");
       const scheduledDispatchesList = document.getElementById("scheduled-dispatches-list");
       const scheduledDispatchesEmpty = document.getElementById("scheduled-dispatches-empty");
@@ -984,6 +1004,28 @@
             focusTarget.focus({ preventScroll: true });
           });
         }
+      };
+
+      const setScheduledDispatchesModalOpen = (open, returnFocus = false) => {
+        if (!(scheduledDispatchesModalBackdrop instanceof HTMLElement)) {
+          return;
+        }
+        const visible = Boolean(open);
+        scheduledDispatchesModalBackdrop.hidden = !visible;
+        scheduledDispatchesModalBackdrop.setAttribute("aria-hidden", visible ? "false" : "true");
+        document.body.classList.toggle("settings-modal-open", visible);
+        if (!visible) {
+          if (returnFocus && scheduledDispatchesDockButton instanceof HTMLElement) {
+            scheduledDispatchesDockButton.focus({ preventScroll: true });
+          }
+          return;
+        }
+        const focusTarget = scheduledDispatchesModalClose instanceof HTMLElement
+          ? scheduledDispatchesModalClose
+          : scheduledDispatchesModalBackdrop;
+        window.requestAnimationFrame(() => {
+          focusTarget.focus({ preventScroll: true });
+        });
       };
 
       const loadThemeMode = () => {
@@ -1578,6 +1620,39 @@
         });
       }
 
+      if (scheduledDispatchesDockButton instanceof HTMLButtonElement) {
+        scheduledDispatchesDockButton.addEventListener("click", () => {
+          trackAppEvent("scheduled_dispatch_modal_open", {
+            app_area: "schedules",
+            scheduled_dispatch_count: latestScheduledMessages.length,
+          });
+          setScheduledDispatchesModalOpen(true);
+        });
+      }
+
+      if (scheduledDispatchesModalClose instanceof HTMLButtonElement) {
+        scheduledDispatchesModalClose.addEventListener("click", () => {
+          trackAppEvent("scheduled_dispatch_modal_close", {
+            app_area: "schedules",
+            method: "button",
+          });
+          setScheduledDispatchesModalOpen(false, true);
+        });
+      }
+
+      if (scheduledDispatchesModalBackdrop instanceof HTMLElement) {
+        scheduledDispatchesModalBackdrop.addEventListener("click", (event) => {
+          if (event.target !== scheduledDispatchesModalBackdrop) {
+            return;
+          }
+          trackAppEvent("scheduled_dispatch_modal_close", {
+            app_area: "schedules",
+            method: "backdrop",
+          });
+          setScheduledDispatchesModalOpen(false, true);
+        });
+      }
+
       if (agentSettingsModalClose instanceof HTMLButtonElement) {
         agentSettingsModalClose.addEventListener("click", () => {
           trackAppEvent("agent_settings_close", {
@@ -1602,6 +1677,14 @@
 
       window.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") {
+          return;
+        }
+        if (scheduledDispatchesModalBackdrop instanceof HTMLElement && !scheduledDispatchesModalBackdrop.hidden) {
+          trackAppEvent("scheduled_dispatch_modal_close", {
+            app_area: "schedules",
+            method: "escape",
+          });
+          setScheduledDispatchesModalOpen(false, true);
           return;
         }
         if (!(onboardingModalBackdrop instanceof HTMLElement) || onboardingModalBackdrop.hidden || !bound) {
@@ -3318,10 +3401,12 @@
         });
         scheduledDispatchesList.hidden = nextSchedules.length === 0;
         scheduledDispatchesEmpty.hidden = nextSchedules.length > 0;
-        if (nextSchedules.length === 0) {
-          setScheduledDispatchesVisible(false);
-        } else if (!hadSchedules) {
-          setScheduledDispatchesVisible(true);
+        if (scheduledDispatchesToggle instanceof HTMLButtonElement) {
+          if (nextSchedules.length === 0) {
+            setScheduledDispatchesVisible(false);
+          } else if (!hadSchedules) {
+            setScheduledDispatchesVisible(true);
+          }
         }
         hydrateLucideIcons(scheduledDispatchesList);
       };

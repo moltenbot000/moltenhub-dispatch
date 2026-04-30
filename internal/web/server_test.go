@@ -1053,8 +1053,11 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `formData.set("scheduled_at", clientDelay.label);`) || strings.Contains(body, `result: "scheduled_client"`) {
 		t.Fatalf("expected manual dispatch delay to use server-side schedule path, body=%s", body)
 	}
-	if !strings.Contains(body, `id="scheduled-dispatches-toggle"`) || !strings.Contains(body, `id="scheduled-dispatches-list"`) {
-		t.Fatalf("expected scheduled dispatch dropdown hooks, body=%s", body)
+	if !strings.Contains(body, `id="scheduled-dispatches-dock-button"`) || !strings.Contains(body, `id="scheduled-dispatches-modal-backdrop"`) || !strings.Contains(body, `id="scheduled-dispatches-list"`) {
+		t.Fatalf("expected scheduled dispatch modal hooks, body=%s", body)
+	}
+	if !strings.Contains(body, `data-lucide="clock-3"`) || !strings.Contains(body, `prompt-mode-divider-core`) {
+		t.Fatalf("expected scheduled dispatch dock icon and core divider, body=%s", body)
 	}
 	if !strings.Contains(body, `fetch("/api/schedules/delete"`) || !strings.Contains(body, `data-scheduled-dispatch-delete`) {
 		t.Fatalf("expected scheduled dispatch delete controls, body=%s", body)
@@ -2230,7 +2233,7 @@ func TestHandleIndexRendersPendingTasksPanelInMainUI(t *testing.T) {
 	}
 }
 
-func TestHandleIndexRendersScheduledDispatchDropdown(t *testing.T) {
+func TestHandleIndexRendersScheduledDispatchModal(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
@@ -2268,8 +2271,11 @@ func TestHandleIndexRendersScheduledDispatchDropdown(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 response, got %d", rec.Code)
 	}
-	if !strings.Contains(body, `id="scheduled-dispatches-toggle"`) || !strings.Contains(body, `aria-expanded="true"`) {
-		t.Fatalf("expected open scheduled dispatch dropdown, body=%s", body)
+	if !strings.Contains(body, `id="scheduled-dispatches-dock-button"`) || !strings.Contains(body, `id="scheduled-dispatches-modal-backdrop"`) {
+		t.Fatalf("expected scheduled dispatch modal entrypoint, body=%s", body)
+	}
+	if !strings.Contains(body, `aria-labelledby="scheduled-dispatches-label"`) || !strings.Contains(body, `hidden`) {
+		t.Fatalf("expected scheduled dispatch modal to render closed by default, body=%s", body)
 	}
 	if !strings.Contains(body, `data-scheduled-dispatch-id="schedule-1"`) || !strings.Contains(body, `name="schedule_id" value="schedule-1"`) {
 		t.Fatalf("expected scheduled dispatch row and delete form, body=%s", body)

@@ -3773,6 +3773,15 @@ p,
   margin-bottom: 18px;
 }
 
+.scheduled-dispatches-dock-button {
+  color: var(--accent);
+}
+
+.prompt-mode-divider-core {
+  height: 28px;
+  background: color-mix(in srgb, var(--border) 72%, var(--accent));
+}
+
 .scheduled-dispatches-toggle {
   width: 34px;
   min-width: 34px;
@@ -3854,6 +3863,16 @@ p,
 .scheduled-dispatch-delete [data-lucide] {
   width: 16px;
   height: 16px;
+}
+
+.settings-modal.scheduled-dispatches-modal {
+  width: min(680px, 100%);
+}
+
+.settings-modal.scheduled-dispatches-modal .scheduled-dispatches-body {
+  display: grid;
+  gap: 12px;
+  padding: 0;
 }
 
 .manual-dispatch-delay-field {
@@ -6174,6 +6193,12 @@ pre {
   .prompt-mode-link-tooltip,
   .prompt-mode-divider {
     display: none;
+  }
+
+  .prompt-mode-divider-core {
+    display: block;
+    height: 32px;
+    margin-inline: 0 2px;
   }
 
   .prompt-mode-mobile-label {
