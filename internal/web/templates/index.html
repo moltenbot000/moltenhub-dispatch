@@ -161,13 +161,17 @@
                 <span id="skill-payload-validation" class="manual-dispatch-payload-validation" aria-live="polite"></span>
               </label>
               <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
-              <label id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
-                <span class="prompt-label">Delay</span>
-                <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
-                <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
-                <span class="prompt-label">Repeat</span>
-                <input id="dispatch-frequency-input" class="prompt-control" type="text" name="every" placeholder="every 30m, every 2h, every 1d" autocomplete="off" aria-describedby="dispatch-delay-hint">
-              </label>
+              <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
+                <label class="manual-dispatch-delay-item">
+                  <span class="prompt-label">Delay</span>
+                  <input id="dispatch-delay-input" class="prompt-control" type="text" name="client_delay" placeholder="now, 10m, in 2h" autocomplete="off" aria-describedby="dispatch-delay-hint">
+                  <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
+                </label>
+                <label class="manual-dispatch-delay-item">
+                  <span class="prompt-label">Repeat</span>
+                  <input id="dispatch-frequency-input" class="prompt-control" type="text" name="every" placeholder="every 30m, every 2h, every 1d" autocomplete="off" aria-describedby="dispatch-delay-hint">
+                </label>
+              </div>
               <div class="prompt-actions manual-dispatch-actions">
                 <p id="dispatch-submit-status" class="connected-agents-refresh-status submit-status" aria-live="polite"></p>
                 <div class="prompt-actions-end">

@@ -3713,7 +3713,16 @@ p,
 }
 
 .manual-dispatch-delay-field {
-  max-width: 18rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  max-width: 38rem;
+  column-gap: 12px;
+}
+
+.manual-dispatch-delay-item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
 }
 
 .manual-dispatch-delay-hint {
