@@ -2917,6 +2917,20 @@ func TestOnboardingStylesForceHiddenProfileFields(t *testing.T) {
 	}
 }
 
+func TestPromptFieldHiddenAttributeOverridesGridDisplay(t *testing.T) {
+	t.Parallel()
+
+	styles, err := os.ReadFile("static/styles.css")
+	if err != nil {
+		t.Fatalf("read styles.css: %v", err)
+	}
+
+	content := string(styles)
+	if !strings.Contains(content, ".prompt-field[hidden] {\n  display: none !important;\n}") {
+		t.Fatalf("expected hidden prompt fields to defeat .prompt-field display grid")
+	}
+}
+
 func TestHandleIndexRendersInteractiveOnboardingFlowForUnboundSession(t *testing.T) {
 	t.Parallel()
 

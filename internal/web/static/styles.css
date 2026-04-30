@@ -1132,6 +1132,10 @@ body .right-col.prompt-collapsed.task-list-hidden {
   min-width: 0;
 }
 
+.prompt-field[hidden] {
+  display: none !important;
+}
+
 .prompt-field-repo-history {
   flex: 0 1 clamp(240px, 28%, 340px);
 }
