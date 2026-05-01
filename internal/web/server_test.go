@@ -1458,6 +1458,9 @@ func TestA2AJSONRPCSendMessageDispatchesToService(t *testing.T) {
 	if got := stub.lastDispatchReq.Payload; got != testDispatchPrompt {
 		t.Fatalf("unexpected payload: %#v", stub.lastDispatchReq.Payload)
 	}
+	if !stub.lastDispatchReq.PreferA2A {
+		t.Fatal("expected A2A dispatch to prefer A2A hub transport")
+	}
 }
 
 func TestA2ARESTSendMessageDispatchesStructuredDataPart(t *testing.T) {

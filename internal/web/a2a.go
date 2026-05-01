@@ -430,6 +430,7 @@ func a2aDispatchRequestFromSendMessage(req a2aSendMessageRequest, targetRef stri
 		strings.TrimSpace(req.Message.ID),
 		app.NewID("a2a"),
 	)
+	dispatchReq.PreferA2A = true
 	return dispatchReq, nil
 }
 

@@ -27,6 +27,47 @@ func (c *Client) canPublishOpenClawViaA2A(req PublishRequest) bool {
 	return isUUIDLike(req.ToAgentUUID) || strings.TrimSpace(req.ToAgentURI) != ""
 }
 
+func (c *Client) publishOpenClawA2A(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	endpoint := c.a2aEndpointBaseURL()
+	if endpoint == "" {
+		return PublishResponse{}, errors.New("a2a endpoint is not configured")
+	}
+	message, err := a2aSendMessageRequestFromOpenClaw(req)
+	if err != nil {
+		return PublishResponse{}, err
+	}
+
+	client, err := a2aclient.NewFromEndpoints(
+		ctx,
+		[]*a2a.AgentInterface{
+			a2a.NewAgentInterface(endpoint, a2a.TransportProtocolJSONRPC),
+			a2a.NewAgentInterface(endpoint, a2a.TransportProtocolHTTPJSON),
+		},
+		a2aclient.WithDefaultsDisabled(),
+		a2aclient.WithConfig(a2aclient.Config{
+			PreferredTransports: []a2a.TransportProtocol{
+				a2a.TransportProtocolJSONRPC,
+				a2a.TransportProtocolHTTPJSON,
+			},
+		}),
+		a2aclient.WithJSONRPCTransport(c.httpClient),
+		a2aclient.WithRESTTransport(c.httpClient),
+	)
+	if err != nil {
+		return PublishResponse{}, err
+	}
+	defer func() { _ = client.Destroy() }()
+
+	result, err := client.SendMessage(a2aContextWithBearer(ctx, token), message)
+	if err != nil {
+		return PublishResponse{}, err
+	}
+	return publishResponseFromA2AResult(result), nil
+}
+
 func (c *Client) publishOpenClawViaA2A(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	endpoint := c.a2aPublishEndpoint(req)
 	if endpoint == "" {
@@ -109,7 +150,7 @@ func openClawMessagePayload(message OpenClawMessage) (map[string]any, error) {
 
 func a2aRoutingMetadata(req PublishRequest) map[string]any {
 	metadata := map[string]any{}
-	if targetUUID := strings.TrimSpace(req.ToAgentUUID); isUUIDLike(targetUUID) {
+	if targetUUID := strings.TrimSpace(req.ToAgentUUID); targetUUID != "" && (req.PreferA2A || isUUIDLike(targetUUID)) {
 		metadata["to_agent_uuid"] = targetUUID
 	}
 	if targetURI := strings.TrimSpace(req.ToAgentURI); targetURI != "" {

@@ -117,6 +117,7 @@ type PendingTask struct {
 	DispatchPayload        map[string]any `json:"dispatch_payload"`
 	DispatchPayloadFormat  string         `json:"dispatch_payload_format"`
 	ExecutionRetryCount    int            `json:"execution_retry_count"`
+	PreferA2A              bool           `json:"prefer_a2a,omitempty"`
 }
 
 type ScheduledMessage struct {
@@ -142,6 +143,7 @@ type ScheduledMessage struct {
 	DispatchPayload        map[string]any `json:"dispatch_payload"`
 	DispatchPayloadFormat  string         `json:"dispatch_payload_format"`
 	Timeout                time.Duration  `json:"timeout"`
+	PreferA2A              bool           `json:"prefer_a2a,omitempty"`
 }
 
 type AppState struct {
@@ -183,4 +185,5 @@ type DispatchRequest struct {
 	Timeout        time.Duration
 	ScheduledAt    time.Time
 	Frequency      time.Duration
+	PreferA2A      bool
 }

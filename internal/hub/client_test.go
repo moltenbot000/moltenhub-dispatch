@@ -649,6 +649,217 @@ func TestUpdateMetadataFallsBackWhenRuntimeMetadataEndpointReturnsUnauthorized(t
 	}
 }
 
+func TestPublishOpenClawPreferA2AUsesStandardSendMessage(t *testing.T) {
+	t.Parallel()
+
+	var sawA2A bool
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/a2a" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		sawA2A = true
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer agent-token" {
+			t.Fatalf("authorization = %q, want bearer token", got)
+		}
+
+		var rpc struct {
+			JSONRPC string         `json:"jsonrpc"`
+			Method  string         `json:"method"`
+			Params  map[string]any `json:"params"`
+			ID      any            `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&rpc); err != nil {
+			t.Fatalf("decode rpc request: %v", err)
+		}
+		if rpc.JSONRPC != "2.0" || rpc.Method != "SendMessage" {
+			t.Fatalf("unexpected rpc request: %#v", rpc)
+		}
+		metadata, _ := rpc.Params["metadata"].(map[string]any)
+		if got := metadata["to_agent_uuid"]; got != "worker-1" {
+			t.Fatalf("target metadata = %#v, want worker-1", metadata)
+		}
+		message, _ := rpc.Params["message"].(map[string]any)
+		if got := message["messageId"]; got != "client-msg-1" {
+			t.Fatalf("message id = %v, want client-msg-1", got)
+		}
+		parts, _ := message["parts"].([]any)
+		if len(parts) != 1 {
+			t.Fatalf("parts = %#v, want one data part", parts)
+		}
+		part, _ := parts[0].(map[string]any)
+		data, _ := part["data"].(map[string]any)
+		if got := data["type"]; got != "skill_request" {
+			t.Fatalf("data type = %v, want skill_request", got)
+		}
+		if got := data["skill_name"]; got != "dispatch_skill_request" {
+			t.Fatalf("skill_name = %v, want dispatch_skill_request", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      rpc.ID,
+			"result": map[string]any{
+				"task": map[string]any{
+					"id":        "message-1",
+					"contextId": "request-1",
+					"status": map[string]any{
+						"state": "TASK_STATE_SUBMITTED",
+					},
+					"metadata": map[string]any{
+						"moltenhub": map[string]any{
+							"message_id": "message-1",
+							"status":     "queued",
+						},
+					},
+				},
+			},
+		})
+	}))
+
+	client := hub.NewClient(server.URL + "/v1")
+	response, err := client.PublishOpenClaw(context.Background(), "agent-token", hub.PublishRequest{
+		ToAgentUUID: "worker-1",
+		ClientMsgID: "client-msg-1",
+		PreferA2A:   true,
+		Message: hub.OpenClawMessage{
+			Protocol:  "openclaw.http.v1",
+			Type:      "skill_request",
+			RequestID: "request-1",
+			SkillName: "dispatch_skill_request",
+			Payload:   map[string]any{"repo": "/tmp/repo"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("publish openclaw over a2a: %v", err)
+	}
+	if !sawA2A {
+		t.Fatal("expected a2a call")
+	}
+	if response.MessageID != "message-1" || response.Delivery != "queued" {
+		t.Fatalf("unexpected publish response: %#v", response)
+	}
+}
+
+func TestPublishOpenClawPreferA2AFallsBackToOpenClaw(t *testing.T) {
+	t.Parallel()
+
+	var sawA2A, sawOpenClaw bool
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/a2a":
+			sawA2A = true
+			http.NotFound(w, r)
+		case "/v1/openclaw/messages/publish":
+			sawOpenClaw = true
+			var payload hub.PublishRequest
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode openclaw publish: %v", err)
+			}
+			if got := payload.Message.RequestID; got != "request-1" {
+				t.Fatalf("request id = %q, want request-1", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": true,
+				"result": map[string]any{
+					"message_id": "message-1",
+					"delivery":   "queued",
+				},
+			})
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+
+	client := hub.NewClient(server.URL + "/v1")
+	response, err := client.PublishOpenClaw(context.Background(), "agent-token", hub.PublishRequest{
+		ToAgentUUID: "worker-1",
+		ClientMsgID: "client-msg-1",
+		PreferA2A:   true,
+		Message: hub.OpenClawMessage{
+			Type:      "skill_request",
+			RequestID: "request-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("publish openclaw fallback: %v", err)
+	}
+	if !sawA2A || !sawOpenClaw {
+		t.Fatalf("expected both a2a and openclaw calls, sawA2A=%v sawOpenClaw=%v", sawA2A, sawOpenClaw)
+	}
+	if response.MessageID != "message-1" {
+		t.Fatalf("message id = %q, want message-1", response.MessageID)
+	}
+}
+
+func TestPullOpenClawDecodesA2AWrappedOpenClawDataPart(t *testing.T) {
+	t.Parallel()
+
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/pull" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"delivery_id":     "delivery-1",
+				"message_id":      "message-1",
+				"from_agent_uuid": "source-agent",
+				"openclaw_message": map[string]any{
+					"protocol": "a2a.v1",
+					"kind":     "agent_message",
+					"message": map[string]any{
+						"messageId": "client-msg-1",
+						"role":      "ROLE_USER",
+						"parts": []any{
+							map[string]any{
+								"data": map[string]any{
+									"protocol":       "openclaw.http.v1",
+									"type":           "skill_request",
+									"request_id":     "request-1",
+									"skill_name":     "dispatch_skill_request",
+									"payload_format": "json",
+									"payload": map[string]any{
+										"repo": "/tmp/repo",
+									},
+								},
+								"mediaType": "application/json",
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+
+	client := hub.NewClient(server.URL + "/v1")
+	pull, ok, err := client.PullOpenClaw(context.Background(), "agent-token", time.Second)
+	if err != nil {
+		t.Fatalf("pull openclaw: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected pull message")
+	}
+	if got := pull.OpenClawMessage.Type; got != "skill_request" {
+		t.Fatalf("message type = %q, want skill_request", got)
+	}
+	if got := pull.OpenClawMessage.RequestID; got != "request-1" {
+		t.Fatalf("request id = %q, want request-1", got)
+	}
+	if got := pull.OpenClawMessage.SkillName; got != "dispatch_skill_request" {
+		t.Fatalf("skill name = %q, want dispatch_skill_request", got)
+	}
+	payload, ok := pull.OpenClawMessage.Payload.(map[string]any)
+	if !ok || payload["repo"] != "/tmp/repo" {
+		t.Fatalf("payload = %#v, want repo", pull.OpenClawMessage.Payload)
+	}
+}
+
 func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 	t.Parallel()
 
