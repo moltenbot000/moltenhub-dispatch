@@ -2016,6 +2016,42 @@ func TestDispatchFromUISchedulesMessageWithoutImmediatePublish(t *testing.T) {
 	}
 }
 
+func TestDispatchFromUISchedulesSecondRepeatCron(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	worker := testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"})
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{worker}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	_, err = service.DispatchFromUI(context.Background(), DispatchRequest{
+		RequestID:      "ui-req",
+		TargetAgentRef: "worker-a",
+		SkillName:      "run_task",
+		ScheduledAt:    time.Now().UTC().Add(time.Minute),
+		Frequency:      30 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("schedule dispatch from ui: %v", err)
+	}
+	if len(fake.publishCalls) != 0 {
+		t.Fatalf("expected no immediate publish, got %d", len(fake.publishCalls))
+	}
+	state := service.store.Snapshot()
+	if len(state.ScheduledMessages) != 1 {
+		t.Fatalf("expected one scheduled message, got %d", len(state.ScheduledMessages))
+	}
+	if got, want := state.ScheduledMessages[0].Cron, "*/30 * * * * *"; got != want {
+		t.Fatalf("unexpected cron: %q, want %q", got, want)
+	}
+}
+
 func TestProcessDueScheduledMessagesPublishesAndAdvancesRecurringSchedule(t *testing.T) {
 	t.Parallel()
 

@@ -1388,7 +1388,7 @@ func (s *Service) scheduleDispatch(state AppState, target ConnectedAgent, req Di
 	}
 	cron := cronFromDuration(req.Frequency)
 	if req.Frequency > 0 && cron == "" {
-		return ScheduledMessage{}, errors.New("schedule frequency must be cron-compatible minutes, hours, or days")
+		return ScheduledMessage{}, errors.New("schedule frequency must be cron-compatible seconds, minutes, hours, or days")
 	}
 	payload := normalizePayload(req.Payload, req.Repo, req.LogPaths)
 	payloadFormat := normalizePayloadFormat(req.PayloadFormat, payload)
@@ -2010,10 +2010,20 @@ func cronFromDuration(duration time.Duration) string {
 	if duration <= 0 {
 		return ""
 	}
+	if duration%time.Second != 0 {
+		return ""
+	}
+	seconds := int(duration / time.Second)
+	if seconds <= 0 {
+		return ""
+	}
+	if seconds < 60 {
+		return fmt.Sprintf("*/%d * * * * *", seconds)
+	}
 	if duration%time.Minute != 0 {
 		return ""
 	}
-	minutes := int(duration / time.Minute)
+	minutes := seconds / 60
 	if minutes <= 0 {
 		return ""
 	}
@@ -2038,17 +2048,22 @@ func cronFromDuration(duration time.Duration) string {
 
 func durationFromCron(raw string) time.Duration {
 	fields := strings.Fields(strings.TrimSpace(raw))
-	if len(fields) != 5 {
+	if len(fields) == 6 {
+		if strings.HasPrefix(fields[0], "*/") && fields[1] == "*" && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" && fields[5] == "*" {
+			return cronStepDuration(fields[0], time.Second)
+		}
 		return 0
 	}
-	if strings.HasPrefix(fields[0], "*/") && fields[1] == "*" && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
-		return cronStepDuration(fields[0], time.Minute)
-	}
-	if fields[0] == "0" && strings.HasPrefix(fields[1], "*/") && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
-		return cronStepDuration(fields[1], time.Hour)
-	}
-	if fields[0] == "0" && fields[1] == "0" && strings.HasPrefix(fields[2], "*/") && fields[3] == "*" && fields[4] == "*" {
-		return cronStepDuration(fields[2], 24*time.Hour)
+	if len(fields) == 5 {
+		if strings.HasPrefix(fields[0], "*/") && fields[1] == "*" && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
+			return cronStepDuration(fields[0], time.Minute)
+		}
+		if fields[0] == "0" && strings.HasPrefix(fields[1], "*/") && fields[2] == "*" && fields[3] == "*" && fields[4] == "*" {
+			return cronStepDuration(fields[1], time.Hour)
+		}
+		if fields[0] == "0" && fields[1] == "0" && strings.HasPrefix(fields[2], "*/") && fields[3] == "*" && fields[4] == "*" {
+			return cronStepDuration(fields[2], 24*time.Hour)
+		}
 	}
 	return 0
 }

@@ -1026,13 +1026,18 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-delay-input" type="hidden" name="scheduled_at"`) ||
 		!strings.Contains(body, `id="dispatch-delay-enabled" type="checkbox"`) ||
 		!strings.Contains(body, `id="dispatch-delay-amount"`) ||
-		!strings.Contains(body, `id="dispatch-delay-unit"`) {
+		!strings.Contains(body, `id="dispatch-delay-unit"`) ||
+		!strings.Contains(body, `<span>Delay</span>`) ||
+		!strings.Contains(body, `<option value="s">seconds</option>`) ||
+		!strings.Contains(body, `<option value="m">minutes</option>`) ||
+		!strings.Contains(body, `<option value="h">hours</option>`) {
 		t.Fatalf("expected manual dispatch structured delay controls, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-frequency-input" type="hidden" name="every"`) ||
 		!strings.Contains(body, `id="dispatch-frequency-enabled" type="checkbox"`) ||
 		!strings.Contains(body, `id="dispatch-frequency-amount"`) ||
-		!strings.Contains(body, `id="dispatch-frequency-unit"`) {
+		!strings.Contains(body, `id="dispatch-frequency-unit"`) ||
+		!strings.Contains(body, `<span>Repeat</span>`) {
 		t.Fatalf("expected manual dispatch structured repeat controls, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden`) {
@@ -1053,7 +1058,8 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	}
 	if !strings.Contains(body, `const parseDispatchFrequency = () => {`) ||
 		!strings.Contains(body, `parseScheduleSelection(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, "Repeat")`) ||
-		!strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) {
+		!strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) ||
+		!strings.Contains(body, `Repeat must fit cron: 1-59 seconds, 1-59 minutes, or 1-23 hours.`) {
 		t.Fatalf("expected manual dispatch recurring interval parser and submit path, body=%s", body)
 	}
 	if !strings.Contains(body, `setDispatchDelayFieldVisible(false, { clear: true });`) {

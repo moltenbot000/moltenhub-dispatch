@@ -183,37 +183,38 @@
                 </div>
                 <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
                   <fieldset class="manual-dispatch-delay-item">
-                    <legend class="prompt-label">Delay</legend>
+                    <legend class="sr-only">Delay</legend>
                     <input id="dispatch-delay-input" type="hidden" name="scheduled_at" value="">
                     <label class="manual-dispatch-schedule-switch">
                       <input id="dispatch-delay-enabled" type="checkbox">
-                      <span>Enable delay</span>
+                      <span>Delay</span>
                     </label>
                     <div class="manual-dispatch-schedule-value-row">
-                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-describedby="dispatch-delay-hint" disabled>
+                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-label="Delay amount" aria-describedby="dispatch-delay-hint" disabled>
                       <select id="dispatch-delay-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Delay unit" disabled>
-                        <option value="m">m</option>
-                        <option value="h">h</option>
-                        <option value="d">d</option>
+                        <option value="s">seconds</option>
+                        <option value="m">minutes</option>
+                        <option value="h">hours</option>
                       </select>
                     </div>
-                    <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use minutes, hours, or days.</span>
+                    <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use seconds, minutes, or hours.</span>
                   </fieldset>
                   <fieldset class="manual-dispatch-delay-item">
-                    <legend class="prompt-label">Repeat</legend>
+                    <legend class="sr-only">Repeat</legend>
                     <input id="dispatch-frequency-input" type="hidden" name="every" value="">
                     <label class="manual-dispatch-schedule-switch">
                       <input id="dispatch-frequency-enabled" type="checkbox">
-                      <span>Enable repeat</span>
+                      <span>Repeat</span>
                     </label>
                     <div class="manual-dispatch-schedule-value-row">
-                      <input id="dispatch-frequency-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="30" autocomplete="off" aria-describedby="dispatch-delay-hint" disabled>
+                      <input id="dispatch-frequency-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="30" autocomplete="off" aria-label="Repeat amount" aria-describedby="dispatch-frequency-hint" disabled>
                       <select id="dispatch-frequency-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Repeat unit" disabled>
-                        <option value="m">m</option>
-                        <option value="h">h</option>
-                        <option value="d">d</option>
+                        <option value="s">seconds</option>
+                        <option value="m">minutes</option>
+                        <option value="h">hours</option>
                       </select>
                     </div>
+                    <span id="dispatch-frequency-hint" class="manual-dispatch-delay-hint">Use cron-compatible seconds, minutes, or hours.</span>
                   </fieldset>
                 </div>
               </section>
@@ -2334,10 +2335,10 @@
           return { ok: false, message: `${label} must be greater than zero.` };
         }
         const unit = unitEl instanceof HTMLSelectElement ? unitEl.value : "m";
-        if (!["m", "h", "d"].includes(unit)) {
-          return { ok: false, message: `${label} unit must be m, h, or d.` };
+        if (!["s", "m", "h"].includes(unit)) {
+          return { ok: false, message: `${label} unit must be seconds, minutes, or hours.` };
         }
-        const delayMs = amount * (unit === "d" ? 24 * 60 * 60 * 1000 : unit === "h" ? 60 * 60 * 1000 : 60 * 1000);
+        const delayMs = amount * (unit === "h" ? 60 * 60 * 1000 : unit === "m" ? 60 * 1000 : 1000);
         if (!Number.isFinite(delayMs)) {
           return { ok: false, message: `${label} is too large.` };
         }
@@ -2356,8 +2357,8 @@
         if (parsed.label !== "") {
           const unit = dispatchFrequencyUnit instanceof HTMLSelectElement ? dispatchFrequencyUnit.value : "m";
           const amount = dispatchFrequencyAmount instanceof HTMLInputElement ? Number.parseInt(trimmedString(dispatchFrequencyAmount.value), 10) : 0;
-          if ((unit === "m" && amount > 59) || (unit === "h" && amount > 23) || (unit === "d" && amount > 31)) {
-            return { ok: false, message: "Repeat must fit cron: 1-59m, 1-23h, or 1-31d." };
+          if ((unit === "s" && amount > 59) || (unit === "m" && amount > 59) || (unit === "h" && amount > 23)) {
+            return { ok: false, message: "Repeat must fit cron: 1-59 seconds, 1-59 minutes, or 1-23 hours." };
           }
         }
         return { ok: true, duration: parsed.label, label: parsed.label === "" ? "" : `every ${parsed.label}` };

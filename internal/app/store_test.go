@@ -274,6 +274,58 @@ func TestStorePersistsHubURLAgentTokenAndScheduledMessages(t *testing.T) {
 	}
 }
 
+func TestStorePersistsSecondScheduledMessageCron(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	nextRunAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.Update(func(state *AppState) error {
+		state.ScheduledMessages = []ScheduledMessage{
+			{
+				ID:                "schedule-1",
+				Status:            ScheduledMessageStatusActive,
+				OriginalSkillName: "run_task",
+				TargetAgentUUID:   "worker-uuid",
+				NextRunAt:         nextRunAt,
+				Frequency:         30 * time.Second,
+			},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("update store: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+
+	var persisted map[string]any
+	if err := json.Unmarshal(raw, &persisted); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	scheduledMessages, ok := persisted["scheduled_messages"].([]any)
+	if !ok || len(scheduledMessages) != 1 {
+		t.Fatalf("expected one persisted scheduled message: %#v", persisted["scheduled_messages"])
+	}
+	scheduled, ok := scheduledMessages[0].(map[string]any)
+	if !ok {
+		t.Fatalf("scheduled message payload missing: %#v", scheduledMessages[0])
+	}
+	if got, want := scheduled["cron"], "*/30 * * * * *"; got != want {
+		t.Fatalf("scheduled cron = %#v, want %q", got, want)
+	}
+	if _, ok := scheduled["frequency"]; ok {
+		t.Fatalf("did not expect frequency in persisted scheduled message: %#v", scheduled)
+	}
+}
+
 func TestNewStoreLoadsPersistedScheduledMessages(t *testing.T) {
 	t.Parallel()
 
@@ -329,6 +381,41 @@ func TestNewStoreLoadsPersistedScheduledMessages(t *testing.T) {
 	}
 	if got := scheduled.DispatchPayload["input"]; got != "scheduled work" {
 		t.Fatalf("dispatch payload = %#v", scheduled.DispatchPayload)
+	}
+}
+
+func TestNewStoreLoadsPersistedSecondCronScheduledMessage(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "scheduled_messages": [
+    {
+      "id": "schedule-1",
+      "status": "active",
+      "original_skill_name": "run_task",
+      "target_agent_uuid": "worker-uuid",
+      "next_run_at": "2030-01-02T03:04:05Z",
+      "cron": "*/30 * * * * *"
+    }
+  ]
+}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	store, err := NewStore(path, DefaultSettings())
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	state := store.Snapshot()
+	if len(state.ScheduledMessages) != 1 {
+		t.Fatalf("scheduled messages = %d, want 1", len(state.ScheduledMessages))
+	}
+	if got, want := state.ScheduledMessages[0].Frequency, 30*time.Second; got != want {
+		t.Fatalf("frequency = %v, want %v", got, want)
 	}
 }
 
