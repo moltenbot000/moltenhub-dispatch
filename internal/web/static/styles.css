@@ -3879,26 +3879,45 @@ p,
 }
 
 .manual-dispatch-delay-field {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  max-width: 38rem;
-  column-gap: 12px;
+  max-width: 24rem;
+}
+
+.manual-dispatch-schedule-mode-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 220px);
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel-muted);
 }
 
 .manual-dispatch-schedule-switch {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   min-height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 0.82rem;
+  cursor: pointer;
 }
 
 .manual-dispatch-schedule-switch input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--accent);
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.manual-dispatch-schedule-switch:has(input:checked) {
+  color: var(--accent);
+  background: var(--surface-control-bg-strong);
+  box-shadow: var(--surface-control-shadow);
 }
 
 .manual-dispatch-schedule-value-row {
