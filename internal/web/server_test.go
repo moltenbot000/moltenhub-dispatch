@@ -1024,7 +1024,8 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 		t.Fatalf("expected manual dispatch payload format field, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-delay-input" type="hidden" name="scheduled_at"`) ||
-		!strings.Contains(body, `id="dispatch-delay-enabled" type="checkbox"`) ||
+		!strings.Contains(body, `class="manual-dispatch-schedule-mode-toggle" role="radiogroup"`) ||
+		!strings.Contains(body, `id="dispatch-delay-enabled" type="radio" name="dispatch_schedule_mode" value="delay" checked`) ||
 		!strings.Contains(body, `id="dispatch-delay-amount"`) ||
 		!strings.Contains(body, `id="dispatch-delay-unit"`) ||
 		!strings.Contains(body, `<span>Delay</span>`) ||
@@ -1034,11 +1035,11 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 		t.Fatalf("expected manual dispatch structured delay controls, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-frequency-input" type="hidden" name="every"`) ||
-		!strings.Contains(body, `id="dispatch-frequency-enabled" type="checkbox"`) ||
-		!strings.Contains(body, `id="dispatch-frequency-amount"`) ||
-		!strings.Contains(body, `id="dispatch-frequency-unit"`) ||
+		!strings.Contains(body, `id="dispatch-frequency-enabled" type="radio" name="dispatch_schedule_mode" value="repeat"`) ||
+		strings.Contains(body, `id="dispatch-frequency-amount"`) ||
+		strings.Contains(body, `id="dispatch-frequency-unit"`) ||
 		!strings.Contains(body, `<span>Repeat</span>`) {
-		t.Fatalf("expected manual dispatch structured repeat controls, body=%s", body)
+		t.Fatalf("expected manual dispatch repeat mode to reuse schedule controls, body=%s", body)
 	}
 	if !strings.Contains(body, `id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden`) {
 		t.Fatalf("expected manual dispatch delay field to be hidden by default, body=%s", body)
@@ -1057,7 +1058,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 		t.Fatalf("expected manual dispatch client-side structured delay parser, body=%s", body)
 	}
 	if !strings.Contains(body, `const parseDispatchFrequency = () => {`) ||
-		!strings.Contains(body, `parseScheduleSelection(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, "Repeat")`) ||
+		!strings.Contains(body, `parseScheduleSelection(dispatchFrequencyEnabled, dispatchDelayAmount, dispatchDelayUnit, "Repeat")`) ||
 		!strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) ||
 		!strings.Contains(body, `Repeat must fit cron: 1-59 seconds, 1-59 minutes, or 1-23 hours.`) {
 		t.Fatalf("expected manual dispatch recurring interval parser and submit path, body=%s", body)

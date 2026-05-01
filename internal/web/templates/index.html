@@ -183,38 +183,28 @@
                 </div>
                 <div id="dispatch-delay-field" class="prompt-field manual-dispatch-delay-field" hidden>
                   <fieldset class="manual-dispatch-delay-item">
-                    <legend class="sr-only">Delay</legend>
+                    <legend class="sr-only">Schedule mode</legend>
                     <input id="dispatch-delay-input" type="hidden" name="scheduled_at" value="">
-                    <label class="manual-dispatch-schedule-switch">
-                      <input id="dispatch-delay-enabled" type="checkbox">
-                      <span>Delay</span>
-                    </label>
-                    <div class="manual-dispatch-schedule-value-row">
-                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-label="Delay amount" aria-describedby="dispatch-delay-hint" disabled>
-                      <select id="dispatch-delay-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Delay unit" disabled>
-                        <option value="s">seconds</option>
-                        <option value="m">minutes</option>
-                        <option value="h">hours</option>
-                      </select>
-                    </div>
-                    <span id="dispatch-delay-hint" class="manual-dispatch-delay-hint">Use seconds, minutes, or hours.</span>
-                  </fieldset>
-                  <fieldset class="manual-dispatch-delay-item">
-                    <legend class="sr-only">Repeat</legend>
                     <input id="dispatch-frequency-input" type="hidden" name="every" value="">
-                    <label class="manual-dispatch-schedule-switch">
-                      <input id="dispatch-frequency-enabled" type="checkbox">
-                      <span>Repeat</span>
-                    </label>
+                    <div class="manual-dispatch-schedule-mode-toggle" role="radiogroup" aria-label="Schedule mode">
+                      <label class="manual-dispatch-schedule-switch">
+                        <input id="dispatch-delay-enabled" type="radio" name="dispatch_schedule_mode" value="delay" checked>
+                        <span>Delay</span>
+                      </label>
+                      <label class="manual-dispatch-schedule-switch">
+                        <input id="dispatch-frequency-enabled" type="radio" name="dispatch_schedule_mode" value="repeat">
+                        <span>Repeat</span>
+                      </label>
+                    </div>
                     <div class="manual-dispatch-schedule-value-row">
-                      <input id="dispatch-frequency-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="30" autocomplete="off" aria-label="Repeat amount" aria-describedby="dispatch-frequency-hint" disabled>
-                      <select id="dispatch-frequency-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Repeat unit" disabled>
+                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-label="Schedule amount" aria-describedby="dispatch-schedule-hint" disabled>
+                      <select id="dispatch-delay-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Schedule unit" disabled>
                         <option value="s">seconds</option>
                         <option value="m">minutes</option>
                         <option value="h">hours</option>
                       </select>
                     </div>
-                    <span id="dispatch-frequency-hint" class="manual-dispatch-delay-hint">Use cron-compatible seconds, minutes, or hours.</span>
+                    <span id="dispatch-schedule-hint" class="manual-dispatch-delay-hint">Use seconds, minutes, or hours. Repeat must be cron-compatible.</span>
                   </fieldset>
                 </div>
               </section>
@@ -553,8 +543,6 @@
       const dispatchDelayUnit = document.getElementById("dispatch-delay-unit");
       const dispatchFrequencyInput = document.getElementById("dispatch-frequency-input");
       const dispatchFrequencyEnabled = document.getElementById("dispatch-frequency-enabled");
-      const dispatchFrequencyAmount = document.getElementById("dispatch-frequency-amount");
-      const dispatchFrequencyUnit = document.getElementById("dispatch-frequency-unit");
       const scheduledDispatchesToggle = document.getElementById("scheduled-dispatches-toggle");
       const scheduledDispatchesDockButton = document.getElementById("scheduled-dispatches-dock-button");
       const scheduledDispatchesModalBackdrop = document.getElementById("scheduled-dispatches-modal-backdrop");
@@ -2194,6 +2182,37 @@
       let dispatchStatusClearTimer = 0;
       let scheduledDispatchStatusClearTimer = 0;
 
+      function clearScheduleAmount() {
+        if (dispatchDelayAmount instanceof HTMLInputElement) {
+          dispatchDelayAmount.value = "";
+          dispatchDelayAmount.setCustomValidity("");
+        }
+        if (dispatchDelayUnit instanceof HTMLSelectElement) {
+          dispatchDelayUnit.value = "m";
+        }
+      }
+
+      function syncScheduleModeState() {
+        const visible = dispatchDelayField instanceof HTMLElement && !dispatchDelayField.hidden;
+        const hasMode = (dispatchDelayEnabled instanceof HTMLInputElement && dispatchDelayEnabled.checked)
+          || (dispatchFrequencyEnabled instanceof HTMLInputElement && dispatchFrequencyEnabled.checked);
+        if (visible && !hasMode && dispatchDelayEnabled instanceof HTMLInputElement) {
+          dispatchDelayEnabled.checked = true;
+        }
+        const enabled = visible && (
+          (dispatchDelayEnabled instanceof HTMLInputElement && dispatchDelayEnabled.checked)
+          || (dispatchFrequencyEnabled instanceof HTMLInputElement && dispatchFrequencyEnabled.checked)
+        );
+        if (dispatchDelayAmount instanceof HTMLInputElement) {
+          dispatchDelayAmount.disabled = !enabled;
+          dispatchDelayAmount.placeholder = dispatchFrequencyEnabled instanceof HTMLInputElement && dispatchFrequencyEnabled.checked ? "30" : "10";
+          dispatchDelayAmount.setCustomValidity("");
+        }
+        if (dispatchDelayUnit instanceof HTMLSelectElement) {
+          dispatchDelayUnit.disabled = !enabled;
+        }
+      }
+
       const setDispatchSubmitBusy = (busy) => {
         if (dispatchTaskClear instanceof HTMLButtonElement) {
           dispatchTaskClear.disabled = busy;
@@ -2234,15 +2253,7 @@
           if (dispatchDelayEnabled instanceof HTMLInputElement) {
             dispatchDelayEnabled.checked = false;
           }
-          if (dispatchDelayAmount instanceof HTMLInputElement) {
-            dispatchDelayAmount.value = "";
-            dispatchDelayAmount.disabled = true;
-            dispatchDelayAmount.setCustomValidity("");
-          }
-          if (dispatchDelayUnit instanceof HTMLSelectElement) {
-            dispatchDelayUnit.value = "m";
-            dispatchDelayUnit.disabled = true;
-          }
+          clearScheduleAmount();
         }
         if (options.clear === true && dispatchFrequencyInput instanceof HTMLInputElement) {
           dispatchFrequencyInput.value = "";
@@ -2252,16 +2263,9 @@
           if (dispatchFrequencyEnabled instanceof HTMLInputElement) {
             dispatchFrequencyEnabled.checked = false;
           }
-          if (dispatchFrequencyAmount instanceof HTMLInputElement) {
-            dispatchFrequencyAmount.value = "";
-            dispatchFrequencyAmount.disabled = true;
-            dispatchFrequencyAmount.setCustomValidity("");
-          }
-          if (dispatchFrequencyUnit instanceof HTMLSelectElement) {
-            dispatchFrequencyUnit.value = "m";
-            dispatchFrequencyUnit.disabled = true;
-          }
+          clearScheduleAmount();
         }
+        syncScheduleModeState();
       };
 
       const setScheduledDispatchesVisible = (visible) => {
@@ -2321,8 +2325,12 @@
         }, 12000);
       };
 
+      const scheduleFieldVisible = () => {
+        return dispatchDelayField instanceof HTMLElement && !dispatchDelayField.hidden;
+      };
+
       const parseScheduleSelection = (enabledEl, amountEl, unitEl, label) => {
-        const enabled = enabledEl instanceof HTMLInputElement && enabledEl.checked;
+        const enabled = scheduleFieldVisible() && enabledEl instanceof HTMLInputElement && enabledEl.checked;
         if (!enabled) {
           return { ok: true, delayMs: 0, label: "" };
         }
@@ -2350,13 +2358,13 @@
       };
 
       const parseDispatchFrequency = () => {
-        const parsed = parseScheduleSelection(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, "Repeat");
+        const parsed = parseScheduleSelection(dispatchFrequencyEnabled, dispatchDelayAmount, dispatchDelayUnit, "Repeat");
         if (!parsed.ok) {
           return parsed;
         }
         if (parsed.label !== "") {
-          const unit = dispatchFrequencyUnit instanceof HTMLSelectElement ? dispatchFrequencyUnit.value : "m";
-          const amount = dispatchFrequencyAmount instanceof HTMLInputElement ? Number.parseInt(trimmedString(dispatchFrequencyAmount.value), 10) : 0;
+          const unit = dispatchDelayUnit instanceof HTMLSelectElement ? dispatchDelayUnit.value : "m";
+          const amount = dispatchDelayAmount instanceof HTMLInputElement ? Number.parseInt(trimmedString(dispatchDelayAmount.value), 10) : 0;
           if ((unit === "s" && amount > 59) || (unit === "m" && amount > 59) || (unit === "h" && amount > 23)) {
             return { ok: false, message: "Repeat must fit cron: 1-59 seconds, 1-59 minutes, or 1-23 hours." };
           }
@@ -3041,13 +3049,13 @@
           dispatchFrequencyInput.setCustomValidity("");
         }
         if (dispatchDelayEnabled instanceof HTMLInputElement) {
-          dispatchDelayEnabled.checked = false;
+          dispatchDelayEnabled.checked = true;
         }
         if (dispatchFrequencyEnabled instanceof HTMLInputElement) {
           dispatchFrequencyEnabled.checked = false;
         }
-        syncScheduleSelectionState(dispatchDelayEnabled, dispatchDelayAmount, dispatchDelayUnit, dispatchDelayInput);
-        syncScheduleSelectionState(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, dispatchFrequencyInput);
+        clearScheduleAmount();
+        syncScheduleModeState();
         setDispatchDelayFieldVisible(false, { clear: true });
         setSkillPayloadValidationMessage("");
         setDispatchSubmitStatus("");
@@ -3950,26 +3958,9 @@
           validateSkillPayload();
         });
       }
-      const syncScheduleSelectionState = (enabledEl, amountEl, unitEl, hiddenEl) => {
-        const enabled = enabledEl instanceof HTMLInputElement && enabledEl.checked;
-        if (amountEl instanceof HTMLInputElement) {
-          amountEl.disabled = !enabled;
-          if (!enabled) {
-            amountEl.value = "";
-            amountEl.setCustomValidity("");
-          }
-        }
-        if (unitEl instanceof HTMLSelectElement) {
-          unitEl.disabled = !enabled;
-        }
-        if (hiddenEl instanceof HTMLInputElement && !enabled) {
-          hiddenEl.value = "";
-        }
-      };
-
       if (dispatchDelayEnabled instanceof HTMLInputElement) {
         dispatchDelayEnabled.addEventListener("change", () => {
-          syncScheduleSelectionState(dispatchDelayEnabled, dispatchDelayAmount, dispatchDelayUnit, dispatchDelayInput);
+          syncScheduleModeState();
           trackAppEvent("dispatch_schedule_field_change", {
             app_area: "dispatch",
             field_name: "delay",
@@ -3987,20 +3978,15 @@
       }
       if (dispatchFrequencyEnabled instanceof HTMLInputElement) {
         dispatchFrequencyEnabled.addEventListener("change", () => {
-          syncScheduleSelectionState(dispatchFrequencyEnabled, dispatchFrequencyAmount, dispatchFrequencyUnit, dispatchFrequencyInput);
+          syncScheduleModeState();
           trackAppEvent("dispatch_schedule_field_change", {
             app_area: "dispatch",
             field_name: "repeat",
             has_value: dispatchFrequencyEnabled.checked,
           });
-          if (dispatchFrequencyEnabled.checked && dispatchFrequencyAmount instanceof HTMLInputElement) {
-            dispatchFrequencyAmount.focus({ preventScroll: true });
+          if (dispatchFrequencyEnabled.checked && dispatchDelayAmount instanceof HTMLInputElement) {
+            dispatchDelayAmount.focus({ preventScroll: true });
           }
-        });
-      }
-      if (dispatchFrequencyAmount instanceof HTMLInputElement) {
-        dispatchFrequencyAmount.addEventListener("input", () => {
-          dispatchFrequencyAmount.setCustomValidity("");
         });
       }
       if (dispatchDelayToggle instanceof HTMLButtonElement) {
@@ -4011,8 +3997,8 @@
             expanded: nextVisible,
           });
           setDispatchDelayFieldVisible(nextVisible);
-          if (nextVisible && dispatchDelayEnabled instanceof HTMLInputElement) {
-            dispatchDelayEnabled.focus({ preventScroll: true });
+          if (nextVisible && dispatchDelayAmount instanceof HTMLInputElement) {
+            dispatchDelayAmount.focus({ preventScroll: true });
           }
         });
       }
@@ -4108,18 +4094,15 @@
               ...dispatchAnalyticsParams(dispatchState),
               result: "invalid_frequency",
             });
-            if (dispatchFrequencyAmount instanceof HTMLInputElement) {
-              dispatchFrequencyAmount.setCustomValidity(dispatchFrequency.message);
-              dispatchFrequencyAmount.reportValidity();
-              dispatchFrequencyAmount.focus({ preventScroll: true });
+            if (dispatchDelayAmount instanceof HTMLInputElement) {
+              dispatchDelayAmount.setCustomValidity(dispatchFrequency.message);
+              dispatchDelayAmount.reportValidity();
+              dispatchDelayAmount.focus({ preventScroll: true });
             }
             return;
           }
           if (dispatchDelayAmount instanceof HTMLInputElement) {
             dispatchDelayAmount.setCustomValidity("");
-          }
-          if (dispatchFrequencyAmount instanceof HTMLInputElement) {
-            dispatchFrequencyAmount.setCustomValidity("");
           }
           if (dispatchRequestInFlight) {
             return;
