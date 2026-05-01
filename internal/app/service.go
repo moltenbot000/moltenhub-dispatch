@@ -25,6 +25,7 @@ const (
 	openClawHTTPProtocol  = "openclaw.http.v1"
 	openClawSkillRequest  = "skill_request"
 	openClawSkillResult   = "skill_result"
+	openClawTextMessage   = "text_message"
 	hubPingRetryInterval  = 12 * time.Second
 	hubPingRequestTimeout = 6 * time.Second
 	wsFallbackWindow      = 30 * time.Second
@@ -1015,9 +1016,15 @@ func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResp
 		return s.handleSkillResult(ctx, message)
 	case openClawSkillRequest:
 		return s.handleSkillRequest(ctx, message)
+	case openClawTextMessage:
+		return s.handleTextMessage(message)
 	default:
 		return s.logEvent("info", "Ignored message", "Received unsupported message type "+messageType, "", "")
 	}
+}
+
+func (s *Service) handleTextMessage(message hub.PullResponse) error {
+	return s.logEvent("info", "Message received", textMessageDetail(message.OpenClawMessage), "", "")
 }
 
 func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullResponse) error {
@@ -1772,6 +1779,35 @@ func (s *Service) logTaskEvent(level, title, detail string, task PendingTask) er
 		TargetAgentUUID:        task.TargetAgentUUID,
 		TargetAgentURI:         task.TargetAgentURI,
 	})
+}
+
+func textMessageDetail(message hub.OpenClawMessage) string {
+	for _, candidate := range []any{message.Payload, message.Input} {
+		if detail := textMessageValue(candidate); detail != "" {
+			return detail
+		}
+	}
+	return "Received text message."
+}
+
+func textMessageValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]any:
+		for _, key := range []string{"text", "message", "content"} {
+			if detail := textMessageValue(typed[key]); detail != "" {
+				return detail
+			}
+		}
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+	return strings.TrimSpace(string(data))
 }
 
 type dispatchPayload struct {

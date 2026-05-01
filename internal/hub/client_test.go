@@ -860,6 +860,53 @@ func TestPullOpenClawDecodesA2AWrappedOpenClawDataPart(t *testing.T) {
 	}
 }
 
+func TestPullOpenClawDecodesA2ATextPartAsTextMessage(t *testing.T) {
+	t.Parallel()
+
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/pull" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"delivery_id":     "delivery-1",
+				"message_id":      "message-1",
+				"from_agent_uuid": "source-agent",
+				"openclaw_message": map[string]any{
+					"protocol": "a2a.v1",
+					"message": map[string]any{
+						"messageId": "client-msg-1",
+						"role":      "ROLE_USER",
+						"parts": []any{
+							map[string]any{"text": "hello from a2a"},
+						},
+					},
+				},
+			},
+		})
+	}))
+
+	client := hub.NewClient(server.URL + "/v1")
+	pull, ok, err := client.PullOpenClaw(context.Background(), "agent-token", time.Second)
+	if err != nil {
+		t.Fatalf("pull openclaw: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected pull message")
+	}
+	if got := pull.OpenClawMessage.Type; got != "text_message" {
+		t.Fatalf("message type = %q, want text_message", got)
+	}
+	if got := pull.OpenClawMessage.RequestID; got != "client-msg-1" {
+		t.Fatalf("request id = %q, want client-msg-1", got)
+	}
+	if got := pull.OpenClawMessage.Payload; got != "hello from a2a" {
+		t.Fatalf("payload = %#v, want text", got)
+	}
+}
+
 func TestOpenClawHTTPMethodsMatchRuntimeContract(t *testing.T) {
 	t.Parallel()
 

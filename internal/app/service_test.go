@@ -3914,6 +3914,35 @@ func TestHandleInboundMessageAcceptsKindWhenTypeIsOmitted(t *testing.T) {
 	}
 }
 
+func TestHandleInboundMessageDisplaysTextMessageInActivity(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+
+	err := service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-1",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "text_message",
+			RequestID: "message-1",
+			Payload:   "hello from another agent",
+		},
+	})
+	if err != nil {
+		t.Fatalf("handle inbound message: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if len(state.RecentEvents) == 0 {
+		t.Fatal("expected recent event")
+	}
+	if got := state.RecentEvents[0].Title; got != "Message received" {
+		t.Fatalf("event title = %q, want Message received", got)
+	}
+	if got := state.RecentEvents[0].Detail; got != "hello from another agent" {
+		t.Fatalf("event detail = %q, want text payload", got)
+	}
+}
+
 func TestConsumeRealtimeSessionMarksWebsocketConnectivityAndAcksDeliveries(t *testing.T) {
 	t.Parallel()
 

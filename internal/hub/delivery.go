@@ -64,7 +64,7 @@ func decodeOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, error) {
 		return OpenClawMessage{}, false, nil
 	}
 
-	if message, ok, err := openClawMessageFromA2AEnvelope(raw); err != nil || ok {
+	if message, ok, err := openClawMessageFromA2A(raw); err != nil || ok {
 		return message, ok, err
 	}
 
@@ -78,41 +78,91 @@ func decodeOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, error) {
 	return message, true, nil
 }
 
-func openClawMessageFromA2AEnvelope(raw json.RawMessage) (OpenClawMessage, bool, error) {
+func openClawMessageFromA2A(raw json.RawMessage) (OpenClawMessage, bool, error) {
 	var envelope struct {
-		Protocol string `json:"protocol"`
-		Message  struct {
-			Parts []struct {
-				Data json.RawMessage `json:"data"`
-				Text *string         `json:"text"`
-			} `json:"parts"`
-		} `json:"message"`
+		Protocol string             `json:"protocol"`
+		Message  *a2aMessagePayload `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return OpenClawMessage{}, false, err
 	}
-	if strings.TrimSpace(envelope.Protocol) != a2aProtocolAdapter || len(envelope.Message.Parts) == 0 {
-		return OpenClawMessage{}, false, nil
+	if strings.TrimSpace(envelope.Protocol) == a2aProtocolAdapter && envelope.Message != nil {
+		return openClawMessageFromA2APayload(*envelope.Message)
 	}
 
-	for _, part := range envelope.Message.Parts {
+	var message a2aMessagePayload
+	if err := json.Unmarshal(raw, &message); err != nil {
+		return OpenClawMessage{}, false, err
+	}
+	if len(message.Parts) == 0 {
+		return OpenClawMessage{}, false, nil
+	}
+	return openClawMessageFromA2APayload(message)
+}
+
+type a2aMessagePayload struct {
+	MessageID string    `json:"messageId"`
+	Role      string    `json:"role"`
+	ContextID string    `json:"contextId"`
+	TaskID    string    `json:"taskId"`
+	Parts     []a2aPart `json:"parts"`
+}
+
+type a2aPart struct {
+	Data json.RawMessage `json:"data"`
+	Text *string         `json:"text"`
+}
+
+func openClawMessageFromA2APayload(message a2aMessagePayload) (OpenClawMessage, bool, error) {
+	for _, part := range message.Parts {
 		if len(strings.TrimSpace(string(part.Data))) > 0 && string(part.Data) != "null" {
-			message, ok, err := decodeOpenClawMessageFromJSON(part.Data)
+			openClawMessage, ok, err := decodeOpenClawMessageFromJSON(part.Data)
 			if err != nil || ok {
-				return message, ok, err
+				return openClawMessage, ok, err
 			}
 		}
 		if part.Text != nil {
 			text := strings.TrimSpace(*part.Text)
 			if strings.HasPrefix(text, "{") {
-				message, ok, err := decodeOpenClawMessageFromJSON(json.RawMessage(text))
+				openClawMessage, ok, err := decodeOpenClawMessageFromJSON(json.RawMessage(text))
 				if err != nil || ok {
-					return message, ok, err
+					return openClawMessage, ok, err
 				}
 			}
 		}
 	}
+
+	if text := a2aTextMessagePayload(message.Parts); text != "" {
+		requestID := strings.TrimSpace(message.MessageID)
+		if requestID == "" {
+			requestID = strings.TrimSpace(message.TaskID)
+		}
+		return OpenClawMessage{
+			Protocol:  a2aProtocolAdapter,
+			Kind:      "text_message",
+			Type:      "text_message",
+			RequestID: requestID,
+			ReplyTo:   strings.TrimSpace(message.ContextID),
+			Payload:   text,
+		}, true, nil
+	}
 	return OpenClawMessage{}, false, nil
+}
+
+func a2aTextMessagePayload(parts []a2aPart) string {
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Text != nil {
+			if text := strings.TrimSpace(*part.Text); text != "" {
+				values = append(values, text)
+			}
+			continue
+		}
+		if len(strings.TrimSpace(string(part.Data))) > 0 && string(part.Data) != "null" {
+			values = append(values, strings.TrimSpace(string(part.Data)))
+		}
+	}
+	return strings.Join(values, "\n")
 }
 
 func decodeOpenClawMessageFromJSON(raw json.RawMessage) (OpenClawMessage, bool, error) {
