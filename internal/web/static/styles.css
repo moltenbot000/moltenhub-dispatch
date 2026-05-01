@@ -3922,13 +3922,13 @@ p,
 
 .manual-dispatch-schedule-value-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px;
+  grid-template-columns: minmax(0, 1fr) 6.5rem;
   gap: 8px;
   min-width: 0;
 }
 
 .manual-dispatch-schedule-unit {
-  min-width: 0;
+  min-width: 6.5rem;
 }
 
 label {
