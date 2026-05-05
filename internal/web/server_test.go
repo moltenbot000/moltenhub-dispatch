@@ -1642,6 +1642,68 @@ func TestA2AGetTaskUsesDownstreamStatusUpdate(t *testing.T) {
 	}
 }
 
+func TestA2AListTasksSkipsNonTerminalRuntimeEvents(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	stub := &stubService{
+		state: app.AppState{
+			RecentEvents: []app.RuntimeEvent{
+				{
+					At:     now,
+					Level:  "info",
+					Title:  "Task dispatched",
+					TaskID: "task-dispatched",
+				},
+				{
+					At:     now,
+					Level:  "info",
+					Title:  "Task completed",
+					TaskID: "task-completed",
+				},
+				{
+					At:     now,
+					Level:  "error",
+					Title:  "Task failed",
+					TaskID: "task-failed",
+				},
+			},
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/a2a/tasks", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	body := decodeJSONMap(t, rec.Body.Bytes())
+	tasks, _ := body["tasks"].([]any)
+	if len(tasks) != 2 {
+		t.Fatalf("expected only terminal runtime events as A2A tasks, got %#v", body)
+	}
+	seen := map[string]string{}
+	for _, raw := range tasks {
+		task, _ := raw.(map[string]any)
+		id, _ := task["id"].(string)
+		seen[id] = readStringPath(task, "status", "state")
+	}
+	if _, ok := seen["task-dispatched"]; ok {
+		t.Fatalf("did not expect dispatch acknowledgement event as task: %#v", tasks)
+	}
+	if seen["task-completed"] != "TASK_STATE_COMPLETED" {
+		t.Fatalf("expected completed terminal task, got %#v", tasks)
+	}
+	if seen["task-failed"] != "TASK_STATE_FAILED" {
+		t.Fatalf("expected failed terminal task, got %#v", tasks)
+	}
+}
+
 func TestA2AJSONRPCDispatchFailureIncludesFailureDetails(t *testing.T) {
 	t.Parallel()
 
