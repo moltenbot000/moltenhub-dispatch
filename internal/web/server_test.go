@@ -1047,6 +1047,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="manual-dispatch-schedule-panel"`) || !strings.Contains(body, `id="dispatch-schedule-label" class="prompt-label">Scheduling</span>`) {
 		t.Fatalf("expected manual dispatch schedule controls to render inside a schedule panel, body=%s", body)
 	}
+	if !strings.Contains(body, `class="manual-dispatch-schedule-header" data-dispatch-delay-toggle-region`) ||
+		!strings.Contains(body, `const dispatchDelayToggleRegion = document.querySelector("[data-dispatch-delay-toggle-region]");`) ||
+		!strings.Contains(body, `const toggleDispatchDelayField = () => {`) ||
+		!strings.Contains(body, `dispatchDelayToggleRegion.addEventListener("click", (event) => {`) {
+		t.Fatalf("expected manual dispatch schedule header to toggle scheduling panel, body=%s", body)
+	}
 	if !strings.Contains(body, `id="dispatch-delay-toggle"`) || !strings.Contains(body, `aria-controls="dispatch-delay-field"`) {
 		t.Fatalf("expected manual dispatch delay toggle control, body=%s", body)
 	}
@@ -2430,8 +2436,14 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const groupActivityFeedLanes = (feed) => {`) {
 		t.Fatalf("expected activity feed lane grouping helper, body=%s", body)
 	}
-	if !strings.Contains(body, `return leftSortAt - rightSortAt;`) {
-		t.Fatalf("expected grouped activity cards to keep oldest events on the left, body=%s", body)
+	if !strings.Contains(body, `const activityFeedTitleGroupKey = (item) => {`) {
+		t.Fatalf("expected activity feed title grouping helper, body=%s", body)
+	}
+	if !strings.Contains(body, "return `event-title:${titleKey}`;") {
+		t.Fatalf("expected recent activity events with the same title to share a lane, body=%s", body)
+	}
+	if !strings.Contains(body, `return rightSortAt - leftSortAt;`) {
+		t.Fatalf("expected grouped activity cards to keep latest events on the left, body=%s", body)
 	}
 	if !strings.Contains(body, `laneTrack.className = "activity-feed-lane-track";`) {
 		t.Fatalf("expected grouped activity renderer to build horizontal lane tracks, body=%s", body)
@@ -2451,7 +2463,7 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `laneElement.classList.toggle("is-collapsed", !laneExpanded);`) {
 		t.Fatalf("expected collapsed activity lanes to receive a collapsed styling hook, body=%s", body)
 	}
-	if !strings.Contains(body, `laneMeta.textContent = "Oldest -> newest";`) {
+	if !strings.Contains(body, `laneMeta.textContent = "Latest -> oldest";`) {
 		t.Fatalf("expected grouped activity renderer to annotate expanded update logs, body=%s", body)
 	}
 	if strings.Contains(body, `const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);`) {
