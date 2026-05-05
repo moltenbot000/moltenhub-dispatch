@@ -151,6 +151,7 @@ func (s *Server) renderIndex(w http.ResponseWriter, r *http.Request, flash strin
 		}
 	}
 	state := s.service.Snapshot()
+	state.ConnectedAgents = orderConnectedAgents(state.ConnectedAgents)
 	selectedRuntime, err := app.ResolveHubRuntime(state.Settings.HubRegion, state.Settings.HubURL)
 	if err != nil {
 		selectedRuntime = app.DefaultHubRuntime()
@@ -351,13 +352,13 @@ func (s *Server) handleConnectedAgents(w http.ResponseWriter, r *http.Request) {
 			"ok":               false,
 			"error":            "connected agents refresh failed",
 			"detail":           err.Error(),
-			"connected_agents": state.ConnectedAgents,
+			"connected_agents": orderConnectedAgents(state.ConnectedAgents),
 		})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":               true,
-		"connected_agents": agents,
+		"connected_agents": orderConnectedAgents(agents),
 	})
 }
 
@@ -882,6 +883,17 @@ func connectedAgentEmoji(agent app.ConnectedAgent) string {
 
 func connectedAgentSkills(agent app.ConnectedAgent) []app.Skill {
 	return dedupeSkills(app.ConnectedAgentSkills(agent))
+}
+
+func orderConnectedAgents(agents []app.ConnectedAgent) []app.ConnectedAgent {
+	if len(agents) < 2 {
+		return agents
+	}
+	ordered := append([]app.ConnectedAgent(nil), agents...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return connectedAgentPresenceStatus(ordered[i]) == "online" && connectedAgentPresenceStatus(ordered[j]) != "online"
+	})
+	return ordered
 }
 
 func dedupeSkills(skills []app.Skill) []app.Skill {
