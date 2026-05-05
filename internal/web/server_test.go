@@ -2468,6 +2468,12 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `formatRelativeRuntimeAge(latestItem && latestItem.sortAt)`) {
 		t.Fatalf("expected minimized activity summary to include relative last-status age, body=%s", body)
 	}
+	if !strings.Contains(body, "const suffix = age === \"\" ? \"\" : ` - ${age}`;") {
+		t.Fatalf("expected minimized activity summary to show bare relative age without label or parentheses, body=%s", body)
+	}
+	if strings.Contains(body, "last status updated") {
+		t.Fatalf("did not expect minimized activity summary to include last status updated label, body=%s", body)
+	}
 	if !strings.Contains(body, `laneElement.classList.toggle("is-collapsed", !laneExpanded);`) {
 		t.Fatalf("expected collapsed activity lanes to receive a collapsed styling hook, body=%s", body)
 	}

@@ -3509,7 +3509,7 @@
             || "Current Progress",
         ];
         const age = formatRelativeRuntimeAge(latestItem && latestItem.sortAt);
-        const suffix = age === "" ? "" : ` (last status updated, ${age})`;
+        const suffix = age === "" ? "" : ` - ${age}`;
         return `${parts.join(" - ")}${suffix}`;
       };
 
