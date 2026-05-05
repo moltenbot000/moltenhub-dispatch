@@ -3924,7 +3924,7 @@ p,
 
 .manual-dispatch-schedule-value-row {
   display: grid;
-  grid-template-columns: minmax(4.5rem, 1fr) minmax(5.8rem, 6.5rem);
+  grid-template-columns: minmax(4.5rem, 1fr) minmax(5.8rem, 2fr);
   gap: 8px;
   min-width: 0;
 }
