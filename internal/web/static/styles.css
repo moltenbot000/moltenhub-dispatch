@@ -3924,12 +3924,14 @@ p,
 
 .manual-dispatch-schedule-value-row {
   display: grid;
-  grid-template-columns: minmax(4.5rem, 1fr) minmax(5.8rem, 2fr);
+  grid-template-columns: 4.5rem 7.25rem;
   gap: 8px;
+  justify-self: start;
   min-width: 0;
 }
 
 .manual-dispatch-schedule-unit {
+  width: 7.25rem;
   min-width: 0;
 }
 
