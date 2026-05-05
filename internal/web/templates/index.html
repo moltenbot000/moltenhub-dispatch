@@ -2621,6 +2621,23 @@
         return "offline";
       };
 
+      const orderConnectedAgents = (agents) => {
+        if (!Array.isArray(agents)) {
+          return [];
+        }
+        return agents
+          .map((agent, index) => ({ agent, index }))
+          .sort((left, right) => {
+            const leftOnline = connectedAgentPresenceStatus(left.agent) === "online";
+            const rightOnline = connectedAgentPresenceStatus(right.agent) === "online";
+            if (leftOnline !== rightOnline) {
+              return leftOnline ? -1 : 1;
+            }
+            return left.index - right.index;
+          })
+          .map((entry) => entry.agent);
+      };
+
       const canonicalUUIDPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
       const looksLikeUUID = (value) => {
@@ -3044,7 +3061,7 @@
         if (!(manualDispatchTargets instanceof HTMLElement)) {
           return;
         }
-        const nextAgents = Array.isArray(agents) ? agents : [];
+        const nextAgents = orderConnectedAgents(agents);
         const previousTargetRef = targetAgentRefInput instanceof HTMLInputElement
           ? trimmedString(targetAgentRefInput.value)
           : "";
@@ -3858,7 +3875,7 @@
               };
 
       const renderConnectedAgents = (agents) => {
-        const nextAgents = Array.isArray(agents) ? agents : [];
+        const nextAgents = orderConnectedAgents(agents);
         const nextSignature = stableJSONStringify(nextAgents);
         if (nextSignature !== "" && nextSignature === latestConnectedAgentsSignature) {
           return false;

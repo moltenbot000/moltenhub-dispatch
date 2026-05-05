@@ -4081,6 +4081,55 @@ func TestHandleConnectedAgentsReturnsSnapshot(t *testing.T) {
 	}
 }
 
+func TestHandleConnectedAgentsOrdersOnlineAgentsFirst(t *testing.T) {
+	t.Parallel()
+
+	offline := false
+	online := true
+	server, err := New(&stubService{
+		state: app.AppState{
+			ConnectedAgents: []app.ConnectedAgent{
+				{
+					AgentID: "offline-agent",
+					Presence: &hub.AgentPresence{
+						Ready: &offline,
+					},
+				},
+				{
+					AgentID: "online-agent",
+					Presence: &hub.AgentPresence{
+						Ready: &online,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/connected-agents", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d", rec.Code)
+	}
+
+	var body struct {
+		ConnectedAgents []app.ConnectedAgent `json:"connected_agents"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.ConnectedAgents) != 2 {
+		t.Fatalf("expected two connected agents, got %#v", body.ConnectedAgents)
+	}
+	if body.ConnectedAgents[0].AgentID != "online-agent" || body.ConnectedAgents[1].AgentID != "offline-agent" {
+		t.Fatalf("expected online agent first, got %#v", body.ConnectedAgents)
+	}
+}
+
 func TestHandleConnectedAgentsReturnsStructuredRefreshError(t *testing.T) {
 	t.Parallel()
 
@@ -4626,6 +4675,59 @@ func TestHandleIndexRendersHubAgentRootPropertiesFromConnectedAgents(t *testing.
 	}
 	if !strings.Contains(body, `connectedAgentPresenceStatusFromPresence(agent && agent.presence)`) {
 		t.Fatalf("expected client-side presence helper to read root presence.status, body=%s", body)
+	}
+}
+
+func TestHandleIndexOrdersOnlineConnectedAgentsFirst(t *testing.T) {
+	t.Parallel()
+
+	offline := false
+	online := true
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusConnected,
+				Transport: app.ConnectionTransportHTTP,
+			},
+			ConnectedAgents: []app.ConnectedAgent{
+				{
+					AgentID: "offline-agent",
+					Presence: &hub.AgentPresence{
+						Ready: &offline,
+					},
+				},
+				{
+					AgentID: "online-agent",
+					Presence: &hub.AgentPresence{
+						Ready: &online,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	onlineIndex := strings.Index(body, `data-connected-agent-target-ref="online-agent"`)
+	offlineIndex := strings.Index(body, `data-connected-agent-target-ref="offline-agent"`)
+	if onlineIndex < 0 || offlineIndex < 0 {
+		t.Fatalf("expected both connected agents to render, body=%s", body)
+	}
+	if onlineIndex > offlineIndex {
+		t.Fatalf("expected online agent to render before offline agent, body=%s", body)
+	}
+	if !strings.Contains(body, `const orderConnectedAgents = (agents) => {`) {
+		t.Fatalf("expected client-side connected-agent ordering helper, body=%s", body)
 	}
 }
 
