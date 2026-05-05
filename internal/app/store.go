@@ -311,13 +311,13 @@ func normalizeSessionAliases(session *Session) {
 	session.RuntimeStatusURL = runtimeEndpoints.RuntimeStatusURL
 	session.RuntimeWebSocketURL = runtimeEndpoints.RuntimeWebSocketURL
 	session.RuntimeOfflineURL = runtimeEndpoints.RuntimeOfflineURL
-	session.OpenClawPullURL = runtimeEndpoints.OpenClawPullURL
-	session.OpenClawPushURL = runtimeEndpoints.OpenClawPushURL
-	session.OpenClawAckURL = runtimeEndpoints.OpenClawAckURL
-	session.OpenClawNackURL = runtimeEndpoints.OpenClawNackURL
-	session.OpenClawStatusURL = runtimeEndpoints.OpenClawStatusURL
-	session.OpenClawWebSocketURL = runtimeEndpoints.OpenClawWebSocketURL
-	session.OfflineURL = runtimeEndpoints.OpenClawOfflineURL
+	session.OpenClawPullURL = ""
+	session.OpenClawPushURL = ""
+	session.OpenClawAckURL = ""
+	session.OpenClawNackURL = ""
+	session.OpenClawStatusURL = ""
+	session.OpenClawWebSocketURL = ""
+	session.OfflineURL = runtimeEndpoints.RuntimeOfflineURL
 
 	session.APIBase = NormalizeHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))
 	if session.APIBase == "" {

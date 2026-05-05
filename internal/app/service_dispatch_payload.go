@@ -28,7 +28,7 @@ type dispatchPayload struct {
 }
 
 // DispatchRequestFromPayload converts a dispatch skill payload into the
-// internal request shape shared by OpenClaw and HTTP JSON dispatch entrypoints.
+// internal request shape shared by runtime and HTTP JSON dispatch entrypoints.
 
 func DispatchRequestFromPayload(value any) (DispatchRequest, error) {
 	var payload dispatchPayload

@@ -10,15 +10,14 @@ type deliveryPayload struct {
 	Delivery struct {
 		DeliveryID string `json:"delivery_id"`
 	} `json:"delivery"`
-	DeliveryID      string          `json:"delivery_id"`
-	MessageID       string          `json:"message_id"`
-	FromAgentUUID   string          `json:"from_agent_uuid"`
-	FromAgentURI    string          `json:"from_agent_uri"`
-	ToAgentUUID     string          `json:"to_agent_uuid"`
-	ToAgentURI      string          `json:"to_agent_uri"`
-	Envelope        json.RawMessage `json:"envelope"`
-	Message         json.RawMessage `json:"message"`
-	OpenClawMessage json.RawMessage `json:"openclaw_message"`
+	DeliveryID    string          `json:"delivery_id"`
+	MessageID     string          `json:"message_id"`
+	FromAgentUUID string          `json:"from_agent_uuid"`
+	FromAgentURI  string          `json:"from_agent_uri"`
+	ToAgentUUID   string          `json:"to_agent_uuid"`
+	ToAgentURI    string          `json:"to_agent_uri"`
+	Envelope      json.RawMessage `json:"envelope"`
+	Message       json.RawMessage `json:"message"`
 }
 
 func decodePullResponsePayload(raw json.RawMessage, source string) (PullResponse, error) {
@@ -35,18 +34,12 @@ func decodePullResponsePayload(raw json.RawMessage, source string) (PullResponse
 		return PullResponse{}, fmt.Errorf("decode %s envelope: %w", source, err)
 	}
 	if !ok {
-		message, ok, err = decodeOpenClawMessage(delivery.OpenClawMessage)
+		message, ok, err = decodeOpenClawMessage(delivery.Message)
 		if err != nil {
-			return PullResponse{}, fmt.Errorf("decode %s openclaw_message: %w", source, err)
+			return PullResponse{}, fmt.Errorf("decode %s message: %w", source, err)
 		}
 		if !ok {
-			message, ok, err = decodeOpenClawMessage(delivery.Message)
-			if err != nil {
-				return PullResponse{}, fmt.Errorf("decode %s message: %w", source, err)
-			}
-			if !ok {
-				message = OpenClawMessage{}
-			}
+			message = OpenClawMessage{}
 		}
 	}
 
@@ -209,14 +202,13 @@ func a2aTextMessagePayload(parts []a2aPart) string {
 
 func decodeOpenClawMessageFromJSON(raw json.RawMessage) (OpenClawMessage, bool, error) {
 	var wrapped struct {
-		Envelope        json.RawMessage `json:"envelope"`
-		OpenClawMessage json.RawMessage `json:"openclaw_message"`
-		Message         json.RawMessage `json:"message"`
+		Envelope json.RawMessage `json:"envelope"`
+		Message  json.RawMessage `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &wrapped); err != nil {
 		return OpenClawMessage{}, false, err
 	}
-	for _, candidate := range []json.RawMessage{wrapped.Envelope, wrapped.OpenClawMessage, wrapped.Message} {
+	for _, candidate := range []json.RawMessage{wrapped.Envelope, wrapped.Message} {
 		message, ok, err := decodeWrappedOpenClawMessage(candidate)
 		if err != nil || ok {
 			return message, ok, err
@@ -250,7 +242,6 @@ func decodeWrappedOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, e
 
 func looksLikeOpenClawMessage(message OpenClawMessage) bool {
 	return strings.TrimSpace(message.Protocol) == runtimeEnvelopeProtocol ||
-		strings.TrimSpace(message.Protocol) == openClawProtocol ||
 		strings.TrimSpace(message.Kind) != "" ||
 		strings.TrimSpace(message.Type) != "" ||
 		strings.TrimSpace(message.SkillName) != "" ||

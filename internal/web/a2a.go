@@ -888,7 +888,7 @@ func (s *Server) a2aAgentCard(r *http.Request, targetRef string, target *app.Con
 		"metadata": map[string]any{
 			"harness":       "moltenhub-dispatch",
 			"target_agent":  targetRef,
-			"connected_via": "openclaw",
+			"connected_via": "runtime",
 		},
 	}
 	return card

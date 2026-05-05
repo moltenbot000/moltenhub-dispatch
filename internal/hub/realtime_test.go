@@ -130,9 +130,9 @@ func TestWebsocketEndpointFromPull(t *testing.T) {
 			want: "https://na.hub.molten.bot/v1/runtime/messages/ws",
 		},
 		{
-			name: "openclaw compatibility messages route",
+			name: "retired openclaw compatibility messages route",
 			pull: "https://na.hub.molten.bot/v1/openclaw/messages/pull",
-			want: "https://na.hub.molten.bot/v1/openclaw/messages/ws",
+			want: "",
 		},
 		{
 			name: "runtime pull route",
@@ -140,9 +140,9 @@ func TestWebsocketEndpointFromPull(t *testing.T) {
 			want: "https://runtime.na.hub.molten.bot/runtime/messages/ws",
 		},
 		{
-			name: "legacy messages alias route",
+			name: "retired legacy messages alias route",
 			pull: "https://runtime.na.hub.molten.bot/v1/openclaw/messages_pull",
-			want: "https://runtime.na.hub.molten.bot/v1/openclaw/messages_ws",
+			want: "",
 		},
 		{
 			name: "unknown route",
@@ -178,10 +178,10 @@ func TestDeliveryEndpointFromPull(t *testing.T) {
 			want:   "https://na.hub.molten.bot/v1/runtime/messages/ack",
 		},
 		{
-			name:   "openclaw compatibility messages route",
+			name:   "retired openclaw compatibility messages route",
 			pull:   "https://na.hub.molten.bot/v1/openclaw/messages/pull",
 			action: "ack",
-			want:   "https://na.hub.molten.bot/v1/openclaw/messages/ack",
+			want:   "",
 		},
 		{
 			name:   "runtime pull route",
@@ -190,10 +190,10 @@ func TestDeliveryEndpointFromPull(t *testing.T) {
 			want:   "https://runtime.na.hub.molten.bot/runtime/messages/nack",
 		},
 		{
-			name:   "legacy messages alias route",
+			name:   "retired legacy messages alias route",
 			pull:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages_pull",
 			action: "ack",
-			want:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages_ack",
+			want:   "",
 		},
 		{
 			name:   "unknown route",
@@ -225,11 +225,6 @@ func TestAPIBaseFromRuntimeEndpointSupportsStatusRoutes(t *testing.T) {
 		{
 			name: "runtime status route",
 			in:   "https://runtime.na.hub.molten.bot/v1/runtime/messages/{message_id}",
-			want: "https://runtime.na.hub.molten.bot/v1",
-		},
-		{
-			name: "openclaw compatibility status route",
-			in:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages/{message_id}",
 			want: "https://runtime.na.hub.molten.bot/v1",
 		},
 	}
@@ -309,7 +304,7 @@ func TestConnectRuntimeMessagesUsesVersionedFallbackEndpointWhenRuntimePullEndpo
 	defer session.Close()
 }
 
-func TestConnectRuntimeMessagesFallsBackToOpenClawWebsocketWhenRuntimeRouteMissing(t *testing.T) {
+func TestConnectRuntimeMessagesDoesNotFallbackToOpenClawWebsocketWhenRuntimeRouteMissing(t *testing.T) {
 	t.Parallel()
 
 	var sawRuntime bool
@@ -321,12 +316,7 @@ func TestConnectRuntimeMessagesFallsBackToOpenClawWebsocketWhenRuntimeRouteMissi
 			http.NotFound(w, r)
 		case "/v1/openclaw/messages/ws":
 			sawOpenClaw = true
-			websocket.Handler(func(conn *websocket.Conn) {
-				defer conn.Close()
-				if err := websocket.JSON.Send(conn, map[string]any{"type": "session_ready"}); err != nil {
-					t.Fatalf("send session_ready: %v", err)
-				}
-			}).ServeHTTP(w, r)
+			t.Fatalf("unexpected retired openclaw websocket call")
 		default:
 			t.Fatalf("path = %q, want runtime or openclaw websocket", r.URL.Path)
 		}
@@ -335,12 +325,12 @@ func TestConnectRuntimeMessagesFallsBackToOpenClawWebsocketWhenRuntimeRouteMissi
 
 	client := NewClient(server.URL)
 	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
-	if err != nil {
-		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
+	if err == nil {
+		session.Close()
+		t.Fatal("expected ConnectRuntimeMessages error")
 	}
-	defer session.Close()
-	if !sawRuntime || !sawOpenClaw {
-		t.Fatalf("expected runtime and openclaw websocket attempts, sawRuntime=%v sawOpenClaw=%v", sawRuntime, sawOpenClaw)
+	if !sawRuntime || sawOpenClaw {
+		t.Fatalf("expected runtime websocket only, sawRuntime=%v sawOpenClaw=%v", sawRuntime, sawOpenClaw)
 	}
 }
 
