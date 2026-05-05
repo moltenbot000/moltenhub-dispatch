@@ -4075,6 +4075,39 @@ func TestHandleInboundMessageDisplaysTextMessageInActivity(t *testing.T) {
 	}
 }
 
+func TestHandleInboundMessageIgnoresAcknowledgementsInActivity(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+
+	messages := []hub.PullResponse{
+		{
+			DeliveryID: "delivery-1",
+			OpenClawMessage: hub.OpenClawMessage{
+				Type:      "ack",
+				RequestID: "request-1",
+			},
+		},
+		{
+			DeliveryID: "delivery-2",
+			OpenClawMessage: hub.OpenClawMessage{
+				Kind:      "delivery_ack",
+				RequestID: "request-2",
+			},
+		},
+	}
+	for _, message := range messages {
+		if err := service.handleInboundMessage(context.Background(), message); err != nil {
+			t.Fatalf("handle acknowledgement message: %v", err)
+		}
+	}
+
+	state := service.store.Snapshot()
+	if len(state.RecentEvents) != 0 {
+		t.Fatalf("expected acknowledgements not to append recent activity, got %#v", state.RecentEvents)
+	}
+}
+
 func TestConsumeRealtimeSessionMarksWebsocketConnectivityAndAcksDeliveries(t *testing.T) {
 	t.Parallel()
 
