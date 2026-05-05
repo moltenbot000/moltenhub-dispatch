@@ -1572,6 +1572,56 @@ func TestHandleTaskStatusUpdateRecordsDownstreamProgress(t *testing.T) {
 	if got := state.RecentEvents[0].Detail; got != "Task running." {
 		t.Fatalf("event detail = %q, want Task running.", got)
 	}
+	if got := state.RecentEvents[0].HubTaskID; got != "hub-task-1" {
+		t.Fatalf("event hub task id = %q, want hub-task-1", got)
+	}
+	if got := state.RecentEvents[0].ChildRequestID; got != "child-req" {
+		t.Fatalf("event child request id = %q, want child-req", got)
+	}
+}
+
+func TestHandleUnmatchedTaskMessagesKeepRequestAlias(t *testing.T) {
+	t.Parallel()
+
+	service, _ := newTestService(t)
+	if err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		return nil
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-1",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "task_status_update",
+			RequestID: "child-req",
+			Status:    "working",
+		},
+	}); err != nil {
+		t.Fatalf("handle unmatched status update: %v", err)
+	}
+
+	if err := service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-2",
+		OpenClawMessage: hub.OpenClawMessage{
+			Type:      "skill_result",
+			RequestID: "child-req",
+			OK:        boolPtr(true),
+		},
+	}); err != nil {
+		t.Fatalf("handle unmatched skill result: %v", err)
+	}
+
+	state := service.store.Snapshot()
+	if len(state.RecentEvents) < 2 {
+		t.Fatalf("expected unmatched recent events, got %#v", state.RecentEvents)
+	}
+	for _, event := range state.RecentEvents[:2] {
+		if event.ChildRequestID != "child-req" {
+			t.Fatalf("event child request id = %q, want child-req in %#v", event.ChildRequestID, event)
+		}
+	}
 }
 
 func TestExpirePendingTasksFinalizesTimedOutTaskImmediately(t *testing.T) {

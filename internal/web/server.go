@@ -1091,18 +1091,20 @@ func mergedActivityFeed(tasks []app.PendingTask, events []app.RuntimeEvent) []ac
 			subtitle = joinNonEmpty(" • ", skill, strings.TrimSpace(event.Title))
 		}
 		items = append(items, activityFeedItem{
-			SortAt:        event.At,
-			Kind:          "recent_event",
-			Title:         title,
-			Subtitle:      subtitle,
-			WhenLabel:     formatTimestamp(event.At),
-			Detail:        strings.TrimSpace(event.Detail),
-			Level:         strings.TrimSpace(event.Level),
-			Skill:         skill,
-			TargetAgent:   target,
-			TaskID:        strings.TrimSpace(event.TaskID),
-			LogPath:       strings.TrimSpace(event.LogPath),
-			IsRecentEvent: true,
+			SortAt:         event.At,
+			Kind:           "recent_event",
+			Title:          title,
+			Subtitle:       subtitle,
+			WhenLabel:      formatTimestamp(event.At),
+			Detail:         strings.TrimSpace(event.Detail),
+			Level:          strings.TrimSpace(event.Level),
+			Skill:          skill,
+			TargetAgent:    target,
+			TaskID:         strings.TrimSpace(event.TaskID),
+			HubTaskID:      strings.TrimSpace(event.HubTaskID),
+			ChildRequestID: strings.TrimSpace(event.ChildRequestID),
+			LogPath:        strings.TrimSpace(event.LogPath),
+			IsRecentEvent:  true,
 		})
 	}
 	sort.SliceStable(items, func(i, j int) bool {

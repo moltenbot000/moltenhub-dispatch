@@ -2433,6 +2433,14 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const activityFeedLaneKey = (item) => {`) {
 		t.Fatalf("expected activity feed lane grouping key helper, body=%s", body)
 	}
+	if !strings.Contains(body, `const childRequestID = trimmedString(item && item.childRequestID);`) ||
+		!strings.Contains(body, "return `child:${childRequestID}`;") {
+		t.Fatalf("expected activity feed lanes to prefer child request ids for task lifecycle grouping, body=%s", body)
+	}
+	if !strings.Contains(body, `const hubTaskID = trimmedString(item && item.hubTaskID);`) ||
+		!strings.Contains(body, "return `hub:${hubTaskID}`;") {
+		t.Fatalf("expected activity feed lanes to group hub task aliases, body=%s", body)
+	}
 	if !strings.Contains(body, `const groupActivityFeedLanes = (feed) => {`) {
 		t.Fatalf("expected activity feed lane grouping helper, body=%s", body)
 	}
