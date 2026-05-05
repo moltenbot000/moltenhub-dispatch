@@ -4859,6 +4859,8 @@ body.settings-modal-open {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
 .activity-feed-lane-copy {
@@ -4878,10 +4880,9 @@ body.settings-modal-open {
 }
 
 .activity-feed-lane.is-collapsed .activity-feed-lane-label {
-  overflow: hidden;
-  overflow-wrap: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .activity-feed-lane-order {
@@ -4895,6 +4896,7 @@ body.settings-modal-open {
 
 .activity-feed-lane-toggle {
   flex: 0 0 auto;
+  align-self: flex-start;
 }
 
 .activity-feed-lane-static {
@@ -5095,11 +5097,17 @@ body.settings-modal-open {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  min-width: 0;
+}
+
+.runtime-event-card-header > :first-child {
+  min-width: 0;
 }
 
 .runtime-event-card-header h3 {
   margin: 0;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .runtime-event-card-title-row {
