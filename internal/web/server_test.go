@@ -2436,8 +2436,17 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `laneTrack.className = "activity-feed-lane-track";`) {
 		t.Fatalf("expected grouped activity renderer to build horizontal lane tracks, body=%s", body)
 	}
-	if !strings.Contains(body, `laneOrder.textContent = "Oldest -> newest";`) {
-		t.Fatalf("expected grouped activity renderer to annotate left-to-right ordering, body=%s", body)
+	if !strings.Contains(body, `const activityFeedLaneStaticRows = (lane) => {`) {
+		t.Fatalf("expected grouped activity renderer to keep static task details at lane level, body=%s", body)
+	}
+	if !strings.Contains(body, `? "Oldest -> newest"`) {
+		t.Fatalf("expected grouped activity renderer to annotate expanded update logs, body=%s", body)
+	}
+	if !strings.Contains(body, ": `Latest status") {
+		t.Fatalf("expected grouped activity renderer to show only latest status when minimized, body=%s", body)
+	}
+	if !strings.Contains(body, `const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);`) {
+		t.Fatalf("expected grouped activity renderer to collapse lanes to newest update, body=%s", body)
 	}
 	if !strings.Contains(body, `let activityFeedExpandedKeys = new Set();`) {
 		t.Fatalf("expected activity feed expanded-state cache, body=%s", body)
@@ -2445,8 +2454,8 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const activityFeedItemKey = (item) => {`) {
 		t.Fatalf("expected activity feed stable-key helper, body=%s", body)
 	}
-	if !strings.Contains(body, `const expanded = activityFeedExpandedKeys.has(activityKey);`) {
-		t.Fatalf("expected activity feed refresh to reuse expanded cards, body=%s", body)
+	if !strings.Contains(body, `const laneExpanded = activityFeedExpandedKeys.has(laneKey);`) {
+		t.Fatalf("expected activity feed refresh to reuse expanded lanes, body=%s", body)
 	}
 	if !strings.Contains(body, `card.dataset.runtimeEventLaneKey = laneKey;`) {
 		t.Fatalf("expected grouped activity cards to record lane identity, body=%s", body)
