@@ -1,6 +1,7 @@
 package support
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -140,5 +141,62 @@ func TestStringFromAnyAndMapByKeyTraverseNestedPayloads(t *testing.T) {
 	endpoints := MapByKey(payload, "endpoints")
 	if got := StringFromMap(endpoints, "metadata"); got != "https://na.hub.molten.bot/runtime/profile" {
 		t.Fatalf("MapByKey/StringFromMap = %q, want metadata endpoint", got)
+	}
+}
+
+func TestNormalizeEmptyAndFallbackBranches(t *testing.T) {
+	if got := FirstNonEmptyString(" ", "\t"); got != "" {
+		t.Fatalf("FirstNonEmptyString empty = %q, want empty", got)
+	}
+	if got := StringFromMap(nil, "name"); got != "" {
+		t.Fatalf("StringFromMap nil = %q, want empty", got)
+	}
+	if got := MapByKey(map[string]any{"nested": map[string]any{}}, "nested"); got != nil {
+		t.Fatalf("MapByKey empty nested = %#v, want nil", got)
+	}
+	if got := MapByKey([]any{map[string]any{"nested": map[string]any{"name": "agent"}}}, "nested"); got["name"] != "agent" {
+		t.Fatalf("MapByKey slice = %#v, want nested map", got)
+	}
+	if got := StringSliceFromAny("skills"); got != nil {
+		t.Fatalf("StringSliceFromAny unsupported = %#v, want nil", got)
+	}
+	if got := CloneMap(nil); got != nil {
+		t.Fatalf("CloneMap nil = %#v, want nil", got)
+	}
+}
+
+func TestParseDurationRejectsInvalidValues(t *testing.T) {
+	for _, raw := range []string{"", "every", "not-a-duration", "1x"} {
+		if _, err := ParseDuration(raw); err == nil {
+			t.Fatalf("ParseDuration(%q) expected error", raw)
+		}
+	}
+}
+
+func TestUnmarshalJSONPayloadEscapesControlBytesAndPreservesRetryErrors(t *testing.T) {
+	var payload map[string]string
+	raw := []byte{'{', '"', 'p', '"', ':', '"', 'a', 0x01, 'b', '"', '}'}
+	if err := UnmarshalJSONPayload(raw, &payload); err != nil {
+		t.Fatalf("UnmarshalJSONPayload control byte: %v", err)
+	}
+	if got := payload["p"]; got != "a\x01b" {
+		t.Fatalf("payload = %q, want control byte string", got)
+	}
+
+	var out map[string]any
+	err := UnmarshalJSONPayload([]byte("{\"p\":\"unterminated\n"), &out)
+	if err == nil {
+		t.Fatal("expected original JSON error")
+	}
+}
+
+func TestCloneMapFallsBackToShallowClone(t *testing.T) {
+	original := map[string]any{"bad": func() {}, "ok": "value"}
+	cloned := CloneMap(original)
+	if cloned["ok"] != "value" {
+		t.Fatalf("CloneMap fallback = %#v, want ok value", cloned)
+	}
+	if _, err := json.Marshal(cloned); err == nil {
+		t.Fatal("fallback clone should still contain unmarshalable function")
 	}
 }

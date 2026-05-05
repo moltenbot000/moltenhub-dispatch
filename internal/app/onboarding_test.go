@@ -240,3 +240,31 @@ func TestNormalizeOnboardingTokens(t *testing.T) {
 		})
 	}
 }
+
+func TestOnboardingErrorNilAndWrappingBranches(t *testing.T) {
+	var onboardingErr *OnboardingError
+	if got := onboardingErr.Error(); got != "onboarding failed" {
+		t.Fatalf("nil OnboardingError Error = %q", got)
+	}
+	if got := onboardingErr.Unwrap(); got != nil {
+		t.Fatalf("nil OnboardingError Unwrap = %v, want nil", got)
+	}
+	if got := (&OnboardingError{}).Error(); got != "onboarding failed" {
+		t.Fatalf("empty OnboardingError Error = %q", got)
+	}
+	if err := WrapOnboardingError("stage", nil); err != nil {
+		t.Fatalf("WrapOnboardingError nil = %v, want nil", err)
+	}
+	err := WrapOnboardingError("", assertErr("failed"))
+	wrapped, ok := err.(*OnboardingError)
+	if !ok {
+		t.Fatalf("wrapped error type = %T", err)
+	}
+	if wrapped.Stage != OnboardingStepBind || wrapped.Unwrap().Error() != "failed" {
+		t.Fatalf("unexpected wrapped error: %#v", wrapped)
+	}
+}
+
+type assertErr string
+
+func (e assertErr) Error() string { return string(e) }
