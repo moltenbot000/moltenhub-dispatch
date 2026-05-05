@@ -2068,6 +2068,37 @@
         return status === "connected" || transport === "ws" || transport === "http_long_poll" || transport === "http" || transport === "connected";
       };
 
+      const syncShellInteractivity = (connected = isHubConnectedState()) => {
+        const usable = Boolean(connected);
+        if (shell instanceof HTMLElement) {
+          if (bound && usable) {
+            shell.inert = false;
+            shell.removeAttribute("inert");
+            shell.setAttribute("aria-hidden", "false");
+          } else {
+            shell.inert = true;
+            shell.setAttribute("inert", "");
+            shell.setAttribute("aria-hidden", "true");
+          }
+        }
+        if (!(onboardingModalBackdrop instanceof HTMLElement) || !bound) {
+          return;
+        }
+        if (usable) {
+          if (onboardingModalBackdrop.dataset.connectionBlocker === "true" || !(agentSettingsModalClose instanceof HTMLButtonElement)) {
+            onboardingModalBackdrop.hidden = true;
+            onboardingModalBackdrop.setAttribute("aria-hidden", "true");
+            onboardingModalBackdrop.dataset.connectionBlocker = "false";
+            document.body.classList.remove("onboarding-modal-open");
+          }
+          return;
+        }
+        onboardingModalBackdrop.dataset.connectionBlocker = "true";
+        onboardingModalBackdrop.hidden = false;
+        onboardingModalBackdrop.setAttribute("aria-hidden", "false");
+        document.body.classList.add("onboarding-modal-open");
+      };
+
       const syncSubActions = (state = latestHubConnectionState) => {
         if (!subActions || !subActionsNotice) {
           return;
@@ -2179,6 +2210,7 @@
           status: connected ? "connected" : "disconnected",
           transport: mode || "offline",
         };
+        syncShellInteractivity(connected);
         syncSubActions(latestHubConnectionState);
       };
       let dispatchRequestInFlight = false;
