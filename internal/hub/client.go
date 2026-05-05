@@ -109,6 +109,7 @@ type OpenClawMessage struct {
 	Type          string `json:"type,omitempty"`
 	Timestamp     string `json:"timestamp,omitempty"`
 	SkillName     string `json:"skill_name,omitempty"`
+	Message       string `json:"message,omitempty"`
 	Payload       any    `json:"payload,omitempty"`
 	PayloadFormat string `json:"payload_format,omitempty"`
 	Input         any    `json:"input,omitempty"`
@@ -119,6 +120,10 @@ type OpenClawMessage struct {
 	Error         string `json:"error,omitempty"`
 	ErrorDetail   any    `json:"error_detail,omitempty"`
 	Status        string `json:"status,omitempty"`
+	A2AState      string `json:"a2a_state,omitempty"`
+	TaskState     string `json:"task_state,omitempty"`
+	StatusUpdate  any    `json:"statusUpdate,omitempty"`
+	Details       any    `json:"details,omitempty"`
 }
 
 type PullResponse struct {

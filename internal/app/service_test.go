@@ -1492,6 +1492,88 @@ func TestHandleDownstreamSuccessAppendsCompletionRecentActivity(t *testing.T) {
 	}
 }
 
+func TestHandleTaskStatusUpdateRecordsDownstreamProgress(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.PendingTasks = []PendingTask{
+			{
+				ID:                     "task-1",
+				ParentRequestID:        "parent-req",
+				ChildRequestID:         "child-req",
+				HubTaskID:              "hub-task-1",
+				OriginalSkillName:      "run_task",
+				TargetAgentDisplayName: "Worker A",
+				TargetAgentUUID:        "worker-uuid",
+				LogPath:                filepath.Join(service.settings.DataDir, "logs", "task-1.log"),
+				CreatedAt:              time.Now().Add(-time.Minute),
+				ExpiresAt:              time.Now().Add(time.Minute),
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	if err := service.handleInboundMessage(context.Background(), hub.PullResponse{
+		DeliveryID: "delivery-1",
+		MessageID:  "status-message-1",
+		OpenClawMessage: hub.OpenClawMessage{
+			Protocol:  "a2a.v1",
+			Type:      "task_status_update",
+			RequestID: "child-req",
+			Status:    "working",
+			A2AState:  "TASK_STATE_WORKING",
+			Message:   "Task running.",
+			StatusUpdate: map[string]any{
+				"taskId":    "hub-task-1",
+				"contextId": "parent-req",
+				"status": map[string]any{
+					"state": "TASK_STATE_WORKING",
+					"message": map[string]any{
+						"parts": []any{map[string]any{"text": "Task running."}},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("handle task status update: %v", err)
+	}
+
+	if len(fake.publishCalls) != 0 {
+		t.Fatalf("expected no caller result publish for progress update, got %d", len(fake.publishCalls))
+	}
+	state := service.store.Snapshot()
+	if len(state.PendingTasks) != 1 {
+		t.Fatalf("expected pending task to remain, got %d", len(state.PendingTasks))
+	}
+	pending := state.PendingTasks[0]
+	if pending.DownstreamStatus != "working" {
+		t.Fatalf("downstream status = %q, want working", pending.DownstreamStatus)
+	}
+	if pending.DownstreamTaskState != "TASK_STATE_WORKING" {
+		t.Fatalf("downstream task state = %q, want TASK_STATE_WORKING", pending.DownstreamTaskState)
+	}
+	if pending.DownstreamMessage != "Task running." {
+		t.Fatalf("downstream message = %q, want Task running.", pending.DownstreamMessage)
+	}
+	if pending.DownstreamUpdatedAt.IsZero() {
+		t.Fatal("expected downstream updated timestamp")
+	}
+	if len(state.RecentEvents) == 0 {
+		t.Fatal("expected progress recent event")
+	}
+	if got := state.RecentEvents[0].Title; got != "Task progress" {
+		t.Fatalf("event title = %q, want Task progress", got)
+	}
+	if got := state.RecentEvents[0].Detail; got != "Task running." {
+		t.Fatalf("event detail = %q, want Task running.", got)
+	}
+}
+
 func TestExpirePendingTasksFinalizesTimedOutTaskImmediately(t *testing.T) {
 	t.Parallel()
 

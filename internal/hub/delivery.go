@@ -167,18 +167,34 @@ func a2aTextMessagePayload(parts []a2aPart) string {
 
 func decodeOpenClawMessageFromJSON(raw json.RawMessage) (OpenClawMessage, bool, error) {
 	var wrapped struct {
-		OpenClawMessage *OpenClawMessage `json:"openclaw_message"`
-		Message         *OpenClawMessage `json:"message"`
+		OpenClawMessage json.RawMessage `json:"openclaw_message"`
+		Message         json.RawMessage `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &wrapped); err != nil {
 		return OpenClawMessage{}, false, err
 	}
-	for _, candidate := range []*OpenClawMessage{wrapped.OpenClawMessage, wrapped.Message} {
-		if candidate != nil && looksLikeOpenClawMessage(*candidate) {
-			return *candidate, true, nil
+	for _, candidate := range []json.RawMessage{wrapped.OpenClawMessage, wrapped.Message} {
+		message, ok, err := decodeWrappedOpenClawMessage(candidate)
+		if err != nil || ok {
+			return message, ok, err
 		}
 	}
 
+	var message OpenClawMessage
+	if err := json.Unmarshal(raw, &message); err != nil {
+		return OpenClawMessage{}, false, err
+	}
+	if !looksLikeOpenClawMessage(message) {
+		return OpenClawMessage{}, false, nil
+	}
+	return message, true, nil
+}
+
+func decodeWrappedOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, error) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || !strings.HasPrefix(trimmed, "{") {
+		return OpenClawMessage{}, false, nil
+	}
 	var message OpenClawMessage
 	if err := json.Unmarshal(raw, &message); err != nil {
 		return OpenClawMessage{}, false, err
@@ -197,7 +213,10 @@ func looksLikeOpenClawMessage(message OpenClawMessage) bool {
 		strings.TrimSpace(message.RequestID) != "" ||
 		strings.TrimSpace(message.ReplyTo) != "" ||
 		strings.TrimSpace(message.Status) != "" ||
+		strings.TrimSpace(message.A2AState) != "" ||
+		strings.TrimSpace(message.TaskState) != "" ||
 		strings.TrimSpace(message.Error) != "" ||
+		message.StatusUpdate != nil ||
 		message.Payload != nil ||
 		message.Input != nil
 }
