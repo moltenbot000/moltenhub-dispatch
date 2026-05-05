@@ -4849,6 +4849,10 @@ body.settings-modal-open {
   gap: 8px;
 }
 
+.activity-feed-lane.is-collapsed {
+  gap: 0;
+}
+
 .activity-feed-lane-header {
   margin: 0;
   display: flex;
@@ -4859,6 +4863,7 @@ body.settings-modal-open {
 
 .activity-feed-lane-copy {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .activity-feed-lane-label {
@@ -4870,6 +4875,13 @@ body.settings-modal-open {
   text-transform: uppercase;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.activity-feed-lane.is-collapsed .activity-feed-lane-label {
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .activity-feed-lane-order {

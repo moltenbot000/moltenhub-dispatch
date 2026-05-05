@@ -3423,6 +3423,58 @@
         return items.length > 0 ? items[0] : null;
       };
 
+      const formatRelativeRuntimeAge = (value) => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          const elapsedSeconds = Math.max(0, Math.floor((Date.now() - value) / 1000));
+          if (elapsedSeconds < 60) {
+            return `${elapsedSeconds}s`;
+          }
+          const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+          if (elapsedMinutes < 60) {
+            return `${elapsedMinutes}m`;
+          }
+          const elapsedHours = Math.floor(elapsedMinutes / 60);
+          if (elapsedHours < 24) {
+            return `${elapsedHours}h`;
+          }
+          return `${Math.floor(elapsedHours / 24)}d`;
+        }
+        const raw = trimmedString(value);
+        if (raw === "" || raw === "-") {
+          return "";
+        }
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) {
+          return "";
+        }
+        const elapsedSeconds = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 1000));
+        if (elapsedSeconds < 60) {
+          return `${elapsedSeconds}s`;
+        }
+        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+        if (elapsedMinutes < 60) {
+          return `${elapsedMinutes}m`;
+        }
+        const elapsedHours = Math.floor(elapsedMinutes / 60);
+        if (elapsedHours < 24) {
+          return `${elapsedHours}h`;
+        }
+        return `${Math.floor(elapsedHours / 24)}d`;
+      };
+
+      const activityFeedLaneCollapsedLabel = (lane, latestItem) => {
+        const parts = [
+          trimmedString(lane && lane.targetAgent) || "Agent",
+          trimmedString(lane && lane.skill) || "Skill",
+          trimmedString(latestItem && latestItem.title)
+            || trimmedString(latestItem && latestItem.detail)
+            || "Current Progress",
+        ];
+        const age = formatRelativeRuntimeAge(latestItem && latestItem.sortAt);
+        const suffix = age === "" ? "" : ` (last status updated, ${age})`;
+        return `${parts.join(" - ")}${suffix}`;
+      };
+
       const activityFeedLaneStaticRows = (lane) => {
         if (trimmedString(lane && lane.groupTitle) !== "") {
           return [];
@@ -3662,6 +3714,7 @@
           laneElement.className = "activity-feed-lane";
           const laneKey = trimmedString(lane && lane.key);
           const laneExpanded = activityFeedExpandedKeys.has(laneKey);
+          laneElement.classList.toggle("is-collapsed", !laneExpanded);
           if (laneExpanded) {
             nextExpandedKeys.add(laneKey);
           }
@@ -3671,15 +3724,17 @@
           laneCopy.className = "activity-feed-lane-copy";
           const laneLabel = document.createElement("h3");
           laneLabel.className = "activity-feed-lane-label";
-          laneLabel.textContent = activityFeedLaneLabel(lane);
-          laneCopy.appendChild(laneLabel);
           const latestItem = activityFeedLaneLatestItem(lane);
-          const laneMeta = document.createElement("p");
-          laneMeta.className = "activity-feed-lane-order";
-          laneMeta.textContent = laneExpanded
-            ? "Latest -> oldest"
-            : `Latest status${latestItem && latestItem.when ? ` • ${latestItem.when}` : ""}`;
-          laneCopy.appendChild(laneMeta);
+          laneLabel.textContent = laneExpanded
+            ? activityFeedLaneLabel(lane)
+            : activityFeedLaneCollapsedLabel(lane, latestItem);
+          laneCopy.appendChild(laneLabel);
+          if (laneExpanded) {
+            const laneMeta = document.createElement("p");
+            laneMeta.className = "activity-feed-lane-order";
+            laneMeta.textContent = "Latest -> oldest";
+            laneCopy.appendChild(laneMeta);
+          }
           laneHeader.appendChild(laneCopy);
           const laneToggle = document.createElement("button");
           laneToggle.type = "button";
@@ -3703,58 +3758,57 @@
           laneHeader.appendChild(laneToggle);
           laneElement.appendChild(laneHeader);
 
-          const staticRows = activityFeedLaneStaticRows(lane);
-          if (staticRows.length > 0) {
-            const staticDetails = document.createElement("dl");
-            staticDetails.className = "activity-feed-lane-static";
-            staticRows.forEach(([label, value]) => {
-              const term = document.createElement("dt");
-              term.textContent = label;
-              const detail = document.createElement("dd");
-              detail.textContent = value;
-              staticDetails.appendChild(term);
-              staticDetails.appendChild(detail);
-            });
-            laneElement.appendChild(staticDetails);
-          }
+          if (laneExpanded) {
+            const staticRows = activityFeedLaneStaticRows(lane);
+            if (staticRows.length > 0) {
+              const staticDetails = document.createElement("dl");
+              staticDetails.className = "activity-feed-lane-static";
+              staticRows.forEach(([label, value]) => {
+                const term = document.createElement("dt");
+                term.textContent = label;
+                const detail = document.createElement("dd");
+                detail.textContent = value;
+                staticDetails.appendChild(term);
+                staticDetails.appendChild(detail);
+              });
+              laneElement.appendChild(staticDetails);
+            }
 
-          const laneTrack = document.createElement("div");
-          laneTrack.className = "activity-feed-lane-track";
-          const laneItems = Array.isArray(lane.items) ? lane.items : [];
-          const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);
-          laneTrack.classList.toggle("is-collapsed", !laneExpanded);
-          visibleItems.forEach((item) => {
-            const activityKey = activityFeedItemKey(item);
-            const expanded = laneExpanded;
-            const card = createRuntimeEventCard(item.title, (body) => {
-              appendRuntimeRow(body, "When", item.when);
-              appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
-              appendRuntimeRow(body, "Status", item.status);
-              appendRuntimeRow(body, "Level", item.level);
-              appendRuntimeRow(body, "", item.detail);
-              if (trimmedString(lane && lane.groupTitle) !== "") {
-                appendRuntimeRow(body, "Skill", item.skill);
-                appendRuntimeRow(body, "Target agent", item.targetAgent);
-                appendRuntimeRow(body, "Task", item.taskID);
-                appendRuntimeRow(body, "Log", item.logPath);
-              }
-            }, {
-              subtitleText: item.subtitle,
-              subtitleBuilder: item.status ? (subtitle) => {
-                const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
-                if (status) {
-                  subtitle.appendChild(status);
+            const laneTrack = document.createElement("div");
+            laneTrack.className = "activity-feed-lane-track";
+            const laneItems = Array.isArray(lane.items) ? lane.items : [];
+            laneItems.forEach((item) => {
+              const activityKey = activityFeedItemKey(item);
+              const card = createRuntimeEventCard(item.title, (body) => {
+                appendRuntimeRow(body, "When", item.when);
+                appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
+                appendRuntimeRow(body, "Status", item.status);
+                appendRuntimeRow(body, "Level", item.level);
+                appendRuntimeRow(body, "", item.detail);
+                if (trimmedString(lane && lane.groupTitle) !== "") {
+                  appendRuntimeRow(body, "Skill", item.skill);
+                  appendRuntimeRow(body, "Target agent", item.targetAgent);
+                  appendRuntimeRow(body, "Task", item.taskID);
+                  appendRuntimeRow(body, "Log", item.logPath);
                 }
-              } : null,
-              iconName: item.iconName,
-              iconClass: item.iconClass,
-              laneKey: lane.key,
-              activityKey,
-              expanded,
+              }, {
+                subtitleText: item.subtitle,
+                subtitleBuilder: item.status ? (subtitle) => {
+                  const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
+                  if (status) {
+                    subtitle.appendChild(status);
+                  }
+                } : null,
+                iconName: item.iconName,
+                iconClass: item.iconClass,
+                laneKey: lane.key,
+                activityKey,
+                expanded: true,
+              });
+              laneTrack.appendChild(card);
             });
-            laneTrack.appendChild(card);
-          });
-          laneElement.appendChild(laneTrack);
+            laneElement.appendChild(laneTrack);
+          }
           activityFeedList.appendChild(laneElement);
         });
         activityFeedExpandedKeys = nextExpandedKeys;
