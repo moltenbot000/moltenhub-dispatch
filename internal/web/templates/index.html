@@ -3492,7 +3492,7 @@
           if (elapsedHours < 24) {
             return `${elapsedHours}h`;
           }
-          return `${Math.floor(elapsedHours / 24)}d`;
+          return `${elapsedHours}h`;
         }
         const raw = trimmedString(value);
         if (raw === "" || raw === "-") {
@@ -3514,7 +3514,7 @@
         if (elapsedHours < 24) {
           return `${elapsedHours}h`;
         }
-        return `${Math.floor(elapsedHours / 24)}d`;
+        return `${elapsedHours}h`;
       };
 
       const activityFeedLaneCollapsedLabel = (lane, latestItem) => {
@@ -3880,7 +3880,11 @@
               row.appendChild(progressCell);
 
               const whenCell = document.createElement("td");
-              whenCell.textContent = trimmedString(item.when) || trimmedString(item.subtitle) || "-";
+              const absoluteWhen = trimmedString(item.when) || trimmedString(item.subtitle);
+              whenCell.textContent = formatRelativeRuntimeAge(item.sortAt) || absoluteWhen || "-";
+              if (absoluteWhen !== "") {
+                whenCell.title = absoluteWhen;
+              }
               row.appendChild(whenCell);
 
               const detailsCell = document.createElement("td");
