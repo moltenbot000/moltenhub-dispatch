@@ -87,18 +87,22 @@ func decodeOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, error) {
 
 func openClawMessageFromA2A(raw json.RawMessage) (OpenClawMessage, bool, error) {
 	var envelope struct {
-		Protocol string             `json:"protocol"`
-		Message  *a2aMessagePayload `json:"message"`
+		Protocol string          `json:"protocol"`
+		Message  json.RawMessage `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return OpenClawMessage{}, false, err
 	}
-	if strings.TrimSpace(envelope.Protocol) == a2aProtocolAdapter && envelope.Message != nil {
-		return openClawMessageFromA2APayload(*envelope.Message)
+	if strings.TrimSpace(envelope.Protocol) == a2aProtocolAdapter && len(strings.TrimSpace(string(envelope.Message))) > 0 {
+		message, ok, err := decodeA2AMessagePayload(envelope.Message)
+		if err != nil || !ok {
+			return OpenClawMessage{}, false, err
+		}
+		return openClawMessageFromA2APayload(message)
 	}
 
-	var message a2aMessagePayload
-	if err := json.Unmarshal(raw, &message); err != nil {
+	message, ok, err := decodeA2AMessagePayload(raw)
+	if err != nil || !ok {
 		return OpenClawMessage{}, false, err
 	}
 	if len(message.Parts) == 0 {
@@ -118,6 +122,37 @@ type a2aMessagePayload struct {
 type a2aPart struct {
 	Data json.RawMessage `json:"data"`
 	Text *string         `json:"text"`
+}
+
+func decodeA2AMessagePayload(raw json.RawMessage) (a2aMessagePayload, bool, error) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return a2aMessagePayload{}, false, nil
+	}
+	if strings.HasPrefix(trimmed, "\"") {
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return a2aMessagePayload{}, false, err
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return a2aMessagePayload{}, false, nil
+		}
+		return a2aMessagePayload{
+			Parts: []a2aPart{{Text: &text}},
+		}, true, nil
+	}
+	if !strings.HasPrefix(trimmed, "{") {
+		return a2aMessagePayload{}, false, nil
+	}
+	var message a2aMessagePayload
+	if err := json.Unmarshal(raw, &message); err != nil {
+		return a2aMessagePayload{}, false, err
+	}
+	if len(message.Parts) == 0 {
+		return a2aMessagePayload{}, false, nil
+	}
+	return message, true, nil
 }
 
 func openClawMessageFromA2APayload(message a2aMessagePayload) (OpenClawMessage, bool, error) {

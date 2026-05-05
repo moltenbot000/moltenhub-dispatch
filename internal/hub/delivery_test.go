@@ -65,3 +65,52 @@ func TestDecodeOpenClawMessageFromA2AStatusUpdateTextPart(t *testing.T) {
 		t.Fatalf("statusUpdate = %#v, want map", message.StatusUpdate)
 	}
 }
+
+func TestDecodeOpenClawMessageFromA2AStringMessage(t *testing.T) {
+	t.Parallel()
+
+	raw := json.RawMessage(`{
+		"protocol": "a2a.v1",
+		"message": "Hub still connected."
+	}`)
+
+	message, ok, err := decodeOpenClawMessage(raw)
+	if err != nil {
+		t.Fatalf("decode A2A string message: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected decoded text message")
+	}
+	if message.Type != "text_message" {
+		t.Fatalf("type = %q, want text_message", message.Type)
+	}
+	if message.Payload != "Hub still connected." {
+		t.Fatalf("payload = %#v, want Hub still connected.", message.Payload)
+	}
+}
+
+func TestDecodePullResponsePayloadWithA2AStringMessage(t *testing.T) {
+	t.Parallel()
+
+	raw := json.RawMessage(`{
+		"delivery_id": "delivery-1",
+		"openclaw_message": {
+			"protocol": "a2a.v1",
+			"message": "Hub still connected."
+		}
+	}`)
+
+	response, err := decodePullResponsePayload(raw, "pull response")
+	if err != nil {
+		t.Fatalf("decode pull response: %v", err)
+	}
+	if response.DeliveryID != "delivery-1" {
+		t.Fatalf("delivery_id = %q, want delivery-1", response.DeliveryID)
+	}
+	if response.OpenClawMessage.Type != "text_message" {
+		t.Fatalf("type = %q, want text_message", response.OpenClawMessage.Type)
+	}
+	if response.OpenClawMessage.Payload != "Hub still connected." {
+		t.Fatalf("payload = %#v, want Hub still connected.", response.OpenClawMessage.Payload)
+	}
+}
