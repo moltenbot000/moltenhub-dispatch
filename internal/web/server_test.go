@@ -4446,6 +4446,59 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	}
 }
 
+func TestHandleIndexSyncsShellInteractivityFromLiveHubStatus(t *testing.T) {
+	t.Parallel()
+
+	server, err := New(&stubService{
+		state: app.AppState{
+			Settings: app.DefaultSettings(),
+			Session: app.Session{
+				AgentToken: "agent-token",
+			},
+			Connection: app.ConnectionState{
+				Status:    app.ConnectionStatusDisconnected,
+				Transport: app.ConnectionTransportRetrying,
+			},
+			ConnectedAgents: []app.ConnectedAgent{
+				testConnectedAgent(
+					"dispatcher",
+					"Dispatcher",
+					"dispatcher-uuid",
+					"molten://agent/dispatcher",
+					app.Skill{Name: "dispatch_skill_request", Description: "Dispatch a task."},
+				),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `inert aria-hidden="true"`) {
+		t.Fatalf("expected initial disconnected bound shell to be inert, body=%s", body)
+	}
+	if !strings.Contains(body, `const syncShellInteractivity = (connected = isHubConnectedState()) => {`) {
+		t.Fatalf("expected live status shell interactivity helper, body=%s", body)
+	}
+	if !strings.Contains(body, `shell.removeAttribute("inert");`) {
+		t.Fatalf("expected live hub connection to remove inert shell blocker, body=%s", body)
+	}
+	if !strings.Contains(body, `shell.setAttribute("aria-hidden", "false");`) {
+		t.Fatalf("expected live hub connection to expose shell to interaction, body=%s", body)
+	}
+	if !strings.Contains(body, `onboardingModalBackdrop.dataset.connectionBlocker = "false";`) {
+		t.Fatalf("expected live hub connection to close startup connection blocker, body=%s", body)
+	}
+	if !strings.Contains(body, `syncShellInteractivity(connected);`) {
+		t.Fatalf("expected hub status rendering to sync shell interactivity, body=%s", body)
+	}
+}
+
 func TestHandleIndexHidesUUIDsAndShowsHubAgentMetadata(t *testing.T) {
 	t.Parallel()
 
