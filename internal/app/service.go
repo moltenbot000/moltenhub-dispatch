@@ -9,18 +9,18 @@ import (
 )
 
 const (
-	dispatchSkillName     = "dispatch_skill_request"
-	dispatcherHarness     = "moltenhub-dispatch"
-	openClawHTTPProtocol  = "openclaw.http.v1"
-	openClawSkillRequest  = "skill_request"
-	openClawSkillResult   = "skill_result"
-	openClawTaskStatus    = "task_status_update"
-	openClawTextMessage   = "text_message"
-	hubPingRetryInterval  = 12 * time.Second
-	hubPingRequestTimeout = 6 * time.Second
-	wsFallbackWindow      = 30 * time.Second
-	wsUpgradeRetryWindow  = 5 * time.Second
-	hubDisconnectGrace    = 30 * time.Second
+	dispatchSkillName       = "dispatch_skill_request"
+	dispatcherHarness       = "moltenhub-dispatch"
+	runtimeEnvelopeProtocol = "runtime.envelope.v1"
+	openClawSkillRequest    = "skill_request"
+	openClawSkillResult     = "skill_result"
+	openClawTaskStatus      = "task_status_update"
+	openClawTextMessage     = "text_message"
+	hubPingRetryInterval    = 12 * time.Second
+	hubPingRequestTimeout   = 6 * time.Second
+	wsFallbackWindow        = 30 * time.Second
+	wsUpgradeRetryWindow    = 5 * time.Second
+	hubDisconnectGrace      = 30 * time.Second
 )
 
 var advertisedSkills = []Skill{
@@ -34,15 +34,15 @@ type HubClient interface {
 	BindAgent(ctx context.Context, req hub.BindRequest) (hub.BindResponse, error)
 	UpdateMetadata(ctx context.Context, token string, req hub.UpdateMetadataRequest) (map[string]any, error)
 	GetCapabilities(ctx context.Context, token string) (map[string]any, error)
-	PublishOpenClaw(ctx context.Context, token string, req hub.PublishRequest) (hub.PublishResponse, error)
-	PullOpenClaw(ctx context.Context, token string, timeout time.Duration) (hub.PullResponse, bool, error)
-	AckOpenClaw(ctx context.Context, token, deliveryID string) error
-	NackOpenClaw(ctx context.Context, token, deliveryID string) error
+	PublishRuntimeMessage(ctx context.Context, token string, req hub.PublishRequest) (hub.PublishResponse, error)
+	PullRuntimeMessage(ctx context.Context, token string, timeout time.Duration) (hub.PullResponse, bool, error)
+	AckRuntimeMessage(ctx context.Context, token, deliveryID string) error
+	NackRuntimeMessage(ctx context.Context, token, deliveryID string) error
 	MarkOffline(ctx context.Context, token string, req hub.OfflineRequest) error
 }
 
 type realtimeHubClient interface {
-	ConnectOpenClaw(ctx context.Context, token, sessionKey string) (hub.RealtimeSession, error)
+	ConnectRuntimeMessages(ctx context.Context, token, sessionKey string) (hub.RealtimeSession, error)
 }
 
 type hubPingClient interface {

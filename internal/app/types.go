@@ -48,26 +48,37 @@ type ConnectionState struct {
 }
 
 type Session struct {
-	BoundAt         time.Time `json:"bound_at"`
-	HubURL          string    `json:"hub_url"`
-	APIBase         string    `json:"api_base"`
-	AgentToken      string    `json:"agent_token"`
-	BaseURL         string    `json:"base_url,omitempty"`
-	BindToken       string    `json:"bind_token,omitempty"`
-	AgentUUID       string    `json:"agent_uuid"`
-	AgentURI        string    `json:"agent_uri"`
-	Handle          string    `json:"handle"`
-	HandleFinalized bool      `json:"handle_finalized"`
-	DisplayName     string    `json:"display_name"`
-	Emoji           string    `json:"emoji"`
-	ProfileBio      string    `json:"profile_bio"`
-	ManifestURL     string    `json:"manifest_url"`
-	MetadataURL     string    `json:"metadata_url"`
-	Capabilities    string    `json:"capabilities_url"`
-	OpenClawPullURL string    `json:"openclaw_pull_url"`
-	OpenClawPushURL string    `json:"openclaw_push_url"`
-	OfflineURL      string    `json:"offline_url"`
-	OfflineMarked   bool      `json:"offline_marked"`
+	BoundAt              time.Time `json:"bound_at"`
+	HubURL               string    `json:"hub_url"`
+	APIBase              string    `json:"api_base"`
+	AgentToken           string    `json:"agent_token"`
+	BaseURL              string    `json:"base_url,omitempty"`
+	BindToken            string    `json:"bind_token,omitempty"`
+	AgentUUID            string    `json:"agent_uuid"`
+	AgentURI             string    `json:"agent_uri"`
+	Handle               string    `json:"handle"`
+	HandleFinalized      bool      `json:"handle_finalized"`
+	DisplayName          string    `json:"display_name"`
+	Emoji                string    `json:"emoji"`
+	ProfileBio           string    `json:"profile_bio"`
+	ManifestURL          string    `json:"manifest_url"`
+	MetadataURL          string    `json:"metadata_url"`
+	Capabilities         string    `json:"capabilities_url"`
+	RuntimePullURL       string    `json:"runtime_pull_url,omitempty"`
+	RuntimePushURL       string    `json:"runtime_push_url,omitempty"`
+	RuntimeAckURL        string    `json:"runtime_ack_url,omitempty"`
+	RuntimeNackURL       string    `json:"runtime_nack_url,omitempty"`
+	RuntimeStatusURL     string    `json:"runtime_status_url,omitempty"`
+	RuntimeWebSocketURL  string    `json:"runtime_websocket_url,omitempty"`
+	RuntimeOfflineURL    string    `json:"runtime_offline_url,omitempty"`
+	OpenClawPullURL      string    `json:"openclaw_pull_url"`
+	OpenClawPushURL      string    `json:"openclaw_push_url"`
+	OpenClawAckURL       string    `json:"openclaw_ack_url,omitempty"`
+	OpenClawNackURL      string    `json:"openclaw_nack_url,omitempty"`
+	OpenClawStatusURL    string    `json:"openclaw_status_url,omitempty"`
+	OpenClawWebSocketURL string    `json:"openclaw_websocket_url,omitempty"`
+	OfflineURL           string    `json:"offline_url"`
+	OfflineMarked        bool      `json:"offline_marked"`
 }
 
 type Skill struct {

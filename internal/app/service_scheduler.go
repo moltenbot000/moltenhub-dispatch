@@ -165,7 +165,7 @@ func (s *Service) dispatchScheduledMessage(ctx context.Context, state AppState, 
 	}); err != nil {
 		return err
 	}
-	if _, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq); err != nil {
+	if _, err := s.hub.PublishRuntimeMessage(ctx, state.Session.AgentToken, publishReq); err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		failureErr := s.handleTaskFailure(ctx, state, task, failureFromError("Scheduled message dispatch failed before it reached a connected agent.", err))
 		removeErr := s.removePendingTask(task.ChildRequestID)

@@ -304,8 +304,19 @@ func normalizeSessionAliases(session *Session) {
 	session.ManifestURL = runtimeEndpoints.ManifestURL
 	session.MetadataURL = runtimeEndpoints.MetadataURL
 	session.Capabilities = runtimeEndpoints.CapabilitiesURL
+	session.RuntimePullURL = runtimeEndpoints.RuntimePullURL
+	session.RuntimePushURL = runtimeEndpoints.RuntimePushURL
+	session.RuntimeAckURL = runtimeEndpoints.RuntimeAckURL
+	session.RuntimeNackURL = runtimeEndpoints.RuntimeNackURL
+	session.RuntimeStatusURL = runtimeEndpoints.RuntimeStatusURL
+	session.RuntimeWebSocketURL = runtimeEndpoints.RuntimeWebSocketURL
+	session.RuntimeOfflineURL = runtimeEndpoints.RuntimeOfflineURL
 	session.OpenClawPullURL = runtimeEndpoints.OpenClawPullURL
 	session.OpenClawPushURL = runtimeEndpoints.OpenClawPushURL
+	session.OpenClawAckURL = runtimeEndpoints.OpenClawAckURL
+	session.OpenClawNackURL = runtimeEndpoints.OpenClawNackURL
+	session.OpenClawStatusURL = runtimeEndpoints.OpenClawStatusURL
+	session.OpenClawWebSocketURL = runtimeEndpoints.OpenClawWebSocketURL
 	session.OfflineURL = runtimeEndpoints.OpenClawOfflineURL
 
 	session.APIBase = NormalizeHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))

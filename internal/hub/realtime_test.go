@@ -21,7 +21,7 @@ import (
 func TestWebsocketURLIncludesSessionKeyAliases(t *testing.T) {
 	t.Parallel()
 
-	raw, err := websocketURL("https://na.hub.molten.bot/v1", "/openclaw/messages/ws", "main")
+	raw, err := websocketURL("https://na.hub.molten.bot/v1", "/runtime/messages/ws", "main")
 	if err != nil {
 		t.Fatalf("websocketURL() error = %v", err)
 	}
@@ -33,8 +33,8 @@ func TestWebsocketURLIncludesSessionKeyAliases(t *testing.T) {
 	if parsed.Scheme != "wss" {
 		t.Fatalf("scheme = %q, want wss", parsed.Scheme)
 	}
-	if parsed.Path != "/v1/openclaw/messages/ws" {
-		t.Fatalf("path = %q, want /v1/openclaw/messages/ws", parsed.Path)
+	if parsed.Path != "/v1/runtime/messages/ws" {
+		t.Fatalf("path = %q, want /v1/runtime/messages/ws", parsed.Path)
 	}
 
 	query := parsed.Query()
@@ -83,7 +83,7 @@ func TestWebsocketURLSupportsAbsoluteEndpointOverride(t *testing.T) {
 
 	raw, err := websocketURL(
 		"https://na.hub.molten.bot/v1",
-		"https://runtime.na.hub.molten.bot/runtime/openclaw/ws?channel=dispatch",
+		"https://runtime.na.hub.molten.bot/runtime/messages/ws?channel=dispatch",
 		"main",
 	)
 	if err != nil {
@@ -100,8 +100,8 @@ func TestWebsocketURLSupportsAbsoluteEndpointOverride(t *testing.T) {
 	if parsed.Host != "runtime.na.hub.molten.bot" {
 		t.Fatalf("host = %q, want runtime.na.hub.molten.bot", parsed.Host)
 	}
-	if parsed.Path != "/runtime/openclaw/ws" {
-		t.Fatalf("path = %q, want /runtime/openclaw/ws", parsed.Path)
+	if parsed.Path != "/runtime/messages/ws" {
+		t.Fatalf("path = %q, want /runtime/messages/ws", parsed.Path)
 	}
 
 	query := parsed.Query()
@@ -125,14 +125,19 @@ func TestWebsocketEndpointFromPull(t *testing.T) {
 		want string
 	}{
 		{
-			name: "canonical messages route",
+			name: "canonical runtime messages route",
+			pull: "https://na.hub.molten.bot/v1/runtime/messages/pull",
+			want: "https://na.hub.molten.bot/v1/runtime/messages/ws",
+		},
+		{
+			name: "openclaw compatibility messages route",
 			pull: "https://na.hub.molten.bot/v1/openclaw/messages/pull",
 			want: "https://na.hub.molten.bot/v1/openclaw/messages/ws",
 		},
 		{
 			name: "runtime pull route",
-			pull: "https://runtime.na.hub.molten.bot/runtime/openclaw/pull",
-			want: "https://runtime.na.hub.molten.bot/runtime/openclaw/ws",
+			pull: "https://runtime.na.hub.molten.bot/runtime/messages/pull",
+			want: "https://runtime.na.hub.molten.bot/runtime/messages/ws",
 		},
 		{
 			name: "legacy messages alias route",
@@ -167,16 +172,22 @@ func TestDeliveryEndpointFromPull(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "canonical messages route",
+			name:   "canonical runtime messages route",
+			pull:   "https://na.hub.molten.bot/v1/runtime/messages/pull",
+			action: "ack",
+			want:   "https://na.hub.molten.bot/v1/runtime/messages/ack",
+		},
+		{
+			name:   "openclaw compatibility messages route",
 			pull:   "https://na.hub.molten.bot/v1/openclaw/messages/pull",
 			action: "ack",
 			want:   "https://na.hub.molten.bot/v1/openclaw/messages/ack",
 		},
 		{
 			name:   "runtime pull route",
-			pull:   "https://runtime.na.hub.molten.bot/runtime/openclaw/pull",
+			pull:   "https://runtime.na.hub.molten.bot/runtime/messages/pull",
 			action: "nack",
-			want:   "https://runtime.na.hub.molten.bot/runtime/openclaw/nack",
+			want:   "https://runtime.na.hub.molten.bot/runtime/messages/nack",
 		},
 		{
 			name:   "legacy messages alias route",
@@ -203,12 +214,43 @@ func TestDeliveryEndpointFromPull(t *testing.T) {
 	}
 }
 
-func TestConnectOpenClawUsesRuntimeEndpointDerivedFromPullURL(t *testing.T) {
+func TestAPIBaseFromRuntimeEndpointSupportsStatusRoutes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "runtime status route",
+			in:   "https://runtime.na.hub.molten.bot/v1/runtime/messages/{message_id}",
+			want: "https://runtime.na.hub.molten.bot/v1",
+		},
+		{
+			name: "openclaw compatibility status route",
+			in:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages/{message_id}",
+			want: "https://runtime.na.hub.molten.bot/v1",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := apiBaseFromRuntimeEndpoint(tc.in); got != tc.want {
+				t.Fatalf("apiBaseFromRuntimeEndpoint(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestConnectRuntimeMessagesUsesRuntimeEndpointDerivedFromPullURL(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/runtime/openclaw/ws" {
-			t.Fatalf("path = %q, want /runtime/openclaw/ws", r.URL.Path)
+		if r.URL.Path != "/runtime/messages/ws" {
+			t.Fatalf("path = %q, want /runtime/messages/ws", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("session_key"); got != "main" {
 			t.Fatalf("session_key = %q, want main", got)
@@ -227,22 +269,22 @@ func TestConnectOpenClawUsesRuntimeEndpointDerivedFromPullURL(t *testing.T) {
 
 	client := NewClient(server.URL + "/v1")
 	client.SetRuntimeEndpoints(RuntimeEndpoints{
-		OpenClawPullURL: server.URL + "/runtime/openclaw/pull",
+		RuntimePullURL: server.URL + "/runtime/messages/pull",
 	})
 
-	session, err := client.ConnectOpenClaw(context.Background(), "agent-token", "main")
+	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
 	if err != nil {
-		t.Fatalf("ConnectOpenClaw() error = %v", err)
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
 	}
 	defer session.Close()
 }
 
-func TestConnectOpenClawUsesVersionedFallbackEndpointWhenRuntimePullEndpointMissing(t *testing.T) {
+func TestConnectRuntimeMessagesUsesVersionedFallbackEndpointWhenRuntimePullEndpointMissing(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/openclaw/messages/ws" {
-			t.Fatalf("path = %q, want /v1/openclaw/messages/ws", r.URL.Path)
+		if r.URL.Path != "/v1/runtime/messages/ws" {
+			t.Fatalf("path = %q, want /v1/runtime/messages/ws", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("session_key"); got != "main" {
 			t.Fatalf("session_key = %q, want main", got)
@@ -260,14 +302,49 @@ func TestConnectOpenClawUsesVersionedFallbackEndpointWhenRuntimePullEndpointMiss
 	defer server.Close()
 
 	client := NewClient(server.URL)
-	session, err := client.ConnectOpenClaw(context.Background(), "agent-token", "main")
+	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
 	if err != nil {
-		t.Fatalf("ConnectOpenClaw() error = %v", err)
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
 	}
 	defer session.Close()
 }
 
-func TestConnectOpenClawClosesSessionWhenContextCanceled(t *testing.T) {
+func TestConnectRuntimeMessagesFallsBackToOpenClawWebsocketWhenRuntimeRouteMissing(t *testing.T) {
+	t.Parallel()
+
+	var sawRuntime bool
+	var sawOpenClaw bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/runtime/messages/ws":
+			sawRuntime = true
+			http.NotFound(w, r)
+		case "/v1/openclaw/messages/ws":
+			sawOpenClaw = true
+			websocket.Handler(func(conn *websocket.Conn) {
+				defer conn.Close()
+				if err := websocket.JSON.Send(conn, map[string]any{"type": "session_ready"}); err != nil {
+					t.Fatalf("send session_ready: %v", err)
+				}
+			}).ServeHTTP(w, r)
+		default:
+			t.Fatalf("path = %q, want runtime or openclaw websocket", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
+	if err != nil {
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
+	}
+	defer session.Close()
+	if !sawRuntime || !sawOpenClaw {
+		t.Fatalf("expected runtime and openclaw websocket attempts, sawRuntime=%v sawOpenClaw=%v", sawRuntime, sawOpenClaw)
+	}
+}
+
+func TestConnectRuntimeMessagesClosesSessionWhenContextCanceled(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(websocket.Handler(func(conn *websocket.Conn) {
@@ -282,9 +359,9 @@ func TestConnectOpenClawClosesSessionWhenContextCanceled(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	client := NewClient(server.URL)
-	session, err := client.ConnectOpenClaw(ctx, "agent-token", "main")
+	session, err := client.ConnectRuntimeMessages(ctx, "agent-token", "main")
 	if err != nil {
-		t.Fatalf("ConnectOpenClaw() error = %v", err)
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
 	}
 	defer session.Close()
 
@@ -309,7 +386,7 @@ func TestConnectOpenClawClosesSessionWhenContextCanceled(t *testing.T) {
 	}
 }
 
-func TestConnectOpenClawStartsHeartbeatPing(t *testing.T) {
+func TestConnectRuntimeMessagesStartsHeartbeatPing(t *testing.T) {
 	previousInterval := websocketHeartbeatInterval
 	websocketHeartbeatInterval = 20 * time.Millisecond
 	defer func() {
@@ -355,9 +432,9 @@ func TestConnectOpenClawStartsHeartbeatPing(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL)
-	session, err := client.ConnectOpenClaw(context.Background(), "agent-token", "main")
+	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
 	if err != nil {
-		t.Fatalf("ConnectOpenClaw() error = %v", err)
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
 	}
 	defer session.Close()
 

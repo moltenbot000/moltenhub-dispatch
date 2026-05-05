@@ -46,51 +46,68 @@ type realtimeEnvelope struct {
 	} `json:"error"`
 }
 
-func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
+func (c *Client) ConnectRuntimeMessages(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	wsURL, err := websocketURL(c.baseURL, c.openClawWebsocketEndpoint(), sessionKey)
-	if err != nil {
-		return nil, err
+	endpoints := c.runtimeWebsocketEndpointCandidates()
+	if len(endpoints) == 0 {
+		return nil, fmt.Errorf("runtime websocket endpoint is not configured")
 	}
 
-	config, err := websocket.NewConfig(wsURL, httpOriginFor(wsURL))
-	if err != nil {
-		return nil, fmt.Errorf("create websocket config: %w", err)
-	}
-	if timeout := boundedTimeout(ctx, websocketDialTimeout); timeout > 0 {
-		config.Dialer = &net.Dialer{Timeout: timeout}
-	}
-	config.Header = http.Header{
-		"Authorization": []string{"Bearer " + token},
-		"User-Agent":    []string{c.userAgent},
-	}
+	var lastErr error
+	for i, endpoint := range endpoints {
+		wsURL, err := websocketURL(c.baseURL, endpoint, sessionKey)
+		if err != nil {
+			return nil, err
+		}
 
-	conn, err := websocket.DialConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("open websocket session: %w", err)
-	}
+		config, err := websocket.NewConfig(wsURL, httpOriginFor(wsURL))
+		if err != nil {
+			return nil, fmt.Errorf("create websocket config: %w", err)
+		}
+		if timeout := boundedTimeout(ctx, websocketDialTimeout); timeout > 0 {
+			config.Dialer = &net.Dialer{Timeout: timeout}
+		}
+		config.Header = http.Header{
+			"Authorization": []string{"Bearer " + token},
+			"User-Agent":    []string{c.userAgent},
+		}
 
-	session := &websocketSession{
-		conn:   conn,
-		closed: make(chan struct{}),
+		conn, err := websocket.DialConfig(config)
+		if err != nil {
+			lastErr = fmt.Errorf("open websocket session: %w", err)
+			if i+1 < len(endpoints) && shouldRetryRuntimeWebsocketEndpoint(lastErr) {
+				continue
+			}
+			return nil, lastErr
+		}
+
+		session := &websocketSession{
+			conn:   conn,
+			closed: make(chan struct{}),
+		}
+		handshakeCtx, cancelHandshake := context.WithTimeout(ctx, boundedTimeout(ctx, websocketHandshakeTimeout))
+		first, err := session.readEnvelope(handshakeCtx)
+		cancelHandshake()
+		if err != nil {
+			_ = session.Close()
+			return nil, err
+		}
+		if !strings.EqualFold(first.Type, "session_ready") {
+			_ = session.Close()
+			return nil, fmt.Errorf("unexpected websocket handshake message type %q", first.Type)
+		}
+		session.bindContext(ctx)
+		session.startHeartbeat(ctx)
+		return session, nil
 	}
-	handshakeCtx, cancelHandshake := context.WithTimeout(ctx, boundedTimeout(ctx, websocketHandshakeTimeout))
-	defer cancelHandshake()
-	first, err := session.readEnvelope(handshakeCtx)
-	if err != nil {
-		_ = session.Close()
-		return nil, err
-	}
-	if !strings.EqualFold(first.Type, "session_ready") {
-		_ = session.Close()
-		return nil, fmt.Errorf("unexpected websocket handshake message type %q", first.Type)
-	}
-	session.bindContext(ctx)
-	session.startHeartbeat(ctx)
-	return session, nil
+	return nil, lastErr
+}
+
+func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
+	return c.ConnectRuntimeMessages(ctx, token, sessionKey)
 }
 
 func boundedTimeout(ctx context.Context, fallback time.Duration) time.Duration {
@@ -112,12 +129,15 @@ func boundedTimeout(ctx context.Context, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-func (c *Client) openClawWebsocketEndpoint() string {
-	pullEndpoint := c.runtimeEndpoint(c.endpoints.OpenClawPullURL, "/v1/openclaw/messages/pull")
-	if endpoint := websocketEndpointFromPull(pullEndpoint); endpoint != "" {
-		return endpoint
-	}
-	return "/v1/openclaw/messages/ws"
+func (c *Client) runtimeWebsocketEndpointCandidates() []string {
+	return compactEndpoints(
+		c.endpoints.RuntimeWebSocketURL,
+		websocketEndpointFromPull(c.endpoints.RuntimePullURL),
+		"/v1/runtime/messages/ws",
+		c.endpoints.OpenClawWebSocketURL,
+		websocketEndpointFromPull(c.endpoints.OpenClawPullURL),
+		"/v1/openclaw/messages/ws",
+	)
 }
 
 func (s *websocketSession) Receive(ctx context.Context) (PullResponse, error) {
@@ -344,7 +364,19 @@ func websocketURL(baseURL, endpoint, sessionKey string) (string, error) {
 }
 
 func websocketEndpointFromPull(pullURL string) string {
-	return openClawEndpointFromPull(pullURL, "/messages/ws", "/messages_ws", "/ws")
+	return runtimeEndpointFromPull(pullURL, "/messages/ws", "/messages_ws", "/ws")
+}
+
+func shouldRetryRuntimeWebsocketEndpoint(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "404") ||
+		strings.Contains(message, "405") ||
+		strings.Contains(message, "bad status") ||
+		strings.Contains(message, "not found") ||
+		strings.Contains(message, "method not allowed")
 }
 
 func httpOriginFor(wsURL string) string {
