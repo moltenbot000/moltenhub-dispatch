@@ -46,7 +46,7 @@ type realtimeEnvelope struct {
 	} `json:"error"`
 }
 
-func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
+func (c *Client) ConnectRuntimeMessages(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -104,6 +104,10 @@ func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) 
 		return session, nil
 	}
 	return nil, lastErr
+}
+
+func (c *Client) ConnectOpenClaw(ctx context.Context, token, sessionKey string) (RealtimeSession, error) {
+	return c.ConnectRuntimeMessages(ctx, token, sessionKey)
 }
 
 func boundedTimeout(ctx context.Context, fallback time.Duration) time.Duration {

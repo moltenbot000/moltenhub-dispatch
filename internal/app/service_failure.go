@@ -61,7 +61,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 		OK:            boolPtr(false),
 		Status:        "failed",
 	}
-	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
+	_, err := s.hub.PublishRuntimeMessage(ctx, state.Session.AgentToken, hub.PublishRequest{
 		ToAgentUUID: pending.CallerAgentUUID,
 		ToAgentURI:  pending.CallerAgentURI,
 		ClientMsgID: NewID("result"),

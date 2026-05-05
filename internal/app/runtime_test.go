@@ -151,6 +151,37 @@ func TestNormalizeHubEndpointURL(t *testing.T) {
 	}
 }
 
+func TestRuntimeAPIBaseFromEndpointSupportsMessageStatusRoutes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "runtime status route",
+			in:   "https://runtime.na.hub.molten.bot/v1/runtime/messages/{message_id}",
+			want: "https://runtime.na.hub.molten.bot",
+		},
+		{
+			name: "openclaw compatibility status route",
+			in:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages/{message_id}",
+			want: "https://runtime.na.hub.molten.bot",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := runtimeAPIBaseFromEndpoint(test.in); got != test.want {
+				t.Fatalf("runtimeAPIBaseFromEndpoint(%q) = %q, want %q", test.in, got, test.want)
+			}
+		})
+	}
+}
+
 func TestFetchHubRuntimeCatalog(t *testing.T) {
 	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/hubs.json" {

@@ -65,7 +65,7 @@ func (s *Service) DispatchFromUI(ctx context.Context, req DispatchRequest) (Pend
 		return PendingTask{}, err
 	}
 
-	publishResp, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq)
+	publishResp, err := s.hub.PublishRuntimeMessage(ctx, state.Session.AgentToken, publishReq)
 	if err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		failureErr := s.failUIRequest(ctx, state, task, err)
@@ -217,7 +217,7 @@ func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullRespon
 		return err
 	}
 
-	publishResp, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, publishReq)
+	publishResp, err := s.hub.PublishRuntimeMessage(ctx, state.Session.AgentToken, publishReq)
 	if err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTP)
 		failureErr := s.handleTaskFailure(ctx, state, task, failureFromError("Task dispatch failed before it reached a connected agent.", err))
@@ -385,7 +385,7 @@ func (s *Service) publishResultToCaller(ctx context.Context, state AppState, pen
 	forwarded := result
 	forwarded.ReplyTo = pending.CallerRequestID
 	forwarded.RequestID = pending.ParentRequestID
-	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
+	_, err := s.hub.PublishRuntimeMessage(ctx, state.Session.AgentToken, hub.PublishRequest{
 		ToAgentUUID: pending.CallerAgentUUID,
 		ToAgentURI:  pending.CallerAgentURI,
 		ClientMsgID: NewID("result"),
@@ -407,7 +407,7 @@ func (s *Service) publishScheduleAckToCaller(ctx context.Context, state AppState
 		"target_agent_uuid": scheduled.TargetAgentUUID,
 		"target_agent_uri":  scheduled.TargetAgentURI,
 	}
-	_, err := s.hub.PublishOpenClaw(ctx, state.Session.AgentToken, hub.PublishRequest{
+	_, err := s.hub.PublishRuntimeMessage(ctx, state.Session.AgentToken, hub.PublishRequest{
 		ToAgentUUID: scheduled.CallerAgentUUID,
 		ToAgentURI:  scheduled.CallerAgentURI,
 		ClientMsgID: NewID("result"),

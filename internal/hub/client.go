@@ -268,35 +268,39 @@ func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]
 	return out, err
 }
 
-func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+func (c *Client) PublishRuntimeMessage(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	if req.PreferA2A {
-		out, err := c.publishOpenClawA2A(ctx, token, req)
+		out, err := c.publishRuntimeA2A(ctx, token, req)
 		if err == nil {
 			return out, nil
 		}
-		if !shouldFallbackOpenClawPublish(err) {
+		if !shouldFallbackRuntimePublish(err) {
 			return PublishResponse{}, fmt.Errorf("a2a publish: %w", err)
 		}
 	}
-	if c.canPublishOpenClawViaA2A(req) {
-		out, err := c.publishOpenClawViaA2A(ctx, token, req)
+	if c.canPublishRuntimeViaA2A(req) {
+		out, err := c.publishRuntimeViaA2A(ctx, token, req)
 		if err == nil {
 			return out, nil
 		}
-		if !shouldFallbackOpenClawPublish(err) {
+		if !shouldFallbackRuntimePublish(err) {
 			return PublishResponse{}, fmt.Errorf("a2a publish: %w", err)
 		}
 	}
-	return c.publishOpenClawHTTP(ctx, token, req)
+	return c.publishRuntimeHTTP(ctx, token, req)
 }
 
-func (c *Client) publishOpenClawHTTP(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+	return c.PublishRuntimeMessage(ctx, token, req)
+}
+
+func (c *Client) publishRuntimeHTTP(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	var out PublishResponse
 	err := c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.publishRuntimeEndpointCandidates(), token, req, &out)
 	return out, err
 }
 
-func (c *Client) PullOpenClaw(ctx context.Context, token string, timeout time.Duration) (PullResponse, bool, error) {
+func (c *Client) PullRuntimeMessage(ctx context.Context, token string, timeout time.Duration) (PullResponse, bool, error) {
 	values := url.Values{}
 	if timeout > 0 {
 		values.Set("timeout_ms", fmt.Sprintf("%d", timeout.Milliseconds()))
@@ -353,16 +357,28 @@ func (c *Client) PullOpenClaw(ctx context.Context, token string, timeout time.Du
 	return PullResponse{}, false, errors.New("runtime pull endpoint is not configured")
 }
 
-func (c *Client) AckOpenClaw(ctx context.Context, token, deliveryID string) error {
+func (c *Client) PullOpenClaw(ctx context.Context, token string, timeout time.Duration) (PullResponse, bool, error) {
+	return c.PullRuntimeMessage(ctx, token, timeout)
+}
+
+func (c *Client) AckRuntimeMessage(ctx context.Context, token, deliveryID string) error {
 	return c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.runtimeDeliveryEndpointCandidates("ack"), token, map[string]string{
 		"delivery_id": deliveryID,
 	}, nil)
 }
 
-func (c *Client) NackOpenClaw(ctx context.Context, token, deliveryID string) error {
+func (c *Client) AckOpenClaw(ctx context.Context, token, deliveryID string) error {
+	return c.AckRuntimeMessage(ctx, token, deliveryID)
+}
+
+func (c *Client) NackRuntimeMessage(ctx context.Context, token, deliveryID string) error {
 	return c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.runtimeDeliveryEndpointCandidates("nack"), token, map[string]string{
 		"delivery_id": deliveryID,
 	}, nil)
+}
+
+func (c *Client) NackOpenClaw(ctx context.Context, token, deliveryID string) error {
+	return c.NackRuntimeMessage(ctx, token, deliveryID)
 }
 
 func (c *Client) MarkOffline(ctx context.Context, token string, req OfflineRequest) error {

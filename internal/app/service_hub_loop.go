@@ -18,7 +18,7 @@ func (s *Service) PollOnce(ctx context.Context) error {
 	}
 	s.syncHubClient(state)
 
-	message, ok, err := s.hub.PullOpenClaw(ctx, state.Session.AgentToken, 25*time.Second)
+	message, ok, err := s.hub.PullRuntimeMessage(ctx, state.Session.AgentToken, 25*time.Second)
 	if err != nil {
 		s.noteHubInteraction(err, ConnectionTransportHTTPLong)
 		return err
@@ -30,10 +30,10 @@ func (s *Service) PollOnce(ctx context.Context) error {
 
 	handleErr := s.handleInboundMessage(ctx, message)
 	if handleErr != nil {
-		_ = s.hub.NackOpenClaw(ctx, state.Session.AgentToken, message.DeliveryID)
+		_ = s.hub.NackRuntimeMessage(ctx, state.Session.AgentToken, message.DeliveryID)
 		return handleErr
 	}
-	if err := s.hub.AckOpenClaw(ctx, state.Session.AgentToken, message.DeliveryID); err != nil {
+	if err := s.hub.AckRuntimeMessage(ctx, state.Session.AgentToken, message.DeliveryID); err != nil {
 		return err
 	}
 	return s.expirePendingTasks(ctx)
@@ -141,7 +141,7 @@ func (s *Service) pollOnceWithTimeout(ctx context.Context) error {
 }
 
 func (s *Service) runRealtimeCycle(ctx context.Context, realtime realtimeHubClient, token, sessionKey string) (bool, error) {
-	session, err := realtime.ConnectOpenClaw(ctx, token, sessionKey)
+	session, err := realtime.ConnectRuntimeMessages(ctx, token, sessionKey)
 	if err != nil {
 		return true, err
 	}

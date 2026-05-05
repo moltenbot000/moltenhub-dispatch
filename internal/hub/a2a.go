@@ -21,14 +21,14 @@ const (
 	openClawProtocol        = "openclaw.http.v1"
 )
 
-func (c *Client) canPublishOpenClawViaA2A(req PublishRequest) bool {
+func (c *Client) canPublishRuntimeViaA2A(req PublishRequest) bool {
 	if c.a2aEndpointBaseURL() == "" {
 		return false
 	}
 	return isUUIDLike(req.ToAgentUUID) || strings.TrimSpace(req.ToAgentURI) != ""
 }
 
-func (c *Client) publishOpenClawA2A(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+func (c *Client) publishRuntimeA2A(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -36,7 +36,7 @@ func (c *Client) publishOpenClawA2A(ctx context.Context, token string, req Publi
 	if endpoint == "" {
 		return PublishResponse{}, errors.New("a2a endpoint is not configured")
 	}
-	message, err := a2aSendMessageRequestFromOpenClaw(req)
+	message, err := a2aSendMessageRequestFromRuntime(req)
 	if err != nil {
 		return PublishResponse{}, err
 	}
@@ -69,12 +69,12 @@ func (c *Client) publishOpenClawA2A(ctx context.Context, token string, req Publi
 	return publishResponseFromA2AResult(result), nil
 }
 
-func (c *Client) publishOpenClawViaA2A(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
+func (c *Client) publishRuntimeViaA2A(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	endpoint := c.a2aPublishEndpoint(req)
 	if endpoint == "" {
 		return PublishResponse{}, errors.New("a2a endpoint is not configured")
 	}
-	message, err := a2aSendMessageRequestFromOpenClaw(req)
+	message, err := a2aSendMessageRequestFromRuntime(req)
 	if err != nil {
 		return PublishResponse{}, err
 	}
@@ -94,9 +94,9 @@ func (c *Client) publishOpenClawViaA2A(ctx context.Context, token string, req Pu
 	return publishResponseFromA2AResult(result), nil
 }
 
-func a2aSendMessageRequestFromOpenClaw(req PublishRequest) (*a2a.SendMessageRequest, error) {
-	message := normalizeOpenClawMessageForA2A(req.Message)
-	payload, err := openClawMessagePayload(message)
+func a2aSendMessageRequestFromRuntime(req PublishRequest) (*a2a.SendMessageRequest, error) {
+	message := normalizeRuntimeMessageForA2A(req.Message)
+	payload, err := runtimeMessagePayload(message)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +124,9 @@ func a2aSendMessageRequestFromOpenClaw(req PublishRequest) (*a2a.SendMessageRequ
 	}, nil
 }
 
-func normalizeOpenClawMessageForA2A(message OpenClawMessage) OpenClawMessage {
-	if strings.TrimSpace(message.Protocol) == "" {
+func normalizeRuntimeMessageForA2A(message OpenClawMessage) OpenClawMessage {
+	switch strings.TrimSpace(message.Protocol) {
+	case "", openClawProtocol:
 		message.Protocol = runtimeEnvelopeProtocol
 	}
 	if strings.TrimSpace(message.Kind) == "" && strings.TrimSpace(message.Type) == "" {
@@ -137,14 +138,14 @@ func normalizeOpenClawMessageForA2A(message OpenClawMessage) OpenClawMessage {
 	return message
 }
 
-func openClawMessagePayload(message OpenClawMessage) (map[string]any, error) {
+func runtimeMessagePayload(message OpenClawMessage) (map[string]any, error) {
 	raw, err := json.Marshal(message)
 	if err != nil {
-		return nil, fmt.Errorf("encode openclaw message for a2a: %w", err)
+		return nil, fmt.Errorf("encode runtime message for a2a: %w", err)
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, fmt.Errorf("decode openclaw message for a2a: %w", err)
+		return nil, fmt.Errorf("decode runtime message for a2a: %w", err)
 	}
 	return payload, nil
 }
@@ -298,12 +299,14 @@ func apiBaseFromRuntimeEndpoint(endpoint string) string {
 		"/runtime/messages/pull",
 		"/runtime/messages/ack",
 		"/runtime/messages/nack",
+		"/runtime/messages/{message_id}",
 		"/runtime/messages/ws",
 		"/runtime/messages/offline",
 		"/openclaw/messages/publish",
 		"/openclaw/messages/pull",
 		"/openclaw/messages/ack",
 		"/openclaw/messages/nack",
+		"/openclaw/messages/{message_id}",
 		"/openclaw/messages/ws",
 		"/openclaw/messages/offline",
 		"/messages/publish",
@@ -322,7 +325,7 @@ func apiBaseFromRuntimeEndpoint(endpoint string) string {
 	return ""
 }
 
-func shouldFallbackOpenClawPublish(err error) bool {
+func shouldFallbackRuntimePublish(err error) bool {
 	if err == nil {
 		return false
 	}

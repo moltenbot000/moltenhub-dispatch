@@ -82,7 +82,7 @@ func (f *fakeHubClient) GetCapabilities(_ context.Context, _ string) (map[string
 	return map[string]any{"advertised_skills": []any{}}, nil
 }
 
-func (f *fakeHubClient) PublishOpenClaw(_ context.Context, _ string, req hub.PublishRequest) (hub.PublishResponse, error) {
+func (f *fakeHubClient) PublishRuntimeMessage(_ context.Context, _ string, req hub.PublishRequest) (hub.PublishResponse, error) {
 	f.publishCalls = append(f.publishCalls, req)
 	if f.publishErr != nil {
 		return hub.PublishResponse{}, f.publishErr
@@ -90,7 +90,7 @@ func (f *fakeHubClient) PublishOpenClaw(_ context.Context, _ string, req hub.Pub
 	return hub.PublishResponse{MessageID: "message-1"}, nil
 }
 
-func (f *fakeHubClient) PullOpenClaw(_ context.Context, _ string, _ time.Duration) (hub.PullResponse, bool, error) {
+func (f *fakeHubClient) PullRuntimeMessage(_ context.Context, _ string, _ time.Duration) (hub.PullResponse, bool, error) {
 	f.pullCalls++
 	if f.expectedPullURL != "" && f.currentBaseURL != f.expectedPullURL {
 		return hub.PullResponse{}, false, &hub.APIError{
@@ -102,11 +102,11 @@ func (f *fakeHubClient) PullOpenClaw(_ context.Context, _ string, _ time.Duratio
 	return f.pullMessage, f.pullOK, f.pullErr
 }
 
-func (f *fakeHubClient) AckOpenClaw(_ context.Context, _ string, _ string) error {
+func (f *fakeHubClient) AckRuntimeMessage(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-func (f *fakeHubClient) NackOpenClaw(_ context.Context, _ string, _ string) error {
+func (f *fakeHubClient) NackRuntimeMessage(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (f *fakeHubClient) SetBaseURL(baseURL string) {
 	f.baseURLCalls = append(f.baseURLCalls, baseURL)
 }
 
-func (f *fakeHubClient) ConnectOpenClaw(_ context.Context, _ string, _ string) (hub.RealtimeSession, error) {
+func (f *fakeHubClient) ConnectRuntimeMessages(_ context.Context, _ string, _ string) (hub.RealtimeSession, error) {
 	f.connectCalls++
 	if len(f.baseURLCalls) == 0 {
 		f.baseURLCalls = append(f.baseURLCalls, f.currentBaseURL)
