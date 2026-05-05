@@ -3216,6 +3216,14 @@
         return `${kind}:snapshot:${labelSignature.join("|")}`;
       };
 
+      const activityFeedTitleGroupKey = (item) => {
+        const title = trimmedString(item && item.title).toLowerCase();
+        if (title === "") {
+          return "";
+        }
+        return title.replace(/\s+/g, " ");
+      };
+
       const mergeActivityFeed = (tasks, events) => {
         const feed = [];
         (Array.isArray(tasks) ? tasks : []).forEach((task) => {
@@ -3273,6 +3281,13 @@
       };
 
       const activityFeedLaneKey = (item) => {
+        const kind = trimmedString(item && item.kind);
+        if (kind === "recent_event") {
+          const titleKey = activityFeedTitleGroupKey(item);
+          if (titleKey !== "") {
+            return `event-title:${titleKey}`;
+          }
+        }
         const taskID = trimmedString(item && item.taskID);
         if (taskID !== "") {
           return `task:${taskID}`;
@@ -3302,6 +3317,7 @@
               logPath: "",
               expiresAt: "",
               fallbackTitle: "",
+              groupTitle: "",
               items: [],
             };
             lanesByKey.set(laneKey, lane);
@@ -3338,6 +3354,9 @@
           if (lane.fallbackTitle === "") {
             lane.fallbackTitle = trimmedString(item && item.title);
           }
+          if (lane.groupTitle === "" && laneKey.startsWith("event-title:")) {
+            lane.groupTitle = trimmedString(item && item.title);
+          }
         });
         const lanes = Array.from(lanesByKey.values());
         lanes.forEach((lane) => {
@@ -3347,7 +3366,7 @@
             if (leftSortAt === rightSortAt) {
               return String(left.kind).localeCompare(String(right.kind));
             }
-            return leftSortAt - rightSortAt;
+            return rightSortAt - leftSortAt;
           });
         });
         lanes.sort((left, right) => {
@@ -3360,6 +3379,10 @@
       };
 
       const activityFeedLaneLabel = (lane) => {
+        const groupTitle = trimmedString(lane && lane.groupTitle);
+        if (groupTitle !== "") {
+          return groupTitle;
+        }
         const targetAgent = trimmedString(lane && lane.targetAgent);
         const skill = trimmedString(lane && lane.skill);
         const fallbackTitle = trimmedString(lane && lane.fallbackTitle);
@@ -3384,10 +3407,13 @@
 
       const activityFeedLaneLatestItem = (lane) => {
         const items = Array.isArray(lane && lane.items) ? lane.items : [];
-        return items.length > 0 ? items[items.length - 1] : null;
+        return items.length > 0 ? items[0] : null;
       };
 
       const activityFeedLaneStaticRows = (lane) => {
+        if (trimmedString(lane && lane.groupTitle) !== "") {
+          return [];
+        }
         return [
           ["Task", trimmedString(lane && lane.taskID)],
           ["Hub task", trimmedString(lane && lane.hubTaskID)],
@@ -3638,7 +3664,7 @@
           const laneMeta = document.createElement("p");
           laneMeta.className = "activity-feed-lane-order";
           laneMeta.textContent = laneExpanded
-            ? "Oldest -> newest"
+            ? "Latest -> oldest"
             : `Latest status${latestItem && latestItem.when ? ` • ${latestItem.when}` : ""}`;
           laneCopy.appendChild(laneMeta);
           laneHeader.appendChild(laneCopy);
@@ -3693,6 +3719,12 @@
               appendRuntimeRow(body, "Status", item.status);
               appendRuntimeRow(body, "Level", item.level);
               appendRuntimeRow(body, "", item.detail);
+              if (trimmedString(lane && lane.groupTitle) !== "") {
+                appendRuntimeRow(body, "Skill", item.skill);
+                appendRuntimeRow(body, "Target agent", item.targetAgent);
+                appendRuntimeRow(body, "Task", item.taskID);
+                appendRuntimeRow(body, "Log", item.logPath);
+              }
             }, {
               subtitleText: item.subtitle,
               subtitleBuilder: item.status ? (subtitle) => {

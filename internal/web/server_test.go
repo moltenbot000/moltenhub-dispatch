@@ -2430,8 +2430,14 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const groupActivityFeedLanes = (feed) => {`) {
 		t.Fatalf("expected activity feed lane grouping helper, body=%s", body)
 	}
-	if !strings.Contains(body, `return leftSortAt - rightSortAt;`) {
-		t.Fatalf("expected grouped activity cards to keep oldest events on the left, body=%s", body)
+	if !strings.Contains(body, `const activityFeedTitleGroupKey = (item) => {`) {
+		t.Fatalf("expected activity feed title grouping helper, body=%s", body)
+	}
+	if !strings.Contains(body, "return `event-title:${titleKey}`;") {
+		t.Fatalf("expected recent activity events with the same title to share a lane, body=%s", body)
+	}
+	if !strings.Contains(body, `return rightSortAt - leftSortAt;`) {
+		t.Fatalf("expected grouped activity cards to keep latest events on the left, body=%s", body)
 	}
 	if !strings.Contains(body, `laneTrack.className = "activity-feed-lane-track";`) {
 		t.Fatalf("expected grouped activity renderer to build horizontal lane tracks, body=%s", body)
@@ -2439,7 +2445,7 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const activityFeedLaneStaticRows = (lane) => {`) {
 		t.Fatalf("expected grouped activity renderer to keep static task details at lane level, body=%s", body)
 	}
-	if !strings.Contains(body, `? "Oldest -> newest"`) {
+	if !strings.Contains(body, `? "Latest -> oldest"`) {
 		t.Fatalf("expected grouped activity renderer to annotate expanded update logs, body=%s", body)
 	}
 	if !strings.Contains(body, ": `Latest status") {
