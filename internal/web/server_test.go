@@ -2468,6 +2468,12 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `formatRelativeRuntimeAge(latestItem && latestItem.sortAt)`) {
 		t.Fatalf("expected minimized activity summary to include relative last-status age, body=%s", body)
 	}
+	if !strings.Contains(body, `whenCell.textContent = formatRelativeRuntimeAge(item.sortAt) || absoluteWhen || "-";`) {
+		t.Fatalf("expected expanded activity When cells to use user-relative s/m/h age, body=%s", body)
+	}
+	if !strings.Contains(body, "return `${elapsedHours}h`;") || strings.Contains(body, "return `${Math.floor(elapsedHours / 24)}d`;") {
+		t.Fatalf("expected relative activity age formatter to stay in s/m/h units, body=%s", body)
+	}
 	if !strings.Contains(body, "const suffix = age === \"\" ? \"\" : ` - ${age}`;") {
 		t.Fatalf("expected minimized activity summary to show bare relative age without label or parentheses, body=%s", body)
 	}
