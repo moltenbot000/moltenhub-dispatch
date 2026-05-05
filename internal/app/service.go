@@ -20,6 +20,7 @@ const (
 	hubPingRequestTimeout = 6 * time.Second
 	wsFallbackWindow      = 30 * time.Second
 	wsUpgradeRetryWindow  = 5 * time.Second
+	hubDisconnectGrace    = 30 * time.Second
 )
 
 var advertisedSkills = []Skill{
@@ -58,6 +59,7 @@ type Service struct {
 	wsUpgradeRetryDelay time.Duration
 	presenceSynced      bool
 	presenceTransport   string
+	hubFailureStartedAt time.Time
 }
 
 type baseURLSetter interface {
