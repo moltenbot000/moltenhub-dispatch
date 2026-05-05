@@ -728,6 +728,40 @@
         return badge;
       };
 
+      const runtimeLevelIconName = (level) => {
+        const normalized = trimmedString(level).toLowerCase();
+        if (normalized === "error" || normalized === "fatal") {
+          return "circle-x";
+        }
+        if (normalized === "warn" || normalized === "warning") {
+          return "circle-alert";
+        }
+        if (normalized === "ok" || normalized === "success") {
+          return "circle-check";
+        }
+        return "info";
+      };
+
+      const createLevelIconBadge = (level) => {
+        const levelLabel = trimmedString(level);
+        if (levelLabel === "") {
+          return null;
+        }
+        const badge = document.createElement("span");
+        badge.className = "activity-feed-level-icon";
+        badge.setAttribute("aria-label", levelLabel);
+        badge.title = levelLabel;
+        const icon = createLucideIconPlaceholder(runtimeLevelIconName(levelLabel), []);
+        if (icon) {
+          badge.appendChild(icon);
+        }
+        const hiddenLabel = document.createElement("span");
+        hiddenLabel.className = "sr-only";
+        hiddenLabel.textContent = levelLabel;
+        badge.appendChild(hiddenLabel);
+        return badge;
+      };
+
       const hydrateLucideIcons = (root = document) => {
         if (!lucideAvailable()) {
           return;
@@ -3233,19 +3267,7 @@
         return trimmedString(task && task.status) === "sending" ? "send" : "clock-3";
       };
 
-      const recentEventIconName = (event) => {
-        const level = trimmedString(event && event.level).toLowerCase();
-        if (level === "error" || level === "fatal") {
-          return "circle-x";
-        }
-        if (level === "warn" || level === "warning") {
-          return "circle-alert";
-        }
-        if (level === "ok" || level === "success") {
-          return "circle-check";
-        }
-        return "activity";
-      };
+      const recentEventIconName = (event) => runtimeLevelIconName(event && event.level);
 
       const activityTimestamp = (value) => {
         const parsed = Date.parse(trimmedString(value));
@@ -3842,18 +3864,33 @@
             progressHeading.className = "activity-feed-progress-section-title";
             progressHeading.textContent = "Task Progress";
             progressSection.appendChild(progressHeading);
-            const progressList = document.createElement("ol");
-            progressList.className = "activity-feed-progress-list";
+            const progressList = document.createElement("div");
+            progressList.className = "activity-feed-progress-table";
+            progressList.setAttribute("role", "table");
+            progressList.setAttribute("aria-label", "Task Progress");
+            const headerRow = document.createElement("div");
+            headerRow.className = "activity-feed-progress-row activity-feed-progress-header";
+            headerRow.setAttribute("role", "row");
+            ["Progress", "Status", "Details", "When", "Type", "Level"].forEach((label) => {
+              const headerCell = document.createElement("span");
+              headerCell.className = "activity-feed-progress-cell";
+              headerCell.setAttribute("role", "columnheader");
+              headerCell.textContent = label;
+              headerRow.appendChild(headerCell);
+            });
+            progressList.appendChild(headerRow);
             const laneItems = Array.isArray(lane.items) ? lane.items : [];
             laneItems.forEach((item) => {
               const activityKey = activityFeedItemKey(item);
-              const progressItem = document.createElement("li");
-              progressItem.className = "activity-feed-progress-item";
+              const progressItem = document.createElement("div");
+              progressItem.className = "activity-feed-progress-row";
+              progressItem.setAttribute("role", "row");
               progressItem.dataset.runtimeEventLaneKey = lane.key;
               progressItem.dataset.runtimeEventKey = activityKey;
 
               const progressTitle = document.createElement("div");
-              progressTitle.className = "activity-feed-progress-title";
+              progressTitle.className = "activity-feed-progress-cell activity-feed-progress-title";
+              progressTitle.setAttribute("role", "cell");
               const titleIcon = createLucideIconPlaceholder(
                 item.iconName,
                 trimmedString(item.iconClass) === ""
@@ -3867,33 +3904,72 @@
               titleText.textContent = activityFeedProgressHeading(item);
               progressTitle.appendChild(titleText);
               progressItem.appendChild(progressTitle);
-              const meta = document.createElement("p");
-              meta.className = "activity-feed-progress-meta";
+
+              const statusCell = document.createElement("div");
+              statusCell.className = "activity-feed-progress-cell activity-feed-progress-status";
+              statusCell.setAttribute("role", "cell");
+              if (item.status) {
+                const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
+                if (status) {
+                  statusCell.appendChild(status);
+                }
+              } else {
+                statusCell.textContent = "-";
+              }
+              progressItem.appendChild(statusCell);
+
+              const detailsCell = document.createElement("div");
+              detailsCell.className = "activity-feed-progress-cell activity-feed-progress-details";
+              detailsCell.setAttribute("role", "cell");
+              const detailParts = [];
+              const detailText = trimmedString(item.detail) || trimmedString(item.title);
+              if (detailText !== "") {
+                detailParts.push(detailText);
+              }
+              if (trimmedString(lane && lane.groupTitle) !== "") {
+                [
+                  ["Skill", item.skill],
+                  ["Target agent", item.targetAgent],
+                  ["Task", item.taskID],
+                  ["Hub task", item.hubTaskID],
+                  ["Child request", item.childRequestID],
+                  ["Log", item.logPath],
+                ].forEach(([label, value]) => {
+                  const text = trimmedString(value);
+                  if (text !== "") {
+                    detailParts.push(`${label}: ${text}`);
+                  }
+                });
+              }
+              detailsCell.textContent = detailParts.join(" | ") || "-";
+              progressItem.appendChild(detailsCell);
+
+              const meta = document.createElement("div");
+              meta.className = "activity-feed-progress-cell activity-feed-progress-meta";
+              meta.setAttribute("role", "cell");
               const absoluteWhen = trimmedString(item.when) || trimmedString(item.subtitle);
               meta.textContent = formatRelativeRuntimeAge(item.sortAt) || absoluteWhen || "-";
               if (absoluteWhen !== "") {
                 meta.title = absoluteWhen;
               }
               progressItem.appendChild(meta);
-              if (item.status) {
-                const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
-                if (status) {
-                  progressItem.appendChild(status);
-                }
+
+              const typeCell = document.createElement("div");
+              typeCell.className = "activity-feed-progress-cell activity-feed-progress-type";
+              typeCell.setAttribute("role", "cell");
+              typeCell.textContent = item.kind === "pending_task" ? "Pending task" : "Runtime Event";
+              progressItem.appendChild(typeCell);
+
+              const levelCell = document.createElement("div");
+              levelCell.className = "activity-feed-progress-cell activity-feed-progress-level";
+              levelCell.setAttribute("role", "cell");
+              const level = createLevelIconBadge(item.level);
+              if (level) {
+                levelCell.appendChild(level);
+              } else {
+                levelCell.textContent = "-";
               }
-              const detailsCell = document.createElement("div");
-              detailsCell.className = "activity-feed-progress-details";
-              appendRuntimeRow(detailsCell, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
-              appendRuntimeRow(detailsCell, "Level", item.level);
-              if (trimmedString(lane && lane.groupTitle) !== "") {
-                appendRuntimeRow(detailsCell, "Skill", item.skill);
-                appendRuntimeRow(detailsCell, "Target agent", item.targetAgent);
-                appendRuntimeRow(detailsCell, "Task", item.taskID);
-                appendRuntimeRow(detailsCell, "Hub task", item.hubTaskID);
-                appendRuntimeRow(detailsCell, "Child request", item.childRequestID);
-                appendRuntimeRow(detailsCell, "Log", item.logPath);
-              }
-              progressItem.appendChild(detailsCell);
+              progressItem.appendChild(levelCell);
               progressList.appendChild(progressItem);
             });
             progressSection.appendChild(progressList);

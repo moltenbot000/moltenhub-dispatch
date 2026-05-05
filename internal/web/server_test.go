@@ -2521,8 +2521,25 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `progressHeading.textContent = "Task Progress";`) {
 		t.Fatalf("expected grouped activity renderer to label task progress sections, body=%s", body)
 	}
+	if !strings.Contains(body, `progressList.className = "activity-feed-progress-table";`) {
+		t.Fatalf("expected grouped activity renderer to build task progress table, body=%s", body)
+	}
+	if !strings.Contains(body, `["Progress", "Status", "Details", "When", "Type", "Level"].forEach((label) => {`) {
+		t.Fatalf("expected task progress table columns in requested order, body=%s", body)
+	}
 	if !strings.Contains(body, `titleText.textContent = activityFeedProgressHeading(item);`) {
 		t.Fatalf("expected grouped activity renderer to use progress messages as update subheadings, body=%s", body)
+	}
+	if !strings.Contains(body, `typeCell.textContent = item.kind === "pending_task" ? "Pending task" : "Runtime Event";`) {
+		t.Fatalf("expected runtime events to render requested type label, body=%s", body)
+	}
+	if !strings.Contains(body, `const detailText = trimmedString(item.detail) || trimmedString(item.title);`) {
+		t.Fatalf("expected details column to prefer event details and fall back to event title, body=%s", body)
+	}
+	if !strings.Contains(body, `const createLevelIconBadge = (level) => {`) ||
+		!strings.Contains(body, `badge.title = levelLabel;`) ||
+		!strings.Contains(body, `levelCell.appendChild(level);`) {
+		t.Fatalf("expected rightmost level column to render lucide icon with hover label, body=%s", body)
 	}
 	if !strings.Contains(body, `const activityFeedLaneStaticRows = (lane) => {`) {
 		t.Fatalf("expected grouped activity renderer to keep static task details at lane level, body=%s", body)
@@ -3028,6 +3045,14 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `.activity-feed-progress-section-title {`) {
 		t.Fatalf("expected activity feed progress section title styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.activity-feed-progress-table {`) ||
+		!strings.Contains(body, `.activity-feed-progress-row {`) ||
+		!strings.Contains(body, `.activity-feed-progress-level {`) {
+		t.Fatalf("expected task progress table column styles, body=%s", body)
+	}
+	if !strings.Contains(body, `.activity-feed-level-icon {`) {
+		t.Fatalf("expected task progress level icon styles, body=%s", body)
 	}
 	if !strings.Contains(body, `.activity-feed-progress-title h5 {`) {
 		t.Fatalf("expected activity feed progress update subheading styles, body=%s", body)

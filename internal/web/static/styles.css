@@ -4940,21 +4940,39 @@ body.settings-modal-open {
   text-transform: uppercase;
 }
 
-.activity-feed-progress-list {
+.activity-feed-progress-table {
   display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.activity-feed-progress-item {
-  display: grid;
-  gap: 5px;
-  padding: 9px 10px;
+  gap: 0;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--surface-library-bg) 88%, transparent);
+}
+
+.activity-feed-progress-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.1fr) 72px minmax(180px, 1.5fr) 74px 104px 52px;
+  align-items: center;
+  min-width: 0;
+}
+
+.activity-feed-progress-row + .activity-feed-progress-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.activity-feed-progress-header {
+  background: color-mix(in srgb, var(--bg-panel-muted) 72%, transparent);
+  color: var(--meta);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.activity-feed-progress-cell {
+  min-width: 0;
+  padding: 8px 9px;
+  overflow-wrap: anywhere;
 }
 
 .activity-feed-progress-title h5 {
@@ -4967,20 +4985,105 @@ body.settings-modal-open {
 }
 
 .activity-feed-progress-meta {
-  margin: 0;
   color: var(--muted);
   font-size: 0.7rem;
   line-height: 1.2;
 }
 
 .activity-feed-progress-details {
-  display: grid;
-  gap: 3px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.activity-feed-progress-status,
+.activity-feed-progress-type,
+.activity-feed-progress-level {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.activity-feed-progress-status,
+.activity-feed-progress-level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .activity-feed-progress-details .runtime-event-detail-row:first-child,
 .activity-feed-progress-details p:first-child {
   margin-top: 0;
+}
+
+.activity-feed-level-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--running) 28%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-glass-strong) 88%, rgb(var(--hub-running-rgb) / 0.08));
+  color: var(--running);
+}
+
+.activity-feed-level-icon .lucide,
+.activity-feed-level-icon [data-lucide] {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.activity-feed-level-icon:hover,
+.activity-feed-level-icon:focus-visible {
+  border-color: color-mix(in srgb, var(--running) 42%, var(--border));
+  background: color-mix(in srgb, var(--surface-glass-strong) 82%, rgb(var(--hub-running-rgb) / 0.14));
+}
+
+@media (max-width: 760px) {
+  .activity-feed-progress-table {
+    border: 0;
+    gap: 8px;
+    background: transparent;
+  }
+
+  .activity-feed-progress-header {
+    display: none;
+  }
+
+  .activity-feed-progress-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px 10px;
+    padding: 9px 10px;
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--surface-library-bg) 88%, transparent);
+  }
+
+  .activity-feed-progress-row + .activity-feed-progress-row {
+    border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  }
+
+  .activity-feed-progress-cell {
+    padding: 0;
+  }
+
+  .activity-feed-progress-title,
+  .activity-feed-progress-details,
+  .activity-feed-progress-meta,
+  .activity-feed-progress-type {
+    grid-column: 1 / -1;
+  }
+
+  .activity-feed-progress-status {
+    grid-column: 1;
+    justify-content: flex-start;
+  }
+
+  .activity-feed-progress-level {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
 
 .runtime-event-card {
