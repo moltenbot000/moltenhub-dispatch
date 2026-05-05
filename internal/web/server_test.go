@@ -2451,10 +2451,10 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 		t.Fatalf("expected recent activity events with the same title to share a lane, body=%s", body)
 	}
 	if !strings.Contains(body, `return rightSortAt - leftSortAt;`) {
-		t.Fatalf("expected grouped activity cards to keep latest events on the left, body=%s", body)
+		t.Fatalf("expected grouped activity rows to keep latest events first, body=%s", body)
 	}
-	if !strings.Contains(body, `laneTrack.className = "activity-feed-lane-track";`) {
-		t.Fatalf("expected grouped activity renderer to build horizontal lane tracks, body=%s", body)
+	if !strings.Contains(body, `table.className = "activity-feed-progress-table";`) {
+		t.Fatalf("expected grouped activity renderer to build progress tables, body=%s", body)
 	}
 	if !strings.Contains(body, `const activityFeedLaneStaticRows = (lane) => {`) {
 		t.Fatalf("expected grouped activity renderer to keep static task details at lane level, body=%s", body)
@@ -2471,7 +2471,7 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `laneElement.classList.toggle("is-collapsed", !laneExpanded);`) {
 		t.Fatalf("expected collapsed activity lanes to receive a collapsed styling hook, body=%s", body)
 	}
-	if !strings.Contains(body, `laneMeta.textContent = "Latest -> oldest";`) {
+	if !strings.Contains(body, `laneMeta.textContent = "Latest on top";`) {
 		t.Fatalf("expected grouped activity renderer to annotate expanded update logs, body=%s", body)
 	}
 	if strings.Contains(body, `const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);`) {
@@ -2486,8 +2486,8 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const laneExpanded = activityFeedExpandedKeys.has(laneKey);`) {
 		t.Fatalf("expected activity feed refresh to reuse expanded lanes, body=%s", body)
 	}
-	if !strings.Contains(body, `card.dataset.runtimeEventLaneKey = laneKey;`) {
-		t.Fatalf("expected grouped activity cards to record lane identity, body=%s", body)
+	if !strings.Contains(body, `row.dataset.runtimeEventLaneKey = lane.key;`) {
+		t.Fatalf("expected grouped activity rows to record lane identity, body=%s", body)
 	}
 	if !strings.Contains(body, `if (trimmedString(sibling.dataset.runtimeEventLaneKey) !== laneKey) {`) {
 		t.Fatalf("expected runtime event expansion to stay scoped to same lane, body=%s", body)
@@ -2936,17 +2936,17 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.runtime-event-card-header {`) {
 		t.Fatalf("expected runtime event card header layout styles, body=%s", body)
 	}
-	if !strings.Contains(body, `.activity-feed-lane-track {`) {
-		t.Fatalf("expected activity feed lane track styles, body=%s", body)
+	if !strings.Contains(body, `.activity-feed-progress-table {`) {
+		t.Fatalf("expected activity feed progress table styles, body=%s", body)
 	}
-	if !strings.Contains(body, `grid-auto-flow: column;`) {
-		t.Fatalf("expected activity feed lanes to stack cards horizontally, body=%s", body)
+	if !strings.Contains(body, `border-collapse: collapse;`) {
+		t.Fatalf("expected activity feed progress table to use table layout, body=%s", body)
 	}
-	if !strings.Contains(body, `align-items: start;`) {
-		t.Fatalf("expected horizontal activity lanes to avoid stretching collapsed cards, body=%s", body)
+	if !strings.Contains(body, `vertical-align: top;`) {
+		t.Fatalf("expected activity feed progress table rows to align from top, body=%s", body)
 	}
 	if !strings.Contains(body, `overflow-x: auto;`) {
-		t.Fatalf("expected horizontal activity lanes to support scrolling, body=%s", body)
+		t.Fatalf("expected activity feed progress table to support narrow viewport scrolling, body=%s", body)
 	}
 	if !strings.Contains(body, `.runtime-event-card-toggle {`) {
 		t.Fatalf("expected runtime event toggle button styles, body=%s", body)

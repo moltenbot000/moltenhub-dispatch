@@ -3787,7 +3787,7 @@
           if (laneExpanded) {
             const laneMeta = document.createElement("p");
             laneMeta.className = "activity-feed-lane-order";
-            laneMeta.textContent = "Latest -> oldest";
+            laneMeta.textContent = "Latest on top";
             laneCopy.appendChild(laneMeta);
           }
           laneHeader.appendChild(laneCopy);
@@ -3829,42 +3829,78 @@
               laneElement.appendChild(staticDetails);
             }
 
-            const laneTrack = document.createElement("div");
-            laneTrack.className = "activity-feed-lane-track";
+            const tableWrap = document.createElement("div");
+            tableWrap.className = "activity-feed-progress-table-wrap";
+            const table = document.createElement("table");
+            table.className = "activity-feed-progress-table";
+            const caption = document.createElement("caption");
+            caption.className = "sr-only";
+            caption.textContent = "Task progress, latest to oldest";
+            table.appendChild(caption);
+            const head = document.createElement("thead");
+            const headRow = document.createElement("tr");
+            ["Progress", "When", "Details"].forEach((label) => {
+              const cell = document.createElement("th");
+              cell.scope = "col";
+              cell.textContent = label;
+              headRow.appendChild(cell);
+            });
+            head.appendChild(headRow);
+            table.appendChild(head);
+            const body = document.createElement("tbody");
             const laneItems = Array.isArray(lane.items) ? lane.items : [];
             laneItems.forEach((item) => {
               const activityKey = activityFeedItemKey(item);
-              const card = createRuntimeEventCard(item.title, (body) => {
-                appendRuntimeRow(body, "When", item.when);
-                appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
-                appendRuntimeRow(body, "Status", item.status);
-                appendRuntimeRow(body, "Level", item.level);
-                appendRuntimeRow(body, "", item.detail);
-                if (trimmedString(lane && lane.groupTitle) !== "") {
-                  appendRuntimeRow(body, "Skill", item.skill);
-                  appendRuntimeRow(body, "Target agent", item.targetAgent);
-                  appendRuntimeRow(body, "Task", item.taskID);
-                  appendRuntimeRow(body, "Hub task", item.hubTaskID);
-                  appendRuntimeRow(body, "Child request", item.childRequestID);
-                  appendRuntimeRow(body, "Log", item.logPath);
+              const row = document.createElement("tr");
+              row.dataset.runtimeEventLaneKey = lane.key;
+              row.dataset.runtimeEventKey = activityKey;
+
+              const progressCell = document.createElement("td");
+              const progressTitle = document.createElement("div");
+              progressTitle.className = "activity-feed-progress-title";
+              const titleIcon = createLucideIconPlaceholder(
+                item.iconName,
+                trimmedString(item.iconClass) === ""
+                  ? ["runtime-event-card-title-icon"]
+                  : ["runtime-event-card-title-icon", item.iconClass]
+              );
+              if (titleIcon) {
+                progressTitle.appendChild(titleIcon);
+              }
+              const titleText = document.createElement("span");
+              titleText.textContent = trimmedString(item.title) || "Runtime event";
+              progressTitle.appendChild(titleText);
+              progressCell.appendChild(progressTitle);
+              if (item.status) {
+                const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
+                if (status) {
+                  progressCell.appendChild(status);
                 }
-              }, {
-                subtitleText: item.subtitle,
-                subtitleBuilder: item.status ? (subtitle) => {
-                  const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
-                  if (status) {
-                    subtitle.appendChild(status);
-                  }
-                } : null,
-                iconName: item.iconName,
-                iconClass: item.iconClass,
-                laneKey: lane.key,
-                activityKey,
-                expanded: true,
-              });
-              laneTrack.appendChild(card);
+              }
+              row.appendChild(progressCell);
+
+              const whenCell = document.createElement("td");
+              whenCell.textContent = trimmedString(item.when) || trimmedString(item.subtitle) || "-";
+              row.appendChild(whenCell);
+
+              const detailsCell = document.createElement("td");
+              appendRuntimeRow(detailsCell, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
+              appendRuntimeRow(detailsCell, "Level", item.level);
+              appendRuntimeRow(detailsCell, "", item.detail);
+              if (trimmedString(lane && lane.groupTitle) !== "") {
+                appendRuntimeRow(detailsCell, "Skill", item.skill);
+                appendRuntimeRow(detailsCell, "Target agent", item.targetAgent);
+                appendRuntimeRow(detailsCell, "Task", item.taskID);
+                appendRuntimeRow(detailsCell, "Hub task", item.hubTaskID);
+                appendRuntimeRow(detailsCell, "Child request", item.childRequestID);
+                appendRuntimeRow(detailsCell, "Log", item.logPath);
+              }
+              row.appendChild(detailsCell);
+              body.appendChild(row);
             });
-            laneElement.appendChild(laneTrack);
+            table.appendChild(body);
+            tableWrap.appendChild(table);
+            laneElement.appendChild(tableWrap);
           }
           activityFeedList.appendChild(laneElement);
         });
