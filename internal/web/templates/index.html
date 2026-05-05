@@ -1234,6 +1234,8 @@
             return "bot";
           case "task":
             return "clipboard-list";
+          case "hub task":
+            return "network";
           case "child request":
             return "git-branch";
           case "repo":
@@ -3222,8 +3224,8 @@
           feed.push({
             kind: "pending_task",
             sortAt: activityTimestamp(task && task.created_at),
-            title: target || "Unknown agent",
-            subtitle: skillName,
+            title: pendingTaskStatusLabel(task),
+            subtitle: formatRuntimeTimestamp(task && task.created_at),
             status: pendingTaskStatusLabel(task),
             statusClass: pendingTaskStatusClass(task),
             statusIconName: pendingTaskStatusIconName(task),
@@ -3249,8 +3251,8 @@
           feed.push({
             kind: "recent_event",
             sortAt: activityTimestamp(event && event.at),
-            title: target || eventTitle || "Runtime event",
-            subtitle: target !== "" ? (skillName && eventTitle ? `${skillName} • ${eventTitle}` : (skillName || eventTitle)) : "",
+            title: eventTitle || "Runtime event",
+            subtitle: formatRuntimeTimestamp(event && event.at),
             when: formatRuntimeTimestamp(event && event.at),
             level: trimmedString(event && event.level),
             detail: trimmedString(event && event.detail),
@@ -3294,6 +3296,11 @@
               targetAgent: "",
               taskID: "",
               childRequestID: "",
+              skill: "",
+              hubTaskID: "",
+              repo: "",
+              logPath: "",
+              expiresAt: "",
               fallbackTitle: "",
               items: [],
             };
@@ -3312,6 +3319,21 @@
           }
           if (lane.childRequestID === "") {
             lane.childRequestID = trimmedString(item && item.childRequestID);
+          }
+          if (lane.skill === "") {
+            lane.skill = trimmedString(item && item.skill);
+          }
+          if (lane.hubTaskID === "") {
+            lane.hubTaskID = trimmedString(item && item.hubTaskID);
+          }
+          if (lane.repo === "") {
+            lane.repo = trimmedString(item && item.repo);
+          }
+          if (lane.logPath === "") {
+            lane.logPath = trimmedString(item && item.logPath);
+          }
+          if (lane.expiresAt === "") {
+            lane.expiresAt = trimmedString(item && item.expiresAt);
           }
           if (lane.fallbackTitle === "") {
             lane.fallbackTitle = trimmedString(item && item.title);
@@ -3339,25 +3361,61 @@
 
       const activityFeedLaneLabel = (lane) => {
         const targetAgent = trimmedString(lane && lane.targetAgent);
-        const taskID = trimmedString(lane && lane.taskID);
-        const childRequestID = trimmedString(lane && lane.childRequestID);
+        const skill = trimmedString(lane && lane.skill);
         const fallbackTitle = trimmedString(lane && lane.fallbackTitle);
-        if (targetAgent !== "" && taskID !== "") {
-          return `${targetAgent} • ${taskID}`;
-        }
-        if (taskID !== "") {
-          return taskID;
+        if (targetAgent !== "" && skill !== "") {
+          return `${targetAgent} • ${skill}`;
         }
         if (targetAgent !== "") {
           return targetAgent;
         }
-        if (childRequestID !== "") {
-          return `Child request ${childRequestID}`;
+        if (skill !== "") {
+          return skill;
+        }
+        const taskID = trimmedString(lane && lane.taskID);
+        if (taskID !== "") {
+          return taskID;
         }
         if (fallbackTitle !== "") {
           return fallbackTitle;
         }
         return "Runtime activity";
+      };
+
+      const activityFeedLaneLatestItem = (lane) => {
+        const items = Array.isArray(lane && lane.items) ? lane.items : [];
+        return items.length > 0 ? items[items.length - 1] : null;
+      };
+
+      const activityFeedLaneStaticRows = (lane) => {
+        return [
+          ["Task", trimmedString(lane && lane.taskID)],
+          ["Hub task", trimmedString(lane && lane.hubTaskID)],
+          ["Child request", trimmedString(lane && lane.childRequestID)],
+          ["Repo", trimmedString(lane && lane.repo)],
+          ["Log", trimmedString(lane && lane.logPath)],
+          ["Expires", trimmedString(lane && lane.expiresAt)],
+        ].filter(([, value]) => value !== "");
+      };
+
+      const syncActivityFeedLaneToggleButton = (toggle, expanded) => {
+        if (!(toggle instanceof HTMLButtonElement)) {
+          return;
+        }
+        const nextExpanded = Boolean(expanded);
+        const label = nextExpanded ? "Show latest status" : "Show update log";
+        toggle.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
+        toggle.setAttribute("aria-label", label);
+        toggle.title = label;
+        toggle.replaceChildren();
+        const icon = createLucideIconPlaceholder(
+          nextExpanded ? "minimize-2" : "list",
+          "runtime-event-card-toggle-icon"
+        );
+        if (icon) {
+          toggle.appendChild(icon);
+          hydrateLucideIcons(toggle);
+        }
       };
 
       const scheduledMessageID = (schedule) => trimmedString(schedule && schedule.id);
@@ -3563,33 +3621,78 @@
         lanes.forEach((lane) => {
           const laneElement = document.createElement("section");
           laneElement.className = "activity-feed-lane";
-          const laneLabel = document.createElement("p");
+          const laneKey = trimmedString(lane && lane.key);
+          const laneExpanded = activityFeedExpandedKeys.has(laneKey);
+          if (laneExpanded) {
+            nextExpandedKeys.add(laneKey);
+          }
+          const laneHeader = document.createElement("div");
+          laneHeader.className = "activity-feed-lane-header";
+          const laneCopy = document.createElement("div");
+          laneCopy.className = "activity-feed-lane-copy";
+          const laneLabel = document.createElement("h3");
           laneLabel.className = "activity-feed-lane-label";
           laneLabel.textContent = activityFeedLaneLabel(lane);
-          const laneOrder = document.createElement("span");
-          laneOrder.className = "activity-feed-lane-order";
-          laneOrder.textContent = "Oldest -> newest";
-          laneLabel.appendChild(laneOrder);
-          laneElement.appendChild(laneLabel);
+          laneCopy.appendChild(laneLabel);
+          const latestItem = activityFeedLaneLatestItem(lane);
+          const laneMeta = document.createElement("p");
+          laneMeta.className = "activity-feed-lane-order";
+          laneMeta.textContent = laneExpanded
+            ? "Oldest -> newest"
+            : `Latest status${latestItem && latestItem.when ? ` • ${latestItem.when}` : ""}`;
+          laneCopy.appendChild(laneMeta);
+          laneHeader.appendChild(laneCopy);
+          const laneToggle = document.createElement("button");
+          laneToggle.type = "button";
+          laneToggle.className = "runtime-event-card-toggle activity-feed-lane-toggle";
+          syncActivityFeedLaneToggleButton(laneToggle, laneExpanded);
+          laneToggle.addEventListener("click", () => {
+            if (laneKey === "") {
+              return;
+            }
+            if (activityFeedExpandedKeys.has(laneKey)) {
+              activityFeedExpandedKeys.delete(laneKey);
+            } else {
+              activityFeedExpandedKeys.add(laneKey);
+            }
+            renderActivityFeed(latestPendingTasks, latestRecentEvents);
+            trackAppEvent("activity_lane_toggle", {
+              app_area: "activity",
+              expanded: activityFeedExpandedKeys.has(laneKey),
+            });
+          });
+          laneHeader.appendChild(laneToggle);
+          laneElement.appendChild(laneHeader);
+
+          const staticRows = activityFeedLaneStaticRows(lane);
+          if (staticRows.length > 0) {
+            const staticDetails = document.createElement("dl");
+            staticDetails.className = "activity-feed-lane-static";
+            staticRows.forEach(([label, value]) => {
+              const term = document.createElement("dt");
+              term.textContent = label;
+              const detail = document.createElement("dd");
+              detail.textContent = value;
+              staticDetails.appendChild(term);
+              staticDetails.appendChild(detail);
+            });
+            laneElement.appendChild(staticDetails);
+          }
+
           const laneTrack = document.createElement("div");
           laneTrack.className = "activity-feed-lane-track";
-          lane.items.forEach((item) => {
+          const laneItems = Array.isArray(lane.items) ? lane.items : [];
+          const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);
+          laneTrack.classList.toggle("is-collapsed", !laneExpanded);
+          visibleItems.forEach((item) => {
             const activityKey = activityFeedItemKey(item);
-            const expanded = activityFeedExpandedKeys.has(activityKey);
+            const expanded = laneExpanded;
             const card = createRuntimeEventCard(item.title, (body) => {
               appendRuntimeRow(body, "When", item.when);
               appendRuntimeRow(body, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
               appendRuntimeRow(body, "Status", item.status);
               appendRuntimeRow(body, "Level", item.level);
               appendRuntimeRow(body, "", item.detail);
-              appendRuntimeRow(body, "Skill", item.skill);
-              appendRuntimeRow(body, "Target agent", item.targetAgent);
-              appendRuntimeRow(body, "Task", item.taskID);
-              appendRuntimeRow(body, "Hub task", item.hubTaskID);
-              appendRuntimeRow(body, "Child request", item.childRequestID);
-              appendRuntimeRow(body, "Repo", item.repo);
-              appendRuntimeRow(body, "Log", item.logPath);
-              appendRuntimeRow(body, "Expires", item.expiresAt);
             }, {
               subtitleText: item.subtitle,
               subtitleBuilder: item.status ? (subtitle) => {
@@ -3604,9 +3707,6 @@
               activityKey,
               expanded,
             });
-            if (expanded) {
-              nextExpandedKeys.add(activityKey);
-            }
             laneTrack.appendChild(card);
           });
           laneElement.appendChild(laneTrack);

@@ -4848,27 +4848,61 @@ body.settings-modal-open {
   gap: 8px;
 }
 
-.activity-feed-lane-label {
+.activity-feed-lane-header {
   margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.activity-feed-lane-copy {
+  min-width: 0;
+}
+
+.activity-feed-lane-label {
+  margin: 0;
   color: var(--meta);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .activity-feed-lane-order {
+  margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: none;
-  white-space: nowrap;
+}
+
+.activity-feed-lane-toggle {
+  flex: 0 0 auto;
+}
+
+.activity-feed-lane-static {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.activity-feed-lane-static dt {
+  color: var(--meta);
+  font-weight: 800;
+}
+
+.activity-feed-lane-static dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .activity-feed-lane-track {
@@ -4881,6 +4915,14 @@ body.settings-modal-open {
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
   padding-bottom: 4px;
+}
+
+.activity-feed-lane-track.is-collapsed {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  grid-template-columns: minmax(0, 1fr);
+  overflow-x: visible;
+  padding-bottom: 0;
 }
 
 .activity-feed-lane-track .runtime-event-card {
