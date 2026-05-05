@@ -1026,7 +1026,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `id="dispatch-delay-input" type="hidden" name="scheduled_at"`) ||
 		!strings.Contains(body, `class="manual-dispatch-schedule-mode-toggle" role="radiogroup"`) ||
 		!strings.Contains(body, `id="dispatch-delay-enabled" type="radio" name="dispatch_schedule_mode" value="delay" checked`) ||
-		!strings.Contains(body, `id="dispatch-delay-amount"`) ||
+		!strings.Contains(body, `id="dispatch-delay-amount" class="prompt-control" type="number" min="1" max="999"`) ||
 		!strings.Contains(body, `id="dispatch-delay-unit"`) ||
 		!strings.Contains(body, `<span>Delay</span>`) ||
 		!strings.Contains(body, `<option value="s">seconds</option>`) ||
@@ -1066,6 +1066,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `const parseDispatchFrequency = () => {`) ||
 		!strings.Contains(body, `parseScheduleSelection(dispatchFrequencyEnabled, dispatchDelayAmount, dispatchDelayUnit, "Repeat")`) ||
 		!strings.Contains(body, `formData.set("every", dispatchFrequency.duration);`) ||
+		!strings.Contains(body, `${label} must be 999 or less.`) ||
 		!strings.Contains(body, `Repeat must fit cron: 1-59 seconds, 1-59 minutes, or 1-23 hours.`) {
 		t.Fatalf("expected manual dispatch recurring interval parser and submit path, body=%s", body)
 	}
@@ -3618,8 +3619,11 @@ func TestManualDispatchScheduleControlsShareOneRow(t *testing.T) {
 	if !strings.Contains(content, ".manual-dispatch-delay-item {\n  display: grid;\n  grid-template-columns: minmax(130px, 220px) minmax(0, 1fr);") {
 		t.Fatalf("expected schedule mode and value controls to share one grid row")
 	}
-	if !strings.Contains(content, ".manual-dispatch-schedule-value-row {\n  display: grid;\n  grid-template-columns: minmax(4.5rem, 1fr) minmax(5.8rem, 2fr);") {
-		t.Fatalf("expected amount control to use one third of the schedule value row")
+	if !strings.Contains(content, ".manual-dispatch-schedule-value-row {\n  display: grid;\n  grid-template-columns: 4.5rem 7.25rem;\n  gap: 8px;\n  justify-self: start;") {
+		t.Fatalf("expected amount and unit controls to keep compact fixed widths")
+	}
+	if !strings.Contains(content, ".manual-dispatch-schedule-unit {\n  width: 7.25rem;") {
+		t.Fatalf("expected schedule unit control to match seconds/minutes content width")
 	}
 	if !strings.Contains(content, ".manual-dispatch-delay-item .manual-dispatch-delay-hint {\n  grid-column: 1 / -1;\n}") {
 		t.Fatalf("expected schedule hint to span below the single-line controls")

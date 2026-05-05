@@ -197,7 +197,7 @@
                       </label>
                     </div>
                     <div class="manual-dispatch-schedule-value-row">
-                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-label="Schedule amount" aria-describedby="dispatch-schedule-hint" disabled>
+                      <input id="dispatch-delay-amount" class="prompt-control" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="10" autocomplete="off" aria-label="Schedule amount" aria-describedby="dispatch-schedule-hint" disabled>
                       <select id="dispatch-delay-unit" class="prompt-control manual-dispatch-schedule-unit" aria-label="Schedule unit" disabled>
                         <option value="s">seconds</option>
                         <option value="m">minutes</option>
@@ -2422,6 +2422,9 @@
         const amount = Number.parseInt(rawAmount, 10);
         if (!Number.isFinite(amount) || amount <= 0) {
           return { ok: false, message: `${label} must be greater than zero.` };
+        }
+        if (amount > 999) {
+          return { ok: false, message: `${label} must be 999 or less.` };
         }
         const unit = unitEl instanceof HTMLSelectElement ? unitEl.value : "m";
         if (!["s", "m", "h"].includes(unit)) {
