@@ -1047,6 +1047,12 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="manual-dispatch-schedule-panel"`) || !strings.Contains(body, `id="dispatch-schedule-label" class="prompt-label">Scheduling</span>`) {
 		t.Fatalf("expected manual dispatch schedule controls to render inside a schedule panel, body=%s", body)
 	}
+	if !strings.Contains(body, `class="manual-dispatch-schedule-header" data-dispatch-delay-toggle-region`) ||
+		!strings.Contains(body, `const dispatchDelayToggleRegion = document.querySelector("[data-dispatch-delay-toggle-region]");`) ||
+		!strings.Contains(body, `const toggleDispatchDelayField = () => {`) ||
+		!strings.Contains(body, `dispatchDelayToggleRegion.addEventListener("click", (event) => {`) {
+		t.Fatalf("expected manual dispatch schedule header to toggle scheduling panel, body=%s", body)
+	}
 	if !strings.Contains(body, `id="dispatch-delay-toggle"`) || !strings.Contains(body, `aria-controls="dispatch-delay-field"`) {
 		t.Fatalf("expected manual dispatch delay toggle control, body=%s", body)
 	}

@@ -162,7 +162,7 @@
               </label>
               <input id="skill-payload-format-input" type="hidden" name="payload_format" value="">
               <section class="manual-dispatch-schedule-panel" aria-labelledby="dispatch-schedule-label">
-                <div class="manual-dispatch-schedule-header">
+                <div class="manual-dispatch-schedule-header" data-dispatch-delay-toggle-region>
                   <div class="manual-dispatch-schedule-copy">
                     <span id="dispatch-schedule-label" class="prompt-label">Scheduling</span>
                     <span class="manual-dispatch-delay-hint">Send later or repeat this dispatch.</span>
@@ -575,6 +575,7 @@
         : "Markdown and JSON are both supported.";
       const dispatchTaskClear = document.getElementById("dispatch-task-clear");
       const dispatchDelayToggle = document.getElementById("dispatch-delay-toggle");
+      const dispatchDelayToggleRegion = document.querySelector("[data-dispatch-delay-toggle-region]");
       const dispatchTaskSubmit = document.getElementById("dispatch-task-submit");
       const dispatchSubmitStatus = document.getElementById("dispatch-submit-status");
       const runtimeEventCards = Array.from(document.querySelectorAll("[data-runtime-event-card]"));
@@ -2329,6 +2330,18 @@
 
       const scheduleFieldVisible = () => {
         return dispatchDelayField instanceof HTMLElement && !dispatchDelayField.hidden;
+      };
+
+      const toggleDispatchDelayField = () => {
+        const nextVisible = !(dispatchDelayField instanceof HTMLElement) || dispatchDelayField.hidden;
+        trackAppEvent("dispatch_schedule_toggle", {
+          app_area: "dispatch",
+          expanded: nextVisible,
+        });
+        setDispatchDelayFieldVisible(nextVisible);
+        if (nextVisible && dispatchDelayAmount instanceof HTMLInputElement) {
+          dispatchDelayAmount.focus({ preventScroll: true });
+        }
       };
 
       const parseScheduleSelection = (enabledEl, amountEl, unitEl, label) => {
@@ -4123,15 +4136,16 @@
       }
       if (dispatchDelayToggle instanceof HTMLButtonElement) {
         dispatchDelayToggle.addEventListener("click", () => {
-          const nextVisible = !(dispatchDelayField instanceof HTMLElement) || dispatchDelayField.hidden;
-          trackAppEvent("dispatch_schedule_toggle", {
-            app_area: "dispatch",
-            expanded: nextVisible,
-          });
-          setDispatchDelayFieldVisible(nextVisible);
-          if (nextVisible && dispatchDelayAmount instanceof HTMLInputElement) {
-            dispatchDelayAmount.focus({ preventScroll: true });
+          toggleDispatchDelayField();
+        });
+      }
+      if (dispatchDelayToggleRegion instanceof HTMLElement) {
+        dispatchDelayToggleRegion.addEventListener("click", (event) => {
+          const target = event.target;
+          if (target instanceof Element && target.closest("#dispatch-delay-toggle")) {
+            return;
           }
+          toggleDispatchDelayField();
         });
       }
       if (scheduledDispatchesToggle instanceof HTMLButtonElement) {

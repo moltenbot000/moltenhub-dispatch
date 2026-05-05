@@ -3749,6 +3749,7 @@ p,
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  cursor: pointer;
 }
 
 .manual-dispatch-schedule-copy {
