@@ -2453,14 +2453,27 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `return rightSortAt - leftSortAt;`) {
 		t.Fatalf("expected grouped activity rows to keep latest events first, body=%s", body)
 	}
-	if !strings.Contains(body, `table.className = "activity-feed-progress-table";`) {
-		t.Fatalf("expected grouped activity renderer to build progress tables, body=%s", body)
+	if !strings.Contains(body, `progressSection.className = "activity-feed-progress-section";`) {
+		t.Fatalf("expected grouped activity renderer to build task progress sections, body=%s", body)
+	}
+	if !strings.Contains(body, `progressHeading.textContent = "Task Progress";`) {
+		t.Fatalf("expected grouped activity renderer to label task progress sections, body=%s", body)
+	}
+	if !strings.Contains(body, `titleText.textContent = activityFeedProgressHeading(item);`) {
+		t.Fatalf("expected grouped activity renderer to use progress messages as update subheadings, body=%s", body)
 	}
 	if !strings.Contains(body, `const activityFeedLaneStaticRows = (lane) => {`) {
 		t.Fatalf("expected grouped activity renderer to keep static task details at lane level, body=%s", body)
 	}
 	if !strings.Contains(body, `const activityFeedLaneCollapsedLabel = (lane, latestItem) => {`) {
 		t.Fatalf("expected grouped activity renderer to build one-line minimized summaries, body=%s", body)
+	}
+	if !strings.Contains(body, `const activityFeedProgressHeading = (item) => {`) {
+		t.Fatalf("expected grouped activity renderer to centralize progress subheading labels, body=%s", body)
+	}
+	if !strings.Contains(body, "trimmedString(latestItem && latestItem.detail)") ||
+		!strings.Contains(body, "|| trimmedString(latestItem && latestItem.title)") {
+		t.Fatalf("expected minimized activity summary to prefer latest progress detail over generic title, body=%s", body)
 	}
 	if !strings.Contains(body, "return `${parts.join(\" - \")}${suffix}`;") {
 		t.Fatalf("expected minimized activity summary to use agent, skill, current progress, and age, body=%s", body)
@@ -2492,8 +2505,8 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const laneExpanded = activityFeedExpandedKeys.has(laneKey);`) {
 		t.Fatalf("expected activity feed refresh to reuse expanded lanes, body=%s", body)
 	}
-	if !strings.Contains(body, `row.dataset.runtimeEventLaneKey = lane.key;`) {
-		t.Fatalf("expected grouped activity rows to record lane identity, body=%s", body)
+	if !strings.Contains(body, `progressItem.dataset.runtimeEventLaneKey = lane.key;`) {
+		t.Fatalf("expected grouped activity progress items to record lane identity, body=%s", body)
 	}
 	if !strings.Contains(body, `if (trimmedString(sibling.dataset.runtimeEventLaneKey) !== laneKey) {`) {
 		t.Fatalf("expected runtime event expansion to stay scoped to same lane, body=%s", body)
@@ -2942,17 +2955,17 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.runtime-event-card-header {`) {
 		t.Fatalf("expected runtime event card header layout styles, body=%s", body)
 	}
-	if !strings.Contains(body, `.activity-feed-progress-table {`) {
-		t.Fatalf("expected activity feed progress table styles, body=%s", body)
+	if !strings.Contains(body, `.activity-feed-progress-section {`) {
+		t.Fatalf("expected activity feed progress section styles, body=%s", body)
 	}
-	if !strings.Contains(body, `border-collapse: collapse;`) {
-		t.Fatalf("expected activity feed progress table to use table layout, body=%s", body)
+	if !strings.Contains(body, `.activity-feed-progress-section-title {`) {
+		t.Fatalf("expected activity feed progress section title styles, body=%s", body)
 	}
-	if !strings.Contains(body, `vertical-align: top;`) {
-		t.Fatalf("expected activity feed progress table rows to align from top, body=%s", body)
+	if !strings.Contains(body, `.activity-feed-progress-title h5 {`) {
+		t.Fatalf("expected activity feed progress update subheading styles, body=%s", body)
 	}
-	if !strings.Contains(body, `overflow-x: auto;`) {
-		t.Fatalf("expected activity feed progress table to support narrow viewport scrolling, body=%s", body)
+	if !strings.Contains(body, `overflow-wrap: anywhere;`) {
+		t.Fatalf("expected activity feed progress subheadings to wrap long stage messages, body=%s", body)
 	}
 	if !strings.Contains(body, `.runtime-event-card-toggle {`) {
 		t.Fatalf("expected runtime event toggle button styles, body=%s", body)
