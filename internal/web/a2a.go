@@ -644,22 +644,37 @@ func a2aTaskFromPendingTask(task app.PendingTask) map[string]any {
 	if task.Status == app.PendingTaskStatusSending {
 		statusState = "TASK_STATE_WORKING"
 	}
+	if downstreamState := strings.TrimSpace(task.DownstreamTaskState); downstreamState != "" {
+		statusState = downstreamState
+	}
+	statusAt := task.CreatedAt
+	if !task.DownstreamUpdatedAt.IsZero() {
+		statusAt = task.DownstreamUpdatedAt
+	}
+	var statusMessage map[string]any
+	if downstreamMessage := strings.TrimSpace(task.DownstreamMessage); downstreamMessage != "" {
+		statusMessage = a2aAgentStatusMessage(task.ID, contextID, downstreamMessage)
+	}
 	metadata := a2aTaskMetadata(map[string]any{
-		"hub_task_id":       task.HubTaskID,
-		"parent_request_id": task.ParentRequestID,
-		"child_request_id":  task.ChildRequestID,
-		"target_agent_uuid": task.TargetAgentUUID,
-		"target_agent_uri":  task.TargetAgentURI,
-		"target_agent":      task.TargetAgentDisplayName,
-		"skill_name":        task.OriginalSkillName,
-		"repo":              task.Repo,
-		"log_path":          task.LogPath,
-		"expires_at":        a2aTimeString(task.ExpiresAt),
+		"hub_task_id":           task.HubTaskID,
+		"parent_request_id":     task.ParentRequestID,
+		"child_request_id":      task.ChildRequestID,
+		"target_agent_uuid":     task.TargetAgentUUID,
+		"target_agent_uri":      task.TargetAgentURI,
+		"target_agent":          task.TargetAgentDisplayName,
+		"skill_name":            task.OriginalSkillName,
+		"repo":                  task.Repo,
+		"log_path":              task.LogPath,
+		"expires_at":            a2aTimeString(task.ExpiresAt),
+		"downstream_status":     task.DownstreamStatus,
+		"downstream_state":      task.DownstreamTaskState,
+		"downstream_message":    task.DownstreamMessage,
+		"downstream_updated_at": a2aTimeString(task.DownstreamUpdatedAt),
 	})
 	return map[string]any{
 		"id":        task.ID,
 		"contextId": contextID,
-		"status":    a2aTaskStatus(statusState, task.CreatedAt, nil),
+		"status":    a2aTaskStatus(statusState, statusAt, statusMessage),
 		"history": []map[string]any{
 			a2aMessageFromPayload(task.ID, contextID, task.ParentRequestID, task.DispatchPayload, task.DispatchPayloadFormat),
 		},

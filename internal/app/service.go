@@ -25,6 +25,7 @@ const (
 	openClawHTTPProtocol  = "openclaw.http.v1"
 	openClawSkillRequest  = "skill_request"
 	openClawSkillResult   = "skill_result"
+	openClawTaskStatus    = "task_status_update"
 	openClawTextMessage   = "text_message"
 	hubPingRetryInterval  = 12 * time.Second
 	hubPingRequestTimeout = 6 * time.Second
@@ -1016,6 +1017,8 @@ func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResp
 		return s.handleSkillResult(ctx, message)
 	case openClawSkillRequest:
 		return s.handleSkillRequest(ctx, message)
+	case openClawTaskStatus:
+		return s.handleTaskStatusUpdate(message)
 	case openClawTextMessage:
 		return s.handleTextMessage(message)
 	default:
@@ -1168,6 +1171,65 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 		return err
 	}
 	return s.removePendingTask(pending.ChildRequestID)
+}
+
+func (s *Service) handleTaskStatusUpdate(message hub.PullResponse) error {
+	state := s.store.Snapshot()
+	pending, ok := findPendingTaskForStatusUpdate(state.PendingTasks, message)
+	if !ok {
+		requestID := strings.TrimSpace(message.OpenClawMessage.RequestID)
+		if requestID == "" {
+			requestID = strings.TrimSpace(message.MessageID)
+		}
+		return s.logEvent("info", "Unmatched task status", "No pending task matched "+requestID, requestID, "")
+	}
+
+	status := strings.TrimSpace(message.OpenClawMessage.Status)
+	taskState := statusUpdateTaskState(message.OpenClawMessage)
+	statusMessage := statusUpdateMessageText(message.OpenClawMessage)
+	if statusMessage == "" {
+		statusMessage = statusUpdateDefaultMessage(status, taskState)
+	}
+	now := time.Now().UTC()
+
+	if err := s.writeTaskLog(pending.LogPath, map[string]any{
+		"phase":       openClawTaskStatus,
+		"task_id":     pending.ID,
+		"request_id":  message.OpenClawMessage.RequestID,
+		"status":      status,
+		"task_state":  taskState,
+		"message":     statusMessage,
+		"status_body": message.OpenClawMessage,
+	}); err != nil {
+		return err
+	}
+
+	updated := pending
+	updated.DownstreamStatus = status
+	updated.DownstreamTaskState = taskState
+	updated.DownstreamMessage = statusMessage
+	updated.DownstreamUpdatedAt = now
+	if err := s.updatePendingTaskStatusUpdate(updated); err != nil {
+		return err
+	}
+
+	level, title := taskStatusUpdateEventLevelTitle(taskState)
+	return s.logTaskEvent(level, title, statusMessage, updated)
+}
+
+func (s *Service) updatePendingTaskStatusUpdate(updated PendingTask) error {
+	return s.store.Update(func(current *AppState) error {
+		for i := range current.PendingTasks {
+			if current.PendingTasks[i].ChildRequestID == updated.ChildRequestID {
+				current.PendingTasks[i].DownstreamStatus = updated.DownstreamStatus
+				current.PendingTasks[i].DownstreamTaskState = updated.DownstreamTaskState
+				current.PendingTasks[i].DownstreamMessage = updated.DownstreamMessage
+				current.PendingTasks[i].DownstreamUpdatedAt = updated.DownstreamUpdatedAt
+				return nil
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Service) expirePendingTasks(ctx context.Context) error {
@@ -2302,6 +2364,186 @@ func messageSucceeded(message hub.OpenClawMessage) bool {
 	return true
 }
 
+func findPendingTaskForStatusUpdate(tasks []PendingTask, message hub.PullResponse) (PendingTask, bool) {
+	candidates := taskStatusUpdateIDs(message)
+	for _, task := range tasks {
+		for _, candidate := range candidates {
+			if pendingTaskMatchesID(task, candidate) {
+				return task, true
+			}
+		}
+	}
+	return PendingTask{}, false
+}
+
+func taskStatusUpdateIDs(message hub.PullResponse) []string {
+	statusUpdate := mapFromAny(message.OpenClawMessage.StatusUpdate)
+	ids := []string{
+		message.OpenClawMessage.RequestID,
+		message.OpenClawMessage.ReplyTo,
+		message.MessageID,
+		stringFromMap(statusUpdate, "taskId", "task_id"),
+		stringFromMap(statusUpdate, "contextId", "context_id"),
+	}
+	if status := mapFromAny(statusUpdate["status"]); len(status) > 0 {
+		if statusMessage := mapFromAny(status["message"]); len(statusMessage) > 0 {
+			ids = append(ids,
+				stringFromMap(statusMessage, "messageId", "message_id"),
+				stringFromMap(statusMessage, "taskId", "task_id"),
+				stringFromMap(statusMessage, "contextId", "context_id"),
+			)
+		}
+	}
+	return support.CompactStrings(ids)
+}
+
+func pendingTaskMatchesID(task PendingTask, value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, candidate := range []string{
+		task.ID,
+		task.ChildRequestID,
+		task.HubTaskID,
+		task.ParentRequestID,
+		task.CallerRequestID,
+	} {
+		if strings.EqualFold(strings.TrimSpace(candidate), value) {
+			return true
+		}
+	}
+	return false
+}
+
+func statusUpdateTaskState(message hub.OpenClawMessage) string {
+	if state := normalizeA2ATaskState(coalesceTrimmed(message.A2AState, message.TaskState)); state != "" {
+		return state
+	}
+	statusUpdate := mapFromAny(message.StatusUpdate)
+	if status := mapFromAny(statusUpdate["status"]); len(status) > 0 {
+		if state := normalizeA2ATaskState(stringFromMap(status, "state")); state != "" {
+			return state
+		}
+	}
+	if state := taskStateFromStatus(message.Status); state != "" {
+		return state
+	}
+	return "TASK_STATE_WORKING"
+}
+
+func normalizeA2ATaskState(state string) string {
+	normalized := strings.ToUpper(strings.TrimSpace(state))
+	if normalized == "" {
+		return ""
+	}
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.ReplaceAll(normalized, " ", "_")
+	if strings.HasPrefix(normalized, "TASK_STATE_") {
+		return normalized
+	}
+	switch normalized {
+	case "SUBMITTED", "QUEUED", "PENDING", "IN_QUEUE":
+		return "TASK_STATE_SUBMITTED"
+	case "WORKING", "RUNNING", "IN_PROGRESS", "PROGRESS":
+		return "TASK_STATE_WORKING"
+	case "COMPLETED", "COMPLETE", "DONE", "SUCCEEDED", "SUCCESS", "NO_CHANGES":
+		return "TASK_STATE_COMPLETED"
+	case "FAILED", "FAILURE", "ERROR", "ERRORED", "TIMED_OUT", "TIMEOUT":
+		return "TASK_STATE_FAILED"
+	case "CANCELED", "CANCELLED", "ABORTED":
+		return "TASK_STATE_CANCELED"
+	case "REJECTED", "DUPLICATE":
+		return "TASK_STATE_REJECTED"
+	default:
+		return ""
+	}
+}
+
+func taskStateFromStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "queued", "submitted", "pending", "in_queue":
+		return "TASK_STATE_SUBMITTED"
+	case "working", "running", "in_progress", "progress", "waiting":
+		return "TASK_STATE_WORKING"
+	case "completed", "complete", "done", "succeeded", "success", "no_changes":
+		return "TASK_STATE_COMPLETED"
+	case "failed", "failure", "error", "errored", "timed_out", "timeout":
+		return "TASK_STATE_FAILED"
+	case "canceled", "cancelled", "aborted":
+		return "TASK_STATE_CANCELED"
+	case "rejected", "duplicate":
+		return "TASK_STATE_REJECTED"
+	default:
+		return ""
+	}
+}
+
+func statusUpdateMessageText(message hub.OpenClawMessage) string {
+	if text := strings.TrimSpace(message.Message); text != "" {
+		return text
+	}
+	statusUpdate := mapFromAny(message.StatusUpdate)
+	status := mapFromAny(statusUpdate["status"])
+	statusMessage := mapFromAny(status["message"])
+	if text := a2aMessageText(statusMessage); text != "" {
+		return text
+	}
+	if text := stringFromMap(status, "message"); text != "" {
+		return text
+	}
+	return ""
+}
+
+func a2aMessageText(message map[string]any) string {
+	if len(message) == 0 {
+		return ""
+	}
+	if text := stringFromMap(message, "text"); text != "" {
+		return text
+	}
+	parts, _ := message["parts"].([]any)
+	for _, rawPart := range parts {
+		part := mapFromAny(rawPart)
+		if text := stringFromMap(part, "text"); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func statusUpdateDefaultMessage(status, taskState string) string {
+	status = strings.TrimSpace(status)
+	if status != "" {
+		return "Task status updated: " + status + "."
+	}
+	switch taskState {
+	case "TASK_STATE_COMPLETED":
+		return "Task completed."
+	case "TASK_STATE_FAILED":
+		return "Task failed."
+	case "TASK_STATE_CANCELED":
+		return "Task canceled."
+	case "TASK_STATE_REJECTED":
+		return "Task rejected."
+	case "TASK_STATE_SUBMITTED":
+		return "Task queued."
+	default:
+		return "Task status updated."
+	}
+}
+
+func taskStatusUpdateEventLevelTitle(taskState string) (string, string) {
+	switch normalizeA2ATaskState(taskState) {
+	case "TASK_STATE_COMPLETED":
+		return "info", "Task completed"
+	case "TASK_STATE_FAILED", "TASK_STATE_CANCELED", "TASK_STATE_REJECTED":
+		return "error", "Task failed"
+	default:
+		return "info", "Task progress"
+	}
+}
+
 func failureFromError(message string, err error) failureReport {
 	report := failureReport{
 		Message: strings.TrimSpace(message),
@@ -2638,6 +2880,11 @@ func errorString(err error) string {
 
 func stringFromMap(values map[string]any, keys ...string) string {
 	return support.StringFromMap(values, keys...)
+}
+
+func mapFromAny(value any) map[string]any {
+	mapped, _ := value.(map[string]any)
+	return mapped
 }
 
 func (s *Service) tryMarkTaskFailureOffline(ctx context.Context, pending PendingTask, report failureReport) {

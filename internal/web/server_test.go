@@ -1579,6 +1579,63 @@ func TestA2AGetTaskReadsPendingTask(t *testing.T) {
 	}
 }
 
+func TestA2AGetTaskUsesDownstreamStatusUpdate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	stub := &stubService{
+		state: app.AppState{
+			PendingTasks: []app.PendingTask{
+				{
+					ID:                     "task-1",
+					Status:                 app.PendingTaskStatusInQueue,
+					ParentRequestID:        "a2a-msg-1",
+					ChildRequestID:         "dispatch-1",
+					HubTaskID:              "hub-task-1",
+					OriginalSkillName:      "run_task",
+					TargetAgentDisplayName: "Worker A",
+					TargetAgentUUID:        "worker-uuid",
+					CreatedAt:              now.Add(-time.Minute),
+					DownstreamStatus:       "working",
+					DownstreamTaskState:    "TASK_STATE_WORKING",
+					DownstreamMessage:      "Task running.",
+					DownstreamUpdatedAt:    now,
+					DispatchPayload:        map[string]any{"input": testDispatchPrompt},
+					DispatchPayloadFormat:  "markdown",
+				},
+			},
+		},
+	}
+	server, err := New(stub)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/a2a/tasks/task-1", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 response, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	task := decodeJSONMap(t, rec.Body.Bytes())
+	if got := readStringPath(task, "status", "state"); got != "TASK_STATE_WORKING" {
+		t.Fatalf("unexpected task state: %q task=%#v", got, task)
+	}
+	if got := readStringPath(task, "metadata", "moltenhub_dispatch", "downstream_status"); got != "working" {
+		t.Fatalf("unexpected downstream status metadata: %q", got)
+	}
+	message, _ := task["status"].(map[string]any)["message"].(map[string]any)
+	parts, _ := message["parts"].([]any)
+	if len(parts) != 1 {
+		t.Fatalf("expected status message part, got %#v", message)
+	}
+	part, _ := parts[0].(map[string]any)
+	if got := part["text"]; got != "Task running." {
+		t.Fatalf("unexpected status message text: %#v", part)
+	}
+}
+
 func TestA2AJSONRPCDispatchFailureIncludesFailureDetails(t *testing.T) {
 	t.Parallel()
 

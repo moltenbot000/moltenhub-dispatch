@@ -118,6 +118,10 @@ type PendingTask struct {
 	DispatchPayloadFormat  string         `json:"dispatch_payload_format"`
 	ExecutionRetryCount    int            `json:"execution_retry_count"`
 	PreferA2A              bool           `json:"prefer_a2a,omitempty"`
+	DownstreamStatus       string         `json:"downstream_status,omitempty"`
+	DownstreamTaskState    string         `json:"downstream_task_state,omitempty"`
+	DownstreamMessage      string         `json:"downstream_message,omitempty"`
+	DownstreamUpdatedAt    time.Time      `json:"downstream_updated_at,omitempty"`
 }
 
 type ScheduledMessage struct {
