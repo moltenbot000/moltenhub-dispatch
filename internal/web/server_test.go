@@ -2439,14 +2439,23 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	if !strings.Contains(body, `const activityFeedLaneStaticRows = (lane) => {`) {
 		t.Fatalf("expected grouped activity renderer to keep static task details at lane level, body=%s", body)
 	}
-	if !strings.Contains(body, `? "Oldest -> newest"`) {
+	if !strings.Contains(body, `const activityFeedLaneCollapsedLabel = (lane, latestItem) => {`) {
+		t.Fatalf("expected grouped activity renderer to build one-line minimized summaries, body=%s", body)
+	}
+	if !strings.Contains(body, "return `${parts.join(\" - \")}${suffix}`;") {
+		t.Fatalf("expected minimized activity summary to use agent, skill, current progress, and age, body=%s", body)
+	}
+	if !strings.Contains(body, `formatRelativeRuntimeAge(latestItem && latestItem.sortAt)`) {
+		t.Fatalf("expected minimized activity summary to include relative last-status age, body=%s", body)
+	}
+	if !strings.Contains(body, `laneElement.classList.toggle("is-collapsed", !laneExpanded);`) {
+		t.Fatalf("expected collapsed activity lanes to receive a collapsed styling hook, body=%s", body)
+	}
+	if !strings.Contains(body, `laneMeta.textContent = "Oldest -> newest";`) {
 		t.Fatalf("expected grouped activity renderer to annotate expanded update logs, body=%s", body)
 	}
-	if !strings.Contains(body, ": `Latest status") {
-		t.Fatalf("expected grouped activity renderer to show only latest status when minimized, body=%s", body)
-	}
-	if !strings.Contains(body, `const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);`) {
-		t.Fatalf("expected grouped activity renderer to collapse lanes to newest update, body=%s", body)
+	if strings.Contains(body, `const visibleItems = laneExpanded ? laneItems : (latestItem ? [latestItem] : []);`) {
+		t.Fatalf("expected grouped activity renderer to omit event cards from minimized lanes, body=%s", body)
 	}
 	if !strings.Contains(body, `let activityFeedExpandedKeys = new Set();`) {
 		t.Fatalf("expected activity feed expanded-state cache, body=%s", body)
