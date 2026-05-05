@@ -2528,13 +2528,13 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 		t.Fatalf("expected task progress table columns in requested order, body=%s", body)
 	}
 	if !strings.Contains(body, `titleText.textContent = activityFeedProgressHeading(item);`) {
-		t.Fatalf("expected grouped activity renderer to use progress messages as update subheadings, body=%s", body)
+		t.Fatalf("expected grouped activity renderer to use task stage titles as progress subheadings, body=%s", body)
 	}
 	if !strings.Contains(body, `typeCell.textContent = item.kind === "pending_task" ? "Pending task" : "Runtime Event";`) {
 		t.Fatalf("expected runtime events to render requested type label, body=%s", body)
 	}
-	if !strings.Contains(body, `const detailText = trimmedString(item.detail) || trimmedString(item.title);`) {
-		t.Fatalf("expected details column to prefer event details and fall back to event title, body=%s", body)
+	if !strings.Contains(body, `const detailText = trimmedString(item.detail);`) {
+		t.Fatalf("expected details column to render event details only when present, body=%s", body)
 	}
 	if !strings.Contains(body, `const createLevelIconBadge = (level) => {`) ||
 		!strings.Contains(body, `badge.title = levelLabel;`) ||
@@ -2549,6 +2549,10 @@ func TestHandleIndexIncludesPollingHooksForQueueAndActivity(t *testing.T) {
 	}
 	if !strings.Contains(body, `const activityFeedProgressHeading = (item) => {`) {
 		t.Fatalf("expected grouped activity renderer to centralize progress subheading labels, body=%s", body)
+	}
+	if !strings.Contains(body, "return trimmedString(item && item.title)") ||
+		!strings.Contains(body, "|| trimmedString(item && item.detail)") {
+		t.Fatalf("expected progress heading to prefer task stage titles before event details, body=%s", body)
 	}
 	if !strings.Contains(body, "trimmedString(latestItem && latestItem.detail)") ||
 		!strings.Contains(body, "|| trimmedString(latestItem && latestItem.title)") {

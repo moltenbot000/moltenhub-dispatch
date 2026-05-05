@@ -3553,8 +3553,8 @@
       };
 
       const activityFeedProgressHeading = (item) => {
-        return trimmedString(item && item.detail)
-          || trimmedString(item && item.title)
+        return trimmedString(item && item.title)
+          || trimmedString(item && item.detail)
           || "Task progress updated";
       };
 
@@ -3922,7 +3922,7 @@
               detailsCell.className = "activity-feed-progress-cell activity-feed-progress-details";
               detailsCell.setAttribute("role", "cell");
               const detailParts = [];
-              const detailText = trimmedString(item.detail) || trimmedString(item.title);
+              const detailText = trimmedString(item.detail);
               if (detailText !== "") {
                 detailParts.push(detailText);
               }
