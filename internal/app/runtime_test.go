@@ -54,7 +54,7 @@ func TestResolveHubRuntime(t *testing.T) {
 		},
 		{
 			name:    "runtime subdomain maps to runtime region",
-			hubURL:  "https://runtime.na.hub.molten.bot/v1/openclaw/messages/pull",
+			hubURL:  "https://runtime.na.hub.molten.bot/v1/runtime/messages/pull",
 			wantID:  HubRegionNA,
 			wantURL: "https://na.hub.molten.bot",
 		},
@@ -115,8 +115,8 @@ func TestNormalizeHubEndpointURL(t *testing.T) {
 	}{
 		{
 			name: "normalize runtime endpoint",
-			in:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages/pull",
-			want: "https://runtime.na.hub.molten.bot/v1/openclaw/messages/pull",
+			in:   "https://runtime.na.hub.molten.bot/v1/runtime/messages/pull",
+			want: "https://runtime.na.hub.molten.bot/v1/runtime/messages/pull",
 		},
 		{
 			name: "normalize canonical runtime root",

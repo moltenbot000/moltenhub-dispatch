@@ -59,24 +59,53 @@ type BindResponse struct {
 	Handle     string `json:"handle"`
 	APIBase    string `json:"api_base"`
 	Endpoints  struct {
-		Manifest     string `json:"manifest"`
-		Capabilities string `json:"capabilities"`
-		Metadata     string `json:"metadata"`
-		MessagesPull string `json:"messages_pull"`
-		MessagesPush string `json:"messages_publish"`
-		OpenClawPull string `json:"openclaw_messages_pull"`
-		OpenClawPush string `json:"openclaw_messages_publish"`
-		Offline      string `json:"openclaw_offline"`
+		Manifest          string `json:"manifest"`
+		Capabilities      string `json:"capabilities"`
+		Metadata          string `json:"metadata"`
+		MessagesPull      string `json:"messages_pull"`
+		MessagesPush      string `json:"messages_publish"`
+		RuntimePull       string `json:"runtime_messages_pull"`
+		RuntimePush       string `json:"runtime_messages_publish"`
+		RuntimeAck        string `json:"runtime_messages_ack"`
+		RuntimeNack       string `json:"runtime_messages_nack"`
+		RuntimeStatus     string `json:"runtime_messages_status"`
+		RuntimeWebSocket  string `json:"runtime_messages_ws"`
+		RuntimeOffline    string `json:"runtime_offline"`
+		OpenClawPull      string `json:"openclaw_messages_pull"`
+		OpenClawPush      string `json:"openclaw_messages_publish"`
+		OpenClawAck       string `json:"openclaw_messages_ack"`
+		OpenClawNack      string `json:"openclaw_messages_nack"`
+		OpenClawStatus    string `json:"openclaw_messages_status"`
+		OpenClawWebSocket string `json:"openclaw_messages_ws"`
+		Offline           string `json:"openclaw_offline"`
 	} `json:"endpoints"`
+	ProtocolAdapters map[string]ProtocolAdapter `json:"protocol_adapters"`
+}
+
+type ProtocolAdapter struct {
+	Protocol  string            `json:"protocol"`
+	Mode      string            `json:"mode"`
+	Endpoints map[string]string `json:"endpoints"`
 }
 
 type RuntimeEndpoints struct {
-	ManifestURL        string
-	CapabilitiesURL    string
-	MetadataURL        string
-	OpenClawPullURL    string
-	OpenClawPushURL    string
-	OpenClawOfflineURL string
+	ManifestURL          string
+	CapabilitiesURL      string
+	MetadataURL          string
+	RuntimePullURL       string
+	RuntimePushURL       string
+	RuntimeAckURL        string
+	RuntimeNackURL       string
+	RuntimeStatusURL     string
+	RuntimeWebSocketURL  string
+	RuntimeOfflineURL    string
+	OpenClawPullURL      string
+	OpenClawPushURL      string
+	OpenClawAckURL       string
+	OpenClawNackURL      string
+	OpenClawStatusURL    string
+	OpenClawWebSocketURL string
+	OpenClawOfflineURL   string
 }
 
 type SkillMetadata struct {
@@ -263,7 +292,7 @@ func (c *Client) PublishOpenClaw(ctx context.Context, token string, req PublishR
 
 func (c *Client) publishOpenClawHTTP(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
 	var out PublishResponse
-	err := c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawPushURL, "/v1/openclaw/messages/publish"), token, req, &out)
+	err := c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.publishRuntimeEndpointCandidates(), token, req, &out)
 	return out, err
 }
 
@@ -272,57 +301,72 @@ func (c *Client) PullOpenClaw(ctx context.Context, token string, timeout time.Du
 	if timeout > 0 {
 		values.Set("timeout_ms", fmt.Sprintf("%d", timeout.Milliseconds()))
 	}
-	endpoint := c.runtimeEndpoint(c.endpoints.OpenClawPullURL, "/v1/openclaw/messages/pull")
-	if len(values) > 0 {
-		endpoint += "?" + values.Encode()
+	endpointCandidates := c.pullRuntimeEndpointCandidates()
+	if len(endpointCandidates) == 0 {
+		return PullResponse{}, false, errors.New("runtime pull endpoint is not configured")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodGet, endpoint, token, nil)
-	if err != nil {
-		return PullResponse{}, false, err
-	}
+	for i := range endpointCandidates {
+		endpoint := endpointCandidates[i]
+		if len(values) > 0 {
+			endpoint += "?" + values.Encode()
+		}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return PullResponse{}, false, fmt.Errorf("hub pull: %w", err)
-	}
-	defer resp.Body.Close()
+		req, err := c.newRequest(ctx, http.MethodGet, endpoint, token, nil)
+		if err != nil {
+			return PullResponse{}, false, err
+		}
 
-	if resp.StatusCode == http.StatusNoContent {
-		return PullResponse{}, false, nil
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return PullResponse{}, false, decodeAPIError(resp)
-	}
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return PullResponse{}, false, fmt.Errorf("hub pull: %w", err)
+		}
 
-	envelope := struct {
-		OK     bool            `json:"ok"`
-		Result json.RawMessage `json:"result"`
-	}{}
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-		return PullResponse{}, false, fmt.Errorf("decode pull response: %w", err)
+		if resp.StatusCode == http.StatusNoContent {
+			resp.Body.Close()
+			return PullResponse{}, false, nil
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			err := decodeAPIError(resp)
+			resp.Body.Close()
+			if i+1 < len(endpointCandidates) && shouldRetryRuntimeEndpoint(err) {
+				continue
+			}
+			return PullResponse{}, false, err
+		}
+
+		envelope := struct {
+			OK     bool            `json:"ok"`
+			Result json.RawMessage `json:"result"`
+		}{}
+		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+			resp.Body.Close()
+			return PullResponse{}, false, fmt.Errorf("decode pull response: %w", err)
+		}
+		resp.Body.Close()
+		result, err := decodePullResponsePayload(envelope.Result, "pull response")
+		if err != nil {
+			return PullResponse{}, false, err
+		}
+		return result, true, nil
 	}
-	result, err := decodePullResponsePayload(envelope.Result, "pull response")
-	if err != nil {
-		return PullResponse{}, false, err
-	}
-	return result, true, nil
+	return PullResponse{}, false, errors.New("runtime pull endpoint is not configured")
 }
 
 func (c *Client) AckOpenClaw(ctx context.Context, token, deliveryID string) error {
-	return c.doJSON(ctx, http.MethodPost, c.openClawDeliveryEndpoint("ack"), token, map[string]string{
+	return c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.runtimeDeliveryEndpointCandidates("ack"), token, map[string]string{
 		"delivery_id": deliveryID,
 	}, nil)
 }
 
 func (c *Client) NackOpenClaw(ctx context.Context, token, deliveryID string) error {
-	return c.doJSON(ctx, http.MethodPost, c.openClawDeliveryEndpoint("nack"), token, map[string]string{
+	return c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.runtimeDeliveryEndpointCandidates("nack"), token, map[string]string{
 		"delivery_id": deliveryID,
 	}, nil)
 }
 
 func (c *Client) MarkOffline(ctx context.Context, token string, req OfflineRequest) error {
-	return c.doJSON(ctx, http.MethodPost, c.runtimeEndpoint(c.endpoints.OpenClawOfflineURL, "/v1/openclaw/messages/offline"), token, req, nil)
+	return c.doJSONWithRuntimeFallback(ctx, http.MethodPost, c.offlineRuntimeEndpointCandidates(), token, req, nil)
 }
 
 func (c *Client) CheckPing(ctx context.Context) (string, error) {
@@ -367,25 +411,66 @@ func (c *Client) runtimeEndpoint(override, fallback string) string {
 	return fallback
 }
 
-func (c *Client) openClawDeliveryEndpoint(action string) string {
+func (c *Client) publishRuntimeEndpointCandidates() []string {
+	return compactEndpoints(
+		c.endpoints.RuntimePushURL,
+		"/v1/runtime/messages/publish",
+		c.endpoints.OpenClawPushURL,
+		"/v1/openclaw/messages/publish",
+	)
+}
+
+func (c *Client) pullRuntimeEndpointCandidates() []string {
+	return compactEndpoints(
+		c.endpoints.RuntimePullURL,
+		"/v1/runtime/messages/pull",
+		c.endpoints.OpenClawPullURL,
+		"/v1/openclaw/messages/pull",
+	)
+}
+
+func (c *Client) offlineRuntimeEndpointCandidates() []string {
+	return compactEndpoints(
+		c.endpoints.RuntimeOfflineURL,
+		"/v1/runtime/messages/offline",
+		c.endpoints.OpenClawOfflineURL,
+		"/v1/openclaw/messages/offline",
+	)
+}
+
+func (c *Client) runtimeDeliveryEndpointCandidates(action string) []string {
 	action = strings.ToLower(strings.TrimSpace(action))
 	switch action {
 	case "ack", "nack":
 	default:
-		return ""
+		return nil
 	}
 
-	if endpoint := deliveryEndpointFromPull(c.endpoints.OpenClawPullURL, action); endpoint != "" {
-		return endpoint
+	var runtimeActionURL, openClawActionURL string
+	switch action {
+	case "ack":
+		runtimeActionURL = c.endpoints.RuntimeAckURL
+		openClawActionURL = c.endpoints.OpenClawAckURL
+	case "nack":
+		runtimeActionURL = c.endpoints.RuntimeNackURL
+		openClawActionURL = c.endpoints.OpenClawNackURL
 	}
-	return "/v1/openclaw/messages/" + action
+
+	return compactEndpoints(
+		runtimeActionURL,
+		deliveryEndpointFromPull(c.endpoints.RuntimePullURL, action),
+		"/v1/runtime/messages/"+action,
+		openClawActionURL,
+		deliveryEndpointFromPull(c.endpoints.OpenClawPullURL, action),
+		"/v1/openclaw/messages/"+action,
+	)
 }
 
 func deliveryEndpointFromPull(pullURL, action string) string {
-	return openClawEndpointFromPull(pullURL, "/messages/"+action, "/messages_"+action, "/"+action)
+	return runtimeEndpointFromPull(pullURL, "/messages/"+action, "/messages_"+action, "/"+action)
 }
 
-func openClawEndpointFromPull(pullURL, messagesSuffix, legacyMessagesSuffix, pullSuffix string) string {
+func runtimeEndpointFromPull(pullURL, messagesSuffix, legacyMessagesSuffix, pullSuffix string) string {
 	pullURL = strings.TrimSpace(pullURL)
 	if pullURL == "" {
 		return ""
@@ -411,6 +496,36 @@ func openClawEndpointFromPull(pullURL, messagesSuffix, legacyMessagesSuffix, pul
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String()
+}
+
+func compactEndpoints(values ...string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func shouldRetryRuntimeEndpoint(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.StatusCode {
+	case http.StatusNotFound, http.StatusMethodNotAllowed:
+		return true
+	default:
+		return false
+	}
 }
 
 func isRouteNotFound(err error) bool {
@@ -443,6 +558,71 @@ func shouldRetryMetadataEndpoint(err error) bool {
 		return true
 	}
 	return false
+}
+
+func (c *Client) doJSONWithRuntimeFallback(ctx context.Context, method string, endpoints []string, token string, body any, out any) error {
+	endpoints = compactEndpoints(endpoints...)
+	if len(endpoints) == 0 {
+		return errors.New("runtime endpoint is not configured")
+	}
+
+	var lastErr error
+	for i, endpoint := range endpoints {
+		requestBody := body
+		if publishReq, ok := body.(PublishRequest); ok {
+			requestBody = publishRequestForEndpoint(publishReq, endpoint)
+		}
+		err := c.doJSON(ctx, method, endpoint, token, requestBody, out)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if i+1 >= len(endpoints) || !shouldRetryRuntimeEndpoint(err) {
+			return err
+		}
+	}
+	return lastErr
+}
+
+func publishRequestForEndpoint(req PublishRequest, endpoint string) PublishRequest {
+	protocol := strings.TrimSpace(req.Message.Protocol)
+	switch {
+	case isOpenClawCompatibilityEndpoint(endpoint):
+		if protocol == "" || protocol == runtimeEnvelopeProtocol {
+			req.Message.Protocol = openClawProtocol
+		}
+	case isRuntimeMessagesEndpoint(endpoint):
+		if protocol == "" || protocol == openClawProtocol {
+			req.Message.Protocol = runtimeEnvelopeProtocol
+		}
+	default:
+		if protocol == "" {
+			req.Message.Protocol = runtimeEnvelopeProtocol
+		}
+	}
+	return req
+}
+
+func isRuntimeMessagesEndpoint(endpoint string) bool {
+	return strings.Contains(endpointPath(endpoint), "/runtime/messages/")
+}
+
+func isOpenClawCompatibilityEndpoint(endpoint string) bool {
+	return strings.Contains(endpointPath(endpoint), "/openclaw/messages/")
+}
+
+func endpointPath(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(endpoint); err == nil && parsed.Path != "" {
+		return strings.TrimRight(parsed.Path, "/")
+	}
+	if idx := strings.Index(endpoint, "?"); idx >= 0 {
+		endpoint = endpoint[:idx]
+	}
+	return strings.TrimRight(endpoint, "/")
 }
 
 func (c *Client) doJSON(ctx context.Context, method, endpoint, token string, body any, out any) error {
@@ -573,14 +753,28 @@ func normalizeBindResponse(out *BindResponse, payload any) {
 	if endpoints := support.MapByKey(payload, "endpoints"); len(endpoints) > 0 {
 		applyBindEndpoints(out, endpoints)
 	}
+	if adapters := support.MapByKey(payload, "protocol_adapters"); len(adapters) > 0 {
+		applyBindProtocolAdapters(out, adapters)
+	}
 
 	out.Endpoints.Manifest = strings.TrimSpace(out.Endpoints.Manifest)
 	out.Endpoints.Capabilities = strings.TrimSpace(out.Endpoints.Capabilities)
 	out.Endpoints.Metadata = strings.TrimSpace(out.Endpoints.Metadata)
 	out.Endpoints.MessagesPull = strings.TrimSpace(out.Endpoints.MessagesPull)
 	out.Endpoints.MessagesPush = strings.TrimSpace(out.Endpoints.MessagesPush)
+	out.Endpoints.RuntimePull = strings.TrimSpace(out.Endpoints.RuntimePull)
+	out.Endpoints.RuntimePush = strings.TrimSpace(out.Endpoints.RuntimePush)
+	out.Endpoints.RuntimeAck = strings.TrimSpace(out.Endpoints.RuntimeAck)
+	out.Endpoints.RuntimeNack = strings.TrimSpace(out.Endpoints.RuntimeNack)
+	out.Endpoints.RuntimeStatus = strings.TrimSpace(out.Endpoints.RuntimeStatus)
+	out.Endpoints.RuntimeWebSocket = strings.TrimSpace(out.Endpoints.RuntimeWebSocket)
+	out.Endpoints.RuntimeOffline = strings.TrimSpace(out.Endpoints.RuntimeOffline)
 	out.Endpoints.OpenClawPull = strings.TrimSpace(out.Endpoints.OpenClawPull)
 	out.Endpoints.OpenClawPush = strings.TrimSpace(out.Endpoints.OpenClawPush)
+	out.Endpoints.OpenClawAck = strings.TrimSpace(out.Endpoints.OpenClawAck)
+	out.Endpoints.OpenClawNack = strings.TrimSpace(out.Endpoints.OpenClawNack)
+	out.Endpoints.OpenClawStatus = strings.TrimSpace(out.Endpoints.OpenClawStatus)
+	out.Endpoints.OpenClawWebSocket = strings.TrimSpace(out.Endpoints.OpenClawWebSocket)
 	out.Endpoints.Offline = strings.TrimSpace(out.Endpoints.Offline)
 }
 
@@ -594,9 +788,57 @@ func applyBindEndpoints(out *BindResponse, endpoints map[string]any) {
 	out.Endpoints.Metadata = mergeEndpointString(out.Endpoints.Metadata, endpoints, "metadata", "metadata_url", "metadataURL", "profile", "profile_url", "profileURL")
 	out.Endpoints.MessagesPull = mergeEndpointString(out.Endpoints.MessagesPull, endpoints, "messages_pull", "messagesPull")
 	out.Endpoints.MessagesPush = mergeEndpointString(out.Endpoints.MessagesPush, endpoints, "messages_publish", "messagesPush")
+	out.Endpoints.RuntimePull = mergeEndpointString(out.Endpoints.RuntimePull, endpoints, "runtime_messages_pull", "runtime_pull", "runtimePull")
+	out.Endpoints.RuntimePush = mergeEndpointString(out.Endpoints.RuntimePush, endpoints, "runtime_messages_publish", "runtime_publish", "runtimePush")
+	out.Endpoints.RuntimeAck = mergeEndpointString(out.Endpoints.RuntimeAck, endpoints, "runtime_messages_ack", "runtime_ack", "runtimeAck")
+	out.Endpoints.RuntimeNack = mergeEndpointString(out.Endpoints.RuntimeNack, endpoints, "runtime_messages_nack", "runtime_nack", "runtimeNack")
+	out.Endpoints.RuntimeStatus = mergeEndpointString(out.Endpoints.RuntimeStatus, endpoints, "runtime_messages_status", "runtime_status", "runtimeStatus")
+	out.Endpoints.RuntimeWebSocket = mergeEndpointString(out.Endpoints.RuntimeWebSocket, endpoints, "runtime_messages_ws", "runtime_ws", "runtimeWebSocket", "runtimeWebsocket")
+	out.Endpoints.RuntimeOffline = mergeEndpointString(out.Endpoints.RuntimeOffline, endpoints, "runtime_offline", "runtime_messages_offline", "runtimeOffline")
 	out.Endpoints.OpenClawPull = mergeEndpointString(out.Endpoints.OpenClawPull, endpoints, "openclaw_messages_pull", "openclaw_pull", "openclawPull")
 	out.Endpoints.OpenClawPush = mergeEndpointString(out.Endpoints.OpenClawPush, endpoints, "openclaw_messages_publish", "openclaw_publish", "openclawPush")
+	out.Endpoints.OpenClawAck = mergeEndpointString(out.Endpoints.OpenClawAck, endpoints, "openclaw_messages_ack", "openclaw_ack", "openclawAck")
+	out.Endpoints.OpenClawNack = mergeEndpointString(out.Endpoints.OpenClawNack, endpoints, "openclaw_messages_nack", "openclaw_nack", "openclawNack")
+	out.Endpoints.OpenClawStatus = mergeEndpointString(out.Endpoints.OpenClawStatus, endpoints, "openclaw_messages_status", "openclaw_status", "openclawStatus")
+	out.Endpoints.OpenClawWebSocket = mergeEndpointString(out.Endpoints.OpenClawWebSocket, endpoints, "openclaw_messages_ws", "openclaw_ws", "openclawWebSocket", "openclawWebsocket")
 	out.Endpoints.Offline = mergeEndpointString(out.Endpoints.Offline, endpoints, "openclaw_offline", "offline", "openclawOffline")
+}
+
+func applyBindProtocolAdapters(out *BindResponse, adapters map[string]any) {
+	if out == nil || len(adapters) == 0 {
+		return
+	}
+	if endpoints := protocolAdapterEndpoints(adapters, "runtime_v1"); len(endpoints) > 0 {
+		out.Endpoints.RuntimePush = adapterEndpointString(endpoints, "publish", out.Endpoints.RuntimePush)
+		out.Endpoints.RuntimePull = adapterEndpointString(endpoints, "pull", out.Endpoints.RuntimePull)
+		out.Endpoints.RuntimeAck = adapterEndpointString(endpoints, "ack", out.Endpoints.RuntimeAck)
+		out.Endpoints.RuntimeNack = adapterEndpointString(endpoints, "nack", out.Endpoints.RuntimeNack)
+		out.Endpoints.RuntimeStatus = adapterEndpointString(endpoints, "status", out.Endpoints.RuntimeStatus)
+		out.Endpoints.RuntimeWebSocket = adapterEndpointString(endpoints, "websocket", out.Endpoints.RuntimeWebSocket)
+		out.Endpoints.RuntimeOffline = adapterEndpointString(endpoints, "offline", out.Endpoints.RuntimeOffline)
+	}
+	if endpoints := protocolAdapterEndpoints(adapters, "openclaw_http_v1"); len(endpoints) > 0 {
+		out.Endpoints.OpenClawPush = adapterEndpointString(endpoints, "publish", out.Endpoints.OpenClawPush)
+		out.Endpoints.OpenClawPull = adapterEndpointString(endpoints, "pull", out.Endpoints.OpenClawPull)
+		out.Endpoints.OpenClawAck = adapterEndpointString(endpoints, "ack", out.Endpoints.OpenClawAck)
+		out.Endpoints.OpenClawNack = adapterEndpointString(endpoints, "nack", out.Endpoints.OpenClawNack)
+		out.Endpoints.OpenClawStatus = adapterEndpointString(endpoints, "status", out.Endpoints.OpenClawStatus)
+		out.Endpoints.OpenClawWebSocket = adapterEndpointString(endpoints, "websocket", out.Endpoints.OpenClawWebSocket)
+		out.Endpoints.Offline = adapterEndpointString(endpoints, "offline", out.Endpoints.Offline)
+	}
+}
+
+func protocolAdapterEndpoints(adapters map[string]any, name string) map[string]any {
+	adapter, _ := adapters[name].(map[string]any)
+	if len(adapter) == 0 {
+		return nil
+	}
+	endpoints, _ := adapter["endpoints"].(map[string]any)
+	return endpoints
+}
+
+func adapterEndpointString(endpoints map[string]any, key, fallback string) string {
+	return support.FirstNonEmptyString(support.StringFromMap(endpoints, key), fallback)
 }
 
 func mergePayloadString(current string, payload any, keys ...string) string {

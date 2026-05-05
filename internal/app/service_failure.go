@@ -48,7 +48,7 @@ func (s *Service) publishFailureToCaller(ctx context.Context, state AppState, pe
 	errorDetail := failurePayload["error_detail"]
 
 	message := hub.OpenClawMessage{
-		Protocol:      openClawHTTPProtocol,
+		Protocol:      runtimeEnvelopeProtocol,
 		Type:          openClawSkillResult,
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
 		SkillName:     pending.OriginalSkillName,

@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	a2aProtocolAdapter = "a2a.v1"
-	a2aMIMEJSON        = "application/json"
-	a2aMIMEText        = "text/plain"
-	openClawProtocol   = "openclaw.http.v1"
+	a2aProtocolAdapter      = "a2a.v1"
+	a2aMIMEJSON             = "application/json"
+	a2aMIMEText             = "text/plain"
+	runtimeEnvelopeProtocol = "runtime.envelope.v1"
+	openClawProtocol        = "openclaw.http.v1"
 )
 
 func (c *Client) canPublishOpenClawViaA2A(req PublishRequest) bool {
@@ -125,7 +126,7 @@ func a2aSendMessageRequestFromOpenClaw(req PublishRequest) (*a2a.SendMessageRequ
 
 func normalizeOpenClawMessageForA2A(message OpenClawMessage) OpenClawMessage {
 	if strings.TrimSpace(message.Protocol) == "" {
-		message.Protocol = openClawProtocol
+		message.Protocol = runtimeEnvelopeProtocol
 	}
 	if strings.TrimSpace(message.Kind) == "" && strings.TrimSpace(message.Type) == "" {
 		message.Kind = "agent_message"
@@ -247,6 +248,9 @@ func (c *Client) a2aEndpointBaseURL() string {
 		c.endpoints.ManifestURL,
 		c.endpoints.CapabilitiesURL,
 		c.endpoints.MetadataURL,
+		c.endpoints.RuntimePushURL,
+		c.endpoints.RuntimePullURL,
+		c.endpoints.RuntimeOfflineURL,
 		c.endpoints.OpenClawPushURL,
 		c.endpoints.OpenClawPullURL,
 		c.endpoints.OpenClawOfflineURL,
@@ -290,8 +294,17 @@ func apiBaseFromRuntimeEndpoint(endpoint string) string {
 		"/agents/me/capabilities",
 		"/agents/me/metadata",
 		"/agents/me",
+		"/runtime/messages/publish",
+		"/runtime/messages/pull",
+		"/runtime/messages/ack",
+		"/runtime/messages/nack",
+		"/runtime/messages/ws",
+		"/runtime/messages/offline",
 		"/openclaw/messages/publish",
 		"/openclaw/messages/pull",
+		"/openclaw/messages/ack",
+		"/openclaw/messages/nack",
+		"/openclaw/messages/ws",
 		"/openclaw/messages/offline",
 		"/messages/publish",
 		"/messages/pull",

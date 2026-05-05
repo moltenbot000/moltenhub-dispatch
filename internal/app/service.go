@@ -9,17 +9,17 @@ import (
 )
 
 const (
-	dispatchSkillName     = "dispatch_skill_request"
-	dispatcherHarness     = "moltenhub-dispatch"
-	openClawHTTPProtocol  = "openclaw.http.v1"
-	openClawSkillRequest  = "skill_request"
-	openClawSkillResult   = "skill_result"
-	openClawTaskStatus    = "task_status_update"
-	openClawTextMessage   = "text_message"
-	hubPingRetryInterval  = 12 * time.Second
-	hubPingRequestTimeout = 6 * time.Second
-	wsFallbackWindow      = 30 * time.Second
-	wsUpgradeRetryWindow  = 5 * time.Second
+	dispatchSkillName       = "dispatch_skill_request"
+	dispatcherHarness       = "moltenhub-dispatch"
+	runtimeEnvelopeProtocol = "runtime.envelope.v1"
+	openClawSkillRequest    = "skill_request"
+	openClawSkillResult     = "skill_result"
+	openClawTaskStatus      = "task_status_update"
+	openClawTextMessage     = "text_message"
+	hubPingRetryInterval    = 12 * time.Second
+	hubPingRequestTimeout   = 6 * time.Second
+	wsFallbackWindow        = 30 * time.Second
+	wsUpgradeRetryWindow    = 5 * time.Second
 )
 
 var advertisedSkills = []Skill{

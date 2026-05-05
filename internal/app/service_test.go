@@ -3341,9 +3341,9 @@ func TestNewServiceUsesPersistedAPIBaseForRuntimeCalls(t *testing.T) {
 		state.Session.APIBase = "https://runtime.na.hub.molten.bot"
 		state.Settings.HubURL = "https://na.hub.molten.bot"
 		state.Session.MetadataURL = "https://runtime.na.hub.molten.bot/profile"
-		state.Session.OpenClawPullURL = "https://runtime.na.hub.molten.bot/openclaw/pull"
-		state.Session.OpenClawPushURL = "https://runtime.na.hub.molten.bot/openclaw/publish"
-		state.Session.OfflineURL = "https://runtime.na.hub.molten.bot/openclaw/offline"
+		state.Session.RuntimePullURL = "https://runtime.na.hub.molten.bot/runtime/messages/pull"
+		state.Session.RuntimePushURL = "https://runtime.na.hub.molten.bot/runtime/messages/publish"
+		state.Session.RuntimeOfflineURL = "https://runtime.na.hub.molten.bot/runtime/messages/offline"
 		return nil
 	})
 	if err != nil {

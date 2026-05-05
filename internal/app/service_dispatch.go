@@ -412,7 +412,7 @@ func (s *Service) publishScheduleAckToCaller(ctx context.Context, state AppState
 		ToAgentURI:  scheduled.CallerAgentURI,
 		ClientMsgID: NewID("result"),
 		Message: hub.OpenClawMessage{
-			Protocol:      openClawHTTPProtocol,
+			Protocol:      runtimeEnvelopeProtocol,
 			Type:          openClawSkillResult,
 			Timestamp:     time.Now().UTC().Format(time.RFC3339),
 			SkillName:     scheduled.OriginalSkillName,
@@ -607,7 +607,7 @@ func callerTargetFromMessage(message hub.PullResponse) (string, string) {
 
 func newSkillRequestMessage(timestamp time.Time, skillName string, payload any, payloadFormat, requestID, replyTo string) hub.OpenClawMessage {
 	message := hub.OpenClawMessage{
-		Protocol:      openClawHTTPProtocol,
+		Protocol:      runtimeEnvelopeProtocol,
 		Type:          openClawSkillRequest,
 		Timestamp:     timestamp.UTC().Format(time.RFC3339),
 		SkillName:     skillName,
