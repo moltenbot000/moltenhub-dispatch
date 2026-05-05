@@ -105,6 +105,20 @@ func TestResolveHubRuntime(t *testing.T) {
 	}
 }
 
+func TestSupportedAndDefaultHubRuntimeBranches(t *testing.T) {
+	runtimes := SupportedHubRuntimes()
+	if len(runtimes) < 2 {
+		t.Fatalf("SupportedHubRuntimes count = %d, want at least 2", len(runtimes))
+	}
+	runtimes[0].ID = "mutated"
+	if SupportedHubRuntimes()[0].ID == "mutated" {
+		t.Fatal("SupportedHubRuntimes returned mutable backing slice")
+	}
+	if got := DefaultHubRuntime(); got.ID != HubRegionNA || got.HubURL == "" {
+		t.Fatalf("DefaultHubRuntime = %#v", got)
+	}
+}
+
 func TestNormalizeHubEndpointURL(t *testing.T) {
 	t.Parallel()
 
@@ -148,6 +162,21 @@ func TestNormalizeHubEndpointURL(t *testing.T) {
 				t.Fatalf("NormalizeHubEndpointURL(%q) = %q, want %q", test.in, got, test.want)
 			}
 		})
+	}
+}
+
+func TestRuntimeURLHelpersCoverUnknownBranches(t *testing.T) {
+	if got := normalizeHubRuntimeURL("https://runtime.eu.hub.molten.bot/v1/runtime/messages/ws"); got != "https://eu.hub.molten.bot" {
+		t.Fatalf("normalizeHubRuntimeURL runtime endpoint = %q", got)
+	}
+	if got, ok := runtimeFromHost("runtime.eu.hub.molten.bot"); !ok || got.ID != HubRegionEU {
+		t.Fatalf("runtimeFromHost runtime host = %#v", got)
+	}
+	if got := hubHostForRegion("unknown"); got != "unknown.hub.molten.bot" {
+		t.Fatalf("hubHostForRegion unknown = %q, want synthesized hub host", got)
+	}
+	if got := hubURLForRegion("unknown"); got != "https://unknown.hub.molten.bot" {
+		t.Fatalf("hubURLForRegion unknown = %q, want synthesized hub URL", got)
 	}
 }
 
