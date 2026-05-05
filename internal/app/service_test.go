@@ -3499,6 +3499,72 @@ func TestPollOnceMarksDisconnectedWhenHubIsUnreachable(t *testing.T) {
 	}
 }
 
+func TestPollOnceKeepsConnectedDuringBriefHubFailure(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Connection = ConnectionState{
+			Status:    ConnectionStatusConnected,
+			Transport: ConnectionTransportHTTPLong,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	fake.pullErr = errors.New("decode pull response openclaw_message: json: cannot unmarshal string into Go struct field .message of type hub.a2aMessagePayload")
+
+	err = service.PollOnce(context.Background())
+	if err == nil {
+		t.Fatal("expected poll failure")
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusConnected {
+		t.Fatalf("expected connected status during grace period, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportHTTPLong {
+		t.Fatalf("expected existing transport during grace period, got %#v", state.Connection)
+	}
+	if state.Connection.Error == "" {
+		t.Fatalf("expected connection error detail, got %#v", state.Connection)
+	}
+}
+
+func TestPollOnceMarksDisconnectedAfterHubFailureGrace(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Connection = ConnectionState{
+			Status:    ConnectionStatusConnected,
+			Transport: ConnectionTransportHTTPLong,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	service.hubFailureStartedAt = time.Now().UTC().Add(-hubDisconnectGrace)
+	fake.pullErr = errors.New("dial tcp 10.0.0.1:443: connect: connection refused")
+
+	err = service.PollOnce(context.Background())
+	if err == nil {
+		t.Fatal("expected poll failure")
+	}
+
+	state := service.store.Snapshot()
+	if state.Connection.Status != ConnectionStatusDisconnected {
+		t.Fatalf("expected disconnected status after grace period, got %#v", state.Connection)
+	}
+	if state.Connection.Transport != ConnectionTransportOffline {
+		t.Fatalf("expected offline transport after grace period, got %#v", state.Connection)
+	}
+}
+
 func TestPollOnceWithTimeoutReturnsPollError(t *testing.T) {
 	t.Parallel()
 

@@ -393,8 +393,18 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 	transport = normalizePresenceTransport(transport)
 	now := time.Now().UTC()
 	if !hubReachable(err) {
+		if s.hubFailureStartedAt.IsZero() {
+			s.hubFailureStartedAt = now
+		}
 		_ = s.store.Update(func(state *AppState) error {
 			baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
+			if now.Sub(s.hubFailureStartedAt) < hubDisconnectGrace && canDeferHubDisconnect(state.Connection) {
+				state.Connection.Error = strings.TrimSpace(err.Error())
+				state.Connection.Detail = "Hub connection failed; waiting before marking offline. Error: " + strings.TrimSpace(err.Error())
+				state.Connection.BaseURL = baseURL
+				state.Connection.Domain = domain
+				return nil
+			}
 			state.Connection = ConnectionState{
 				Status:        ConnectionStatusDisconnected,
 				Transport:     ConnectionTransportOffline,
@@ -408,6 +418,7 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 		})
 		return
 	}
+	s.hubFailureStartedAt = time.Time{}
 
 	_ = s.store.Update(func(state *AppState) error {
 		baseURL, domain := hubConnectionTarget(state.Session.APIBase, state.Settings.HubURL)
@@ -427,6 +438,18 @@ func (s *Service) noteHubInteraction(err error, transport string) {
 		state.Session.OfflineMarked = false
 		return nil
 	})
+}
+
+func canDeferHubDisconnect(connection ConnectionState) bool {
+	if strings.TrimSpace(connection.Status) == ConnectionStatusConnected {
+		return true
+	}
+	switch strings.TrimSpace(connection.Transport) {
+	case ConnectionTransportConnected, ConnectionTransportReachable, ConnectionTransportRetrying, ConnectionTransportHTTPLong, ConnectionTransportWebSocket, ConnectionTransportHTTP:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) consumeRealtimeSession(ctx context.Context, session hub.RealtimeSession) error {
