@@ -648,10 +648,10 @@
         return normalized === "" ? fallback : normalized.slice(0, 100);
       };
 
-      const trackAppEvent = (eventName, params = {}) => {
+      const trackAppEvent = (eventName, params = {}, options = {}) => {
         const name = analyticsSlug(eventName, "");
         if (name === "" || !googleAnalyticsMeasurementID || typeof window.gtag !== "function") {
-          return;
+          return false;
         }
         const eventParams = {
           send_to: googleAnalyticsMeasurementID,
@@ -670,7 +670,29 @@
             eventParams[paramName] = safeValue;
           });
         }
+        if (typeof options.eventCallback === "function") {
+          const eventTimeout = Number.isFinite(options.eventTimeout)
+            ? Math.max(0, Math.floor(options.eventTimeout))
+            : 1000;
+          let callbackDone = false;
+          let callbackTimer = 0;
+          const runCallback = () => {
+            if (callbackDone) {
+              return;
+            }
+            callbackDone = true;
+            if (callbackTimer) {
+              window.clearTimeout(callbackTimer);
+              callbackTimer = 0;
+            }
+            options.eventCallback();
+          };
+          callbackTimer = window.setTimeout(runCallback, eventTimeout);
+          eventParams.event_callback = runCallback;
+          eventParams.event_timeout = eventTimeout;
+        }
         window.gtag("event", name, eventParams);
+        return true;
       };
 
       const trackOnce = (eventName, paramsFactory = () => ({})) => {
@@ -1759,6 +1781,7 @@
       const bound = shell?.dataset.bound === "true";
       if (bound && bindForm instanceof HTMLFormElement && bindForm.dataset.bound === "true") {
         resetAgentProfileBaseline();
+        let agentProfileSubmitAfterAnalytics = false;
         [
           agentSettingsHandle,
           agentSettingsDisplayName,
@@ -1783,16 +1806,48 @@
           }
         });
         bindForm.addEventListener("submit", (event) => {
+          if (agentProfileSubmitAfterAnalytics) {
+            return;
+          }
+          event.preventDefault();
           const submitter = event.submitter;
           const action = submitter instanceof HTMLButtonElement
             ? trimmedString(submitter.getAttribute("formaction") || bindForm.getAttribute("action"))
             : trimmedString(bindForm.getAttribute("action"));
           const disconnecting = action === "/disconnect";
-          trackAppEvent(disconnecting ? "agent_disconnect" : "agent_profile_save", {
+          const submitAfterAnalytics = () => {
+            agentProfileSubmitAfterAnalytics = true;
+            try {
+              if (typeof bindForm.requestSubmit === "function" && submitter instanceof HTMLElement && submitter.form === bindForm) {
+                bindForm.requestSubmit(submitter);
+                return;
+              }
+              if (submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement) {
+                const submitAction = trimmedString(submitter.getAttribute("formaction"));
+                const submitMethod = trimmedString(submitter.getAttribute("formmethod"));
+                if (submitAction !== "") {
+                  bindForm.setAttribute("action", submitAction);
+                }
+                if (submitMethod !== "") {
+                  bindForm.setAttribute("method", submitMethod);
+                }
+              }
+              bindForm.submit();
+            } finally {
+              agentProfileSubmitAfterAnalytics = false;
+            }
+          };
+          const tracked = trackAppEvent(disconnecting ? "agent_disconnect" : "agent_profile_save", {
             app_area: "agent_settings",
             changed: agentProfileChanged(),
             transport_type: "beacon",
+          }, {
+            eventCallback: submitAfterAnalytics,
+            eventTimeout: 1000,
           });
+          if (!tracked) {
+            submitAfterAnalytics();
+          }
         });
       }
       const normalizedOnboardingMode = (value) => String(value || "").trim() === "new" ? "new" : "existing";

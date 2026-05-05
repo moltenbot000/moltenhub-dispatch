@@ -327,9 +327,10 @@ func TestHandleIndexRendersGoogleAnalyticsInteractionEvents(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`const ANALYTICS_APP_NAME = "moltenhub_dispatch";`,
-		`const trackAppEvent = (eventName, params = {}) => {`,
+		`const trackAppEvent = (eventName, params = {}, options = {}) => {`,
 		`const trackOnce = (eventName, paramsFactory = () => ({})) => {`,
 		`window.gtag("event", name, eventParams);`,
+		`return true;`,
 		`trackAppEvent("theme_change"`,
 		`trackAppEvent("agent_settings_open"`,
 		`trackOnce("agent_profile_field_edit"`,
@@ -343,6 +344,11 @@ func TestHandleIndexRendersGoogleAnalyticsInteractionEvents(t *testing.T) {
 		`trackAppEvent("dispatch_schedule_field_change"`,
 		`trackAppEvent("connected_agents_refresh"`,
 		`trackAppEvent("activity_detail_toggle"`,
+		`callbackTimer = window.setTimeout(runCallback, eventTimeout);`,
+		`eventParams.event_callback = runCallback;`,
+		`eventParams.event_timeout = eventTimeout;`,
+		`agentProfileSubmitAfterAnalytics`,
+		`bindForm.setAttribute("action", submitAction);`,
 		`transport_type: "beacon"`,
 	} {
 		if !strings.Contains(body, want) {
