@@ -3521,13 +3521,19 @@
         const parts = [
           trimmedString(lane && lane.targetAgent) || "Agent",
           trimmedString(lane && lane.skill) || "Skill",
-          trimmedString(latestItem && latestItem.title)
-            || trimmedString(latestItem && latestItem.detail)
+          trimmedString(latestItem && latestItem.detail)
+            || trimmedString(latestItem && latestItem.title)
             || "Current Progress",
         ];
         const age = formatRelativeRuntimeAge(latestItem && latestItem.sortAt);
         const suffix = age === "" ? "" : ` - ${age}`;
         return `${parts.join(" - ")}${suffix}`;
+      };
+
+      const activityFeedProgressHeading = (item) => {
+        return trimmedString(item && item.detail)
+          || trimmedString(item && item.title)
+          || "Task progress updated";
       };
 
       const activityFeedLaneStaticRows = (lane) => {
@@ -3829,33 +3835,23 @@
               laneElement.appendChild(staticDetails);
             }
 
-            const tableWrap = document.createElement("div");
-            tableWrap.className = "activity-feed-progress-table-wrap";
-            const table = document.createElement("table");
-            table.className = "activity-feed-progress-table";
-            const caption = document.createElement("caption");
-            caption.className = "sr-only";
-            caption.textContent = "Task progress, latest to oldest";
-            table.appendChild(caption);
-            const head = document.createElement("thead");
-            const headRow = document.createElement("tr");
-            ["Progress", "When", "Details"].forEach((label) => {
-              const cell = document.createElement("th");
-              cell.scope = "col";
-              cell.textContent = label;
-              headRow.appendChild(cell);
-            });
-            head.appendChild(headRow);
-            table.appendChild(head);
-            const body = document.createElement("tbody");
+            const progressSection = document.createElement("section");
+            progressSection.className = "activity-feed-progress-section";
+            progressSection.setAttribute("aria-label", "Task Progress");
+            const progressHeading = document.createElement("h4");
+            progressHeading.className = "activity-feed-progress-section-title";
+            progressHeading.textContent = "Task Progress";
+            progressSection.appendChild(progressHeading);
+            const progressList = document.createElement("ol");
+            progressList.className = "activity-feed-progress-list";
             const laneItems = Array.isArray(lane.items) ? lane.items : [];
             laneItems.forEach((item) => {
               const activityKey = activityFeedItemKey(item);
-              const row = document.createElement("tr");
-              row.dataset.runtimeEventLaneKey = lane.key;
-              row.dataset.runtimeEventKey = activityKey;
+              const progressItem = document.createElement("li");
+              progressItem.className = "activity-feed-progress-item";
+              progressItem.dataset.runtimeEventLaneKey = lane.key;
+              progressItem.dataset.runtimeEventKey = activityKey;
 
-              const progressCell = document.createElement("td");
               const progressTitle = document.createElement("div");
               progressTitle.className = "activity-feed-progress-title";
               const titleIcon = createLucideIconPlaceholder(
@@ -3867,30 +3863,28 @@
               if (titleIcon) {
                 progressTitle.appendChild(titleIcon);
               }
-              const titleText = document.createElement("span");
-              titleText.textContent = trimmedString(item.title) || "Runtime event";
+              const titleText = document.createElement("h5");
+              titleText.textContent = activityFeedProgressHeading(item);
               progressTitle.appendChild(titleText);
-              progressCell.appendChild(progressTitle);
+              progressItem.appendChild(progressTitle);
+              const meta = document.createElement("p");
+              meta.className = "activity-feed-progress-meta";
+              const absoluteWhen = trimmedString(item.when) || trimmedString(item.subtitle);
+              meta.textContent = formatRelativeRuntimeAge(item.sortAt) || absoluteWhen || "-";
+              if (absoluteWhen !== "") {
+                meta.title = absoluteWhen;
+              }
+              progressItem.appendChild(meta);
               if (item.status) {
                 const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);
                 if (status) {
-                  progressCell.appendChild(status);
+                  progressItem.appendChild(status);
                 }
               }
-              row.appendChild(progressCell);
-
-              const whenCell = document.createElement("td");
-              const absoluteWhen = trimmedString(item.when) || trimmedString(item.subtitle);
-              whenCell.textContent = formatRelativeRuntimeAge(item.sortAt) || absoluteWhen || "-";
-              if (absoluteWhen !== "") {
-                whenCell.title = absoluteWhen;
-              }
-              row.appendChild(whenCell);
-
-              const detailsCell = document.createElement("td");
+              const detailsCell = document.createElement("div");
+              detailsCell.className = "activity-feed-progress-details";
               appendRuntimeRow(detailsCell, "Type", item.kind === "pending_task" ? "Pending task" : "Runtime event");
               appendRuntimeRow(detailsCell, "Level", item.level);
-              appendRuntimeRow(detailsCell, "", item.detail);
               if (trimmedString(lane && lane.groupTitle) !== "") {
                 appendRuntimeRow(detailsCell, "Skill", item.skill);
                 appendRuntimeRow(detailsCell, "Target agent", item.targetAgent);
@@ -3899,12 +3893,11 @@
                 appendRuntimeRow(detailsCell, "Child request", item.childRequestID);
                 appendRuntimeRow(detailsCell, "Log", item.logPath);
               }
-              row.appendChild(detailsCell);
-              body.appendChild(row);
+              progressItem.appendChild(detailsCell);
+              progressList.appendChild(progressItem);
             });
-            table.appendChild(body);
-            tableWrap.appendChild(table);
-            laneElement.appendChild(tableWrap);
+            progressSection.appendChild(progressList);
+            laneElement.appendChild(progressSection);
           }
           activityFeedList.appendChild(laneElement);
         });
