@@ -542,7 +542,7 @@ func (s *Server) a2aTaskByID(taskID string, historyLength *int) (map[string]any,
 		}
 	}
 	for _, event := range state.RecentEvents {
-		if strings.EqualFold(strings.TrimSpace(event.TaskID), taskID) {
+		if a2aRuntimeEventIsTask(event) && strings.EqualFold(strings.TrimSpace(event.TaskID), taskID) {
 			return a2aApplyHistoryLength(a2aTaskFromRuntimeEvent(event), historyLength), nil
 		}
 	}
@@ -584,7 +584,7 @@ func (s *Server) a2aListTasksForRequest(req a2aListTasksRequest) map[string]any 
 		appendTask(a2aTaskFromScheduledMessage(scheduled))
 	}
 	for _, event := range state.RecentEvents {
-		if strings.TrimSpace(event.TaskID) != "" {
+		if a2aRuntimeEventIsTask(event) {
 			appendTask(a2aTaskFromRuntimeEvent(event))
 		}
 	}
@@ -732,6 +732,17 @@ func a2aTaskFromRuntimeEvent(event app.RuntimeEvent) map[string]any {
 			"detail":            event.Detail,
 		}),
 	}
+}
+
+func a2aRuntimeEventIsTask(event app.RuntimeEvent) bool {
+	if strings.TrimSpace(event.TaskID) == "" {
+		return false
+	}
+	if strings.EqualFold(event.Level, "error") {
+		return true
+	}
+	title := strings.ToLower(strings.TrimSpace(event.Title))
+	return strings.Contains(title, "completed")
 }
 
 func a2aMessageFromPayload(taskID, contextID, messageID string, payload any, payloadFormat string) map[string]any {

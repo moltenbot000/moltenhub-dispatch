@@ -3492,7 +3492,7 @@
           if (elapsedHours < 24) {
             return `${elapsedHours}h`;
           }
-          return `${Math.floor(elapsedHours / 24)}d`;
+          return `${elapsedHours}h`;
         }
         const raw = trimmedString(value);
         if (raw === "" || raw === "-") {
@@ -3514,7 +3514,7 @@
         if (elapsedHours < 24) {
           return `${elapsedHours}h`;
         }
-        return `${Math.floor(elapsedHours / 24)}d`;
+        return `${elapsedHours}h`;
       };
 
       const activityFeedLaneCollapsedLabel = (lane, latestItem) => {
@@ -3869,7 +3869,11 @@
               progressItem.appendChild(progressTitle);
               const meta = document.createElement("p");
               meta.className = "activity-feed-progress-meta";
-              meta.textContent = trimmedString(item.when) || trimmedString(item.subtitle) || "-";
+              const absoluteWhen = trimmedString(item.when) || trimmedString(item.subtitle);
+              meta.textContent = formatRelativeRuntimeAge(item.sortAt) || absoluteWhen || "-";
+              if (absoluteWhen !== "") {
+                meta.title = absoluteWhen;
+              }
               progressItem.appendChild(meta);
               if (item.status) {
                 const status = createStatusIconBadge(item.status, item.statusClass, item.statusIconName);

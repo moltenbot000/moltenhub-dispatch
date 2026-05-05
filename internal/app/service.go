@@ -1022,12 +1022,25 @@ func (s *Service) handleInboundMessage(ctx context.Context, message hub.PullResp
 	case openClawTextMessage:
 		return s.handleTextMessage(message)
 	default:
+		if isAcknowledgementMessage(message.OpenClawMessage, messageType) {
+			return nil
+		}
 		return s.logEvent("info", "Ignored message", "Received unsupported message type "+messageType, "", "")
 	}
 }
 
 func (s *Service) handleTextMessage(message hub.PullResponse) error {
 	return s.logEvent("info", "Message received", textMessageDetail(message.OpenClawMessage), "", "")
+}
+
+func isAcknowledgementMessage(message hub.OpenClawMessage, messageType string) bool {
+	for _, candidate := range []string{messageType, message.Kind, message.Type, message.Status} {
+		switch strings.ToLower(strings.TrimSpace(candidate)) {
+		case "ack", "nack", "acknowledged", "acknowledgement", "acknowledgment", "delivery_ack", "delivery_nack":
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) handleSkillRequest(ctx context.Context, message hub.PullResponse) error {
