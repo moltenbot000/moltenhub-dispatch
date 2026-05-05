@@ -164,11 +164,6 @@ func TestRuntimeAPIBaseFromEndpointSupportsMessageStatusRoutes(t *testing.T) {
 			in:   "https://runtime.na.hub.molten.bot/v1/runtime/messages/{message_id}",
 			want: "https://runtime.na.hub.molten.bot",
 		},
-		{
-			name: "openclaw compatibility status route",
-			in:   "https://runtime.na.hub.molten.bot/v1/openclaw/messages/{message_id}",
-			want: "https://runtime.na.hub.molten.bot",
-		},
 	}
 
 	for _, test := range tests {

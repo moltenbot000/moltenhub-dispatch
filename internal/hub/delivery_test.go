@@ -94,7 +94,7 @@ func TestDecodePullResponsePayloadWithA2AStringMessage(t *testing.T) {
 
 	raw := json.RawMessage(`{
 		"delivery_id": "delivery-1",
-		"openclaw_message": {
+		"envelope": {
 			"protocol": "a2a.v1",
 			"message": "Hub still connected."
 		}

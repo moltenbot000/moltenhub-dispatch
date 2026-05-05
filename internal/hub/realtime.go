@@ -134,9 +134,6 @@ func (c *Client) runtimeWebsocketEndpointCandidates() []string {
 		c.endpoints.RuntimeWebSocketURL,
 		websocketEndpointFromPull(c.endpoints.RuntimePullURL),
 		"/v1/runtime/messages/ws",
-		c.endpoints.OpenClawWebSocketURL,
-		websocketEndpointFromPull(c.endpoints.OpenClawPullURL),
-		"/v1/openclaw/messages/ws",
 	)
 }
 

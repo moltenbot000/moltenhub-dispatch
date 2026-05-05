@@ -239,9 +239,9 @@ func TestBindAndRegisterAdvertisesDispatchSkills(t *testing.T) {
 		APIBase:    "https://na.hub.molten.bot",
 	}
 	fake.bindResponse.Endpoints.Metadata = "https://runtime.na.hub.molten.bot/profile"
-	fake.bindResponse.Endpoints.OpenClawPull = "https://runtime.na.hub.molten.bot/openclaw/pull"
-	fake.bindResponse.Endpoints.OpenClawPush = "https://runtime.na.hub.molten.bot/openclaw/publish"
-	fake.bindResponse.Endpoints.Offline = "https://runtime.na.hub.molten.bot/openclaw/offline"
+	fake.bindResponse.Endpoints.RuntimePull = "https://runtime.na.hub.molten.bot/v1/runtime/messages/pull"
+	fake.bindResponse.Endpoints.RuntimePush = "https://runtime.na.hub.molten.bot/v1/runtime/messages/publish"
+	fake.bindResponse.Endpoints.RuntimeOffline = "https://runtime.na.hub.molten.bot/v1/runtime/messages/offline"
 
 	err := service.BindAndRegister(context.Background(), BindProfile{
 		BindToken:       "bind-token",
@@ -3514,7 +3514,7 @@ func TestPollOnceKeepsConnectedDuringBriefHubFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed store: %v", err)
 	}
-	fake.pullErr = errors.New("decode pull response openclaw_message: json: cannot unmarshal string into Go struct field .message of type hub.a2aMessagePayload")
+	fake.pullErr = errors.New("decode pull response envelope: json: cannot unmarshal string into Go struct field .message of type hub.a2aMessagePayload")
 
 	err = service.PollOnce(context.Background())
 	if err == nil {

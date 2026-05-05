@@ -18,7 +18,6 @@ const (
 	a2aMIMEJSON             = "application/json"
 	a2aMIMEText             = "text/plain"
 	runtimeEnvelopeProtocol = "runtime.envelope.v1"
-	openClawProtocol        = "openclaw.http.v1"
 )
 
 func (c *Client) canPublishRuntimeViaA2A(req PublishRequest) bool {
@@ -125,8 +124,7 @@ func a2aSendMessageRequestFromRuntime(req PublishRequest) (*a2a.SendMessageReque
 }
 
 func normalizeRuntimeMessageForA2A(message OpenClawMessage) OpenClawMessage {
-	switch strings.TrimSpace(message.Protocol) {
-	case "", openClawProtocol:
+	if strings.TrimSpace(message.Protocol) == "" || strings.TrimSpace(message.Protocol) == "openclaw.http.v1" {
 		message.Protocol = runtimeEnvelopeProtocol
 	}
 	if strings.TrimSpace(message.Kind) == "" && strings.TrimSpace(message.Type) == "" {
@@ -252,9 +250,6 @@ func (c *Client) a2aEndpointBaseURL() string {
 		c.endpoints.RuntimePushURL,
 		c.endpoints.RuntimePullURL,
 		c.endpoints.RuntimeOfflineURL,
-		c.endpoints.OpenClawPushURL,
-		c.endpoints.OpenClawPullURL,
-		c.endpoints.OpenClawOfflineURL,
 	} {
 		if apiBase := apiBaseFromRuntimeEndpoint(endpoint); apiBase != "" {
 			return strings.TrimRight(apiBase, "/") + "/a2a"
@@ -302,13 +297,6 @@ func apiBaseFromRuntimeEndpoint(endpoint string) string {
 		"/runtime/messages/{message_id}",
 		"/runtime/messages/ws",
 		"/runtime/messages/offline",
-		"/openclaw/messages/publish",
-		"/openclaw/messages/pull",
-		"/openclaw/messages/ack",
-		"/openclaw/messages/nack",
-		"/openclaw/messages/{message_id}",
-		"/openclaw/messages/ws",
-		"/openclaw/messages/offline",
 		"/messages/publish",
 		"/messages/pull",
 		"/messages/ack",

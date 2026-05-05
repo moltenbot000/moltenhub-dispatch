@@ -162,7 +162,7 @@ type PullResponse struct {
 	FromAgentURI    string          `json:"from_agent_uri"`
 	ToAgentUUID     string          `json:"to_agent_uuid"`
 	ToAgentURI      string          `json:"to_agent_uri"`
-	OpenClawMessage OpenClawMessage `json:"openclaw_message"`
+	OpenClawMessage OpenClawMessage `json:"envelope"`
 }
 
 type OfflineRequest struct {
@@ -431,8 +431,6 @@ func (c *Client) publishRuntimeEndpointCandidates() []string {
 	return compactEndpoints(
 		c.endpoints.RuntimePushURL,
 		"/v1/runtime/messages/publish",
-		c.endpoints.OpenClawPushURL,
-		"/v1/openclaw/messages/publish",
 	)
 }
 
@@ -440,8 +438,6 @@ func (c *Client) pullRuntimeEndpointCandidates() []string {
 	return compactEndpoints(
 		c.endpoints.RuntimePullURL,
 		"/v1/runtime/messages/pull",
-		c.endpoints.OpenClawPullURL,
-		"/v1/openclaw/messages/pull",
 	)
 }
 
@@ -449,8 +445,6 @@ func (c *Client) offlineRuntimeEndpointCandidates() []string {
 	return compactEndpoints(
 		c.endpoints.RuntimeOfflineURL,
 		"/v1/runtime/messages/offline",
-		c.endpoints.OpenClawOfflineURL,
-		"/v1/openclaw/messages/offline",
 	)
 }
 
@@ -462,23 +456,18 @@ func (c *Client) runtimeDeliveryEndpointCandidates(action string) []string {
 		return nil
 	}
 
-	var runtimeActionURL, openClawActionURL string
+	var runtimeActionURL string
 	switch action {
 	case "ack":
 		runtimeActionURL = c.endpoints.RuntimeAckURL
-		openClawActionURL = c.endpoints.OpenClawAckURL
 	case "nack":
 		runtimeActionURL = c.endpoints.RuntimeNackURL
-		openClawActionURL = c.endpoints.OpenClawNackURL
 	}
 
 	return compactEndpoints(
 		runtimeActionURL,
 		deliveryEndpointFromPull(c.endpoints.RuntimePullURL, action),
 		"/v1/runtime/messages/"+action,
-		openClawActionURL,
-		deliveryEndpointFromPull(c.endpoints.OpenClawPullURL, action),
-		"/v1/openclaw/messages/"+action,
 	)
 }
 
@@ -497,6 +486,9 @@ func runtimeEndpointFromPull(pullURL, messagesSuffix, legacyMessagesSuffix, pull
 	}
 
 	trimmedPath := strings.TrimRight(parsed.Path, "/")
+	if strings.Contains(trimmedPath, "/openclaw/") {
+		return ""
+	}
 	switch {
 	case strings.HasSuffix(trimmedPath, "/messages/pull"):
 		parsed.Path = strings.TrimSuffix(trimmedPath, "/messages/pull") + messagesSuffix
@@ -602,29 +594,14 @@ func (c *Client) doJSONWithRuntimeFallback(ctx context.Context, method string, e
 
 func publishRequestForEndpoint(req PublishRequest, endpoint string) PublishRequest {
 	protocol := strings.TrimSpace(req.Message.Protocol)
-	switch {
-	case isOpenClawCompatibilityEndpoint(endpoint):
-		if protocol == "" || protocol == runtimeEnvelopeProtocol {
-			req.Message.Protocol = openClawProtocol
-		}
-	case isRuntimeMessagesEndpoint(endpoint):
-		if protocol == "" || protocol == openClawProtocol {
-			req.Message.Protocol = runtimeEnvelopeProtocol
-		}
-	default:
-		if protocol == "" {
-			req.Message.Protocol = runtimeEnvelopeProtocol
-		}
+	if protocol == "" || protocol == "openclaw.http.v1" || isRuntimeMessagesEndpoint(endpoint) {
+		req.Message.Protocol = runtimeEnvelopeProtocol
 	}
 	return req
 }
 
 func isRuntimeMessagesEndpoint(endpoint string) bool {
 	return strings.Contains(endpointPath(endpoint), "/runtime/messages/")
-}
-
-func isOpenClawCompatibilityEndpoint(endpoint string) bool {
-	return strings.Contains(endpointPath(endpoint), "/openclaw/messages/")
 }
 
 func endpointPath(endpoint string) string {
@@ -792,6 +769,7 @@ func normalizeBindResponse(out *BindResponse, payload any) {
 	out.Endpoints.OpenClawStatus = strings.TrimSpace(out.Endpoints.OpenClawStatus)
 	out.Endpoints.OpenClawWebSocket = strings.TrimSpace(out.Endpoints.OpenClawWebSocket)
 	out.Endpoints.Offline = strings.TrimSpace(out.Endpoints.Offline)
+	out.Endpoints.Offline = support.FirstNonEmptyString(out.Endpoints.RuntimeOffline, out.Endpoints.Offline)
 }
 
 func applyBindEndpoints(out *BindResponse, endpoints map[string]any) {
@@ -811,13 +789,7 @@ func applyBindEndpoints(out *BindResponse, endpoints map[string]any) {
 	out.Endpoints.RuntimeStatus = mergeEndpointString(out.Endpoints.RuntimeStatus, endpoints, "runtime_messages_status", "runtime_status", "runtimeStatus")
 	out.Endpoints.RuntimeWebSocket = mergeEndpointString(out.Endpoints.RuntimeWebSocket, endpoints, "runtime_messages_ws", "runtime_ws", "runtimeWebSocket", "runtimeWebsocket")
 	out.Endpoints.RuntimeOffline = mergeEndpointString(out.Endpoints.RuntimeOffline, endpoints, "runtime_offline", "runtime_messages_offline", "runtimeOffline")
-	out.Endpoints.OpenClawPull = mergeEndpointString(out.Endpoints.OpenClawPull, endpoints, "openclaw_messages_pull", "openclaw_pull", "openclawPull")
-	out.Endpoints.OpenClawPush = mergeEndpointString(out.Endpoints.OpenClawPush, endpoints, "openclaw_messages_publish", "openclaw_publish", "openclawPush")
-	out.Endpoints.OpenClawAck = mergeEndpointString(out.Endpoints.OpenClawAck, endpoints, "openclaw_messages_ack", "openclaw_ack", "openclawAck")
-	out.Endpoints.OpenClawNack = mergeEndpointString(out.Endpoints.OpenClawNack, endpoints, "openclaw_messages_nack", "openclaw_nack", "openclawNack")
-	out.Endpoints.OpenClawStatus = mergeEndpointString(out.Endpoints.OpenClawStatus, endpoints, "openclaw_messages_status", "openclaw_status", "openclawStatus")
-	out.Endpoints.OpenClawWebSocket = mergeEndpointString(out.Endpoints.OpenClawWebSocket, endpoints, "openclaw_messages_ws", "openclaw_ws", "openclawWebSocket", "openclawWebsocket")
-	out.Endpoints.Offline = mergeEndpointString(out.Endpoints.Offline, endpoints, "openclaw_offline", "offline", "openclawOffline")
+	out.Endpoints.Offline = mergeEndpointString(out.Endpoints.Offline, endpoints, "runtime_offline", "runtime_messages_offline", "offline", "runtimeOffline")
 }
 
 func applyBindProtocolAdapters(out *BindResponse, adapters map[string]any) {
@@ -832,15 +804,6 @@ func applyBindProtocolAdapters(out *BindResponse, adapters map[string]any) {
 		out.Endpoints.RuntimeStatus = adapterEndpointString(endpoints, "status", out.Endpoints.RuntimeStatus)
 		out.Endpoints.RuntimeWebSocket = adapterEndpointString(endpoints, "websocket", out.Endpoints.RuntimeWebSocket)
 		out.Endpoints.RuntimeOffline = adapterEndpointString(endpoints, "offline", out.Endpoints.RuntimeOffline)
-	}
-	if endpoints := protocolAdapterEndpoints(adapters, "openclaw_http_v1"); len(endpoints) > 0 {
-		out.Endpoints.OpenClawPush = adapterEndpointString(endpoints, "publish", out.Endpoints.OpenClawPush)
-		out.Endpoints.OpenClawPull = adapterEndpointString(endpoints, "pull", out.Endpoints.OpenClawPull)
-		out.Endpoints.OpenClawAck = adapterEndpointString(endpoints, "ack", out.Endpoints.OpenClawAck)
-		out.Endpoints.OpenClawNack = adapterEndpointString(endpoints, "nack", out.Endpoints.OpenClawNack)
-		out.Endpoints.OpenClawStatus = adapterEndpointString(endpoints, "status", out.Endpoints.OpenClawStatus)
-		out.Endpoints.OpenClawWebSocket = adapterEndpointString(endpoints, "websocket", out.Endpoints.OpenClawWebSocket)
-		out.Endpoints.Offline = adapterEndpointString(endpoints, "offline", out.Endpoints.Offline)
 	}
 }
 
