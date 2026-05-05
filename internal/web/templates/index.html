@@ -3281,6 +3281,8 @@
             skill: skillName,
             targetAgent: target,
             taskID: trimmedString(event && event.task_id),
+            hubTaskID: trimmedString(event && event.hub_task_id),
+            childRequestID: trimmedString(event && event.child_request_id),
             logPath: trimmedString(event && event.log_path),
           });
         });
@@ -3294,20 +3296,24 @@
       };
 
       const activityFeedLaneKey = (item) => {
+        const childRequestID = trimmedString(item && item.childRequestID);
+        if (childRequestID !== "") {
+          return `child:${childRequestID}`;
+        }
+        const hubTaskID = trimmedString(item && item.hubTaskID);
+        if (hubTaskID !== "") {
+          return `hub:${hubTaskID}`;
+        }
+        const taskID = trimmedString(item && item.taskID);
+        if (taskID !== "") {
+          return `task:${taskID}`;
+        }
         const kind = trimmedString(item && item.kind);
         if (kind === "recent_event") {
           const titleKey = activityFeedTitleGroupKey(item);
           if (titleKey !== "") {
             return `event-title:${titleKey}`;
           }
-        }
-        const taskID = trimmedString(item && item.taskID);
-        if (taskID !== "") {
-          return `task:${taskID}`;
-        }
-        const childRequestID = trimmedString(item && item.childRequestID);
-        if (childRequestID !== "") {
-          return `child:${childRequestID}`;
         }
         return `item:${activityFeedItemKey(item)}`;
       };
@@ -3789,6 +3795,8 @@
                   appendRuntimeRow(body, "Skill", item.skill);
                   appendRuntimeRow(body, "Target agent", item.targetAgent);
                   appendRuntimeRow(body, "Task", item.taskID);
+                  appendRuntimeRow(body, "Hub task", item.hubTaskID);
+                  appendRuntimeRow(body, "Child request", item.childRequestID);
                   appendRuntimeRow(body, "Log", item.logPath);
                 }
               }, {

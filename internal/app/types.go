@@ -83,6 +83,8 @@ type RuntimeEvent struct {
 	Title                  string    `json:"title"`
 	Detail                 string    `json:"detail"`
 	TaskID                 string    `json:"task_id"`
+	HubTaskID              string    `json:"hub_task_id,omitempty"`
+	ChildRequestID         string    `json:"child_request_id,omitempty"`
 	LogPath                string    `json:"log_path"`
 	OriginalSkillName      string    `json:"original_skill_name"`
 	TargetAgentDisplayName string    `json:"target_agent_display_name"`

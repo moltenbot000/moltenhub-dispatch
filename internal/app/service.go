@@ -1148,7 +1148,8 @@ func (s *Service) handleSkillResult(ctx context.Context, message hub.PullRespons
 	state := s.store.Snapshot()
 	pending, ok := FindPendingTask(state.PendingTasks, message.OpenClawMessage.RequestID)
 	if !ok {
-		return s.logEvent("info", "Unmatched skill result", "No pending task matched "+message.OpenClawMessage.RequestID, "", "")
+		requestID := strings.TrimSpace(message.OpenClawMessage.RequestID)
+		return s.logTaskAliasEvent("info", "Unmatched skill result", "No pending task matched "+requestID, "", "", requestID, "")
 	}
 
 	if err := s.writeTaskLog(pending.LogPath, map[string]any{
@@ -1181,7 +1182,7 @@ func (s *Service) handleTaskStatusUpdate(message hub.PullResponse) error {
 		if requestID == "" {
 			requestID = strings.TrimSpace(message.MessageID)
 		}
-		return s.logEvent("info", "Unmatched task status", "No pending task matched "+requestID, requestID, "")
+		return s.logTaskAliasEvent("info", "Unmatched task status", "No pending task matched "+requestID, requestID, "", requestID, "")
 	}
 
 	status := strings.TrimSpace(message.OpenClawMessage.Status)
@@ -1827,6 +1828,19 @@ func (s *Service) logEvent(level, title, detail, taskID, logPath string) error {
 	})
 }
 
+func (s *Service) logTaskAliasEvent(level, title, detail, taskID, hubTaskID, childRequestID, logPath string) error {
+	return s.store.AppendEvent(RuntimeEvent{
+		At:             time.Now().UTC(),
+		Level:          level,
+		Title:          title,
+		Detail:         detail,
+		TaskID:         strings.TrimSpace(taskID),
+		HubTaskID:      strings.TrimSpace(hubTaskID),
+		ChildRequestID: strings.TrimSpace(childRequestID),
+		LogPath:        strings.TrimSpace(logPath),
+	})
+}
+
 func (s *Service) logTaskEvent(level, title, detail string, task PendingTask) error {
 	return s.store.AppendEvent(RuntimeEvent{
 		At:                     time.Now().UTC(),
@@ -1834,6 +1848,8 @@ func (s *Service) logTaskEvent(level, title, detail string, task PendingTask) er
 		Title:                  title,
 		Detail:                 detail,
 		TaskID:                 task.ID,
+		HubTaskID:              task.HubTaskID,
+		ChildRequestID:         task.ChildRequestID,
 		LogPath:                task.LogPath,
 		OriginalSkillName:      task.OriginalSkillName,
 		TargetAgentDisplayName: task.TargetAgentDisplayName,
