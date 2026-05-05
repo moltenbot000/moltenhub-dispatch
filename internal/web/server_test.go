@@ -3044,6 +3044,12 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	if !strings.Contains(body, `.runtime-event-card-header {`) {
 		t.Fatalf("expected runtime event card header layout styles, body=%s", body)
 	}
+	if !strings.Contains(body, `.runtime-event-card-header > :first-child {`) ||
+		!strings.Contains(body, `.runtime-event-card-header h3 {`) ||
+		!strings.Contains(body, `.activity-feed-lane.is-collapsed .activity-feed-lane-label {`) ||
+		!strings.Contains(body, `white-space: normal;`) {
+		t.Fatalf("expected activity titles to wrap without hiding expand controls, body=%s", body)
+	}
 	if !strings.Contains(body, `.activity-feed-progress-section {`) {
 		t.Fatalf("expected activity feed progress section styles, body=%s", body)
 	}
