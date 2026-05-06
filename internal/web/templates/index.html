@@ -2195,6 +2195,7 @@
         const connected = isHubConnectedState(state);
         const dispatchEnabled = bound && connectedAgentsCount > 0;
         const requiresAgentConnection = connected && connectedAgentsCount === 0;
+        const loadingConnectedAgents = requiresAgentConnection && connectedAgentsRefreshInFlight;
 
         subActions.hidden = !dispatchEnabled;
         subActionsNotice.hidden = dispatchEnabled;
@@ -2205,12 +2206,16 @@
 
         const title = subActionsNotice.querySelector("[data-sub-actions-title]");
         if (title instanceof HTMLElement) {
-          title.textContent = requiresAgentConnection
+          title.textContent = loadingConnectedAgents
+            ? "Checking connected agents"
+            : requiresAgentConnection
             ? "Connect agents in Molten Bot Hub"
             : "Sub-Actions Hidden";
         }
 
-        const reason = requiresAgentConnection
+        const reason = loadingConnectedAgents
+          ? "Connection is being attempted. Attempting to load agents from Molten Hub."
+          : requiresAgentConnection
           ? "No talkable peer agents are available yet. Bound agents are listed in Molten Bot Hub, and dispatch targets appear here after Hub trust/connectivity makes them reachable."
           : (bound
             ? "Sub-actions stay hidden while the Hub connection is offline or unavailable."
@@ -4159,6 +4164,7 @@
           setConnectedAgentsRefreshProgress(1);
           setConnectedAgentsRefreshState(true, "Refreshing connected agents...");
         }
+        syncSubActions(latestHubConnectionState);
         try {
           const response = await fetch("/api/connected-agents", {
             method: "GET",
@@ -4216,6 +4222,7 @@
           }
         } finally {
           connectedAgentsRefreshInFlight = false;
+          syncSubActions(latestHubConnectionState);
           if (shouldPollConnectedAgents()) {
             scheduleConnectedAgentsAutoRefresh();
           } else {
