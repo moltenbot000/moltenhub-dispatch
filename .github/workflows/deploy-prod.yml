@@ -21,8 +21,14 @@ jobs:
     name: Promote image to latest
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
+    env:
+      IMAGE_NAME: docker.io/moltenai/moltenhub-dispatch
     steps:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -40,3 +46,17 @@ jobs:
           docker buildx imagetools create \
             ${TAG_ARGS} \
             moltenai/moltenhub-dispatch:${{ github.event.inputs.source_tag }}${{ matrix.source_suffix }}
+
+      - name: Resolve promoted image digest
+        id: digest
+        run: |
+          DIGEST="$(docker buildx imagetools inspect "${IMAGE_NAME}:latest" --format '{{ .Manifest.Digest }}')"
+          echo "value=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate promotion provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.digest.outputs.value }}
+          push-to-registry: true
+          create-storage-record: false

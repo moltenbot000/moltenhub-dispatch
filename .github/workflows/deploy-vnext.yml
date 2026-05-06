@@ -39,8 +39,14 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
+    env:
+      IMAGE_NAME: docker.io/moltenai/moltenhub-dispatch
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -65,10 +71,21 @@ jobs:
           echo "value=${TAGS}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
+        id: push
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           tags: ${{ steps.tags.outputs.value }}
+          provenance: true
+          sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Generate build provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
