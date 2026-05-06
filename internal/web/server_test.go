@@ -4532,6 +4532,12 @@ func TestHandleIndexRendersConnectedAgentsRefreshPanel(t *testing.T) {
 	if !strings.Contains(body, `const scheduleConnectedAgentsAutoRefresh = (delayMs = CONNECTED_AGENTS_REFRESH_INTERVAL_MS) => {`) {
 		t.Fatalf("expected connected agents auto-refresh scheduler, body=%s", body)
 	}
+	if !strings.Contains(body, `const loadingConnectedAgents = requiresAgentConnection && connectedAgentsRefreshInFlight;`) {
+		t.Fatalf("expected connected agents loading state in sub-actions panel, body=%s", body)
+	}
+	if !strings.Contains(body, `Connection is being attempted. Attempting to load agents from Molten Hub.`) {
+		t.Fatalf("expected loading copy while connected agents refresh is in flight, body=%s", body)
+	}
 	if strings.Contains(body, `Auto-refresh paused while agents are connected.`) {
 		t.Fatalf("did not expect polling to pause once agents exist, body=%s", body)
 	}
