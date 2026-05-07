@@ -2643,8 +2643,16 @@ select.prompt-control {
 .hub-emoji-picker-panel {
   position: fixed;
   z-index: 130;
-  width: min(360px, calc(100vw - 16px));
-  max-height: calc(100vh - 16px);
+  --hub-emoji-picker-viewport-gutter: 8px;
+  --hub-emoji-picker-viewport-gutter-total: 16px;
+  --hub-emoji-picker-width-limit: 360px;
+  --hub-emoji-picker-left: var(--hub-emoji-picker-viewport-gutter);
+  --hub-emoji-picker-block-offset: auto;
+  left: var(--hub-emoji-picker-left);
+  top: auto;
+  bottom: auto;
+  width: min(var(--hub-emoji-picker-width-limit), calc(100vw - var(--hub-emoji-picker-viewport-gutter-total)));
+  max-height: calc(100vh - var(--hub-emoji-picker-viewport-gutter-total));
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--glass-border);
@@ -2665,7 +2673,12 @@ select.prompt-control {
   display: none;
 }
 
+.hub-emoji-picker-panel[data-placement="bottom"] {
+  top: var(--hub-emoji-picker-block-offset);
+}
+
 .hub-emoji-picker-panel[data-placement="top"] {
+  bottom: var(--hub-emoji-picker-block-offset);
   transform: translateY(4px) scale(0.98);
 }
 
@@ -2920,7 +2933,7 @@ select.prompt-control {
   }
 
   .hub-emoji-picker-panel {
-    width: min(340px, calc(100vw - 16px));
+    --hub-emoji-picker-width-limit: 340px;
   }
 
   .hub-dock-group[data-configured="true"] .hub-profile-button {
@@ -4625,9 +4638,10 @@ body.settings-modal-open {
 .connected-agents-refresh-progress-bar {
   position: absolute;
   inset: 0;
+  --connected-agents-refresh-progress-scale: 0;
   border-radius: inherit;
   transform-origin: left center;
-  transform: scaleX(0);
+  transform: scaleX(var(--connected-agents-refresh-progress-scale));
   background: var(--brand-gradient);
   transition: transform 180ms linear;
 }

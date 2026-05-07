@@ -3585,6 +3585,51 @@ func TestEmojiPickerPanelStacksAboveModalBackdrop(t *testing.T) {
 	}
 }
 
+func TestPageRuntimeStylesUseGlobalCSSVariables(t *testing.T) {
+	t.Parallel()
+
+	templateData, err := os.ReadFile("templates/index.html")
+	if err != nil {
+		t.Fatalf("read index.html: %v", err)
+	}
+	styles, err := os.ReadFile("static/styles.css")
+	if err != nil {
+		t.Fatalf("read styles.css: %v", err)
+	}
+
+	body := string(templateData)
+	for _, stale := range []string{
+		"panel.style.left",
+		"panel.style.width",
+		"panel.style.maxHeight",
+		"panel.style.top",
+		"panel.style.bottom",
+		"node.style.transform",
+	} {
+		if strings.Contains(body, stale) {
+			t.Fatalf("expected %s to move out of page script", stale)
+		}
+	}
+	if !strings.Contains(body, `panel.style.setProperty("--hub-emoji-picker-left"`) ||
+		!strings.Contains(body, `node.style.setProperty("--connected-agents-refresh-progress-scale"`) {
+		t.Fatalf("expected page script to set runtime CSS custom property values")
+	}
+
+	content := string(styles)
+	for _, expected := range []string{
+		"left: var(--hub-emoji-picker-left);",
+		"width: min(var(--hub-emoji-picker-width-limit), calc(100vw - var(--hub-emoji-picker-viewport-gutter-total)));",
+		"max-height: calc(100vh - var(--hub-emoji-picker-viewport-gutter-total));",
+		".hub-emoji-picker-panel[data-placement=\"bottom\"] {\n  top: var(--hub-emoji-picker-block-offset);\n}",
+		".hub-emoji-picker-panel[data-placement=\"top\"] {\n  bottom: var(--hub-emoji-picker-block-offset);",
+		"transform: scaleX(var(--connected-agents-refresh-progress-scale));",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Fatalf("expected global styles.css to own moved style rule %q", expected)
+		}
+	}
+}
+
 func TestOnboardingStylesForceHiddenProfileFields(t *testing.T) {
 	t.Parallel()
 
