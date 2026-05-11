@@ -1,35 +1,32 @@
 package main
 
 import (
-	"os"
+	"context"
 	"testing"
 	"time"
 )
 
-func TestMainStartsAndStopsOnInterrupt(t *testing.T) {
+func TestRunStartsAndStopsOnContextCancel(t *testing.T) {
 	t.Setenv("APP_DATA_DIR", t.TempDir())
 	t.Setenv("LISTEN_ADDR", "127.0.0.1:0")
 	t.Setenv("MOLTEN_HUB_TOKEN", "")
 	t.Setenv("MOLTEN_HUB_REGION", "")
 
-	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
 	go func() {
-		main()
-		close(done)
+		done <- run(ctx)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-	process, err := os.FindProcess(os.Getpid())
-	if err != nil {
-		t.Fatalf("find process: %v", err)
-	}
-	if err := process.Signal(os.Interrupt); err != nil {
-		t.Fatalf("signal interrupt: %v", err)
-	}
+	cancel()
 
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("main did not stop after interrupt")
+		t.Fatal("run did not stop after context cancel")
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,19 +17,28 @@ import (
 )
 
 func main() {
+	rootCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	if err := run(rootCtx); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run(rootCtx context.Context) error {
 	settings := app.DefaultSettings()
 	if err := os.MkdirAll(settings.DataDir, 0o755); err != nil {
-		log.Fatalf("create data directory: %v", err)
+		return fmt.Errorf("create data directory: %w", err)
 	}
 
 	storePath, err := app.ResolveStorePath(settings.DataDir)
 	if err != nil {
-		log.Fatalf("resolve state store path: %v", err)
+		return fmt.Errorf("resolve state store path: %w", err)
 	}
 
 	store, err := app.NewStore(storePath, settings)
 	if err != nil {
-		log.Fatalf("initialize store: %v", err)
+		return fmt.Errorf("initialize store: %w", err)
 	}
 
 	client := hub.NewClient(store.Snapshot().Settings.HubURL)
@@ -41,7 +51,7 @@ func main() {
 
 	serverUI, err := web.New(service)
 	if err != nil {
-		log.Fatalf("create web server: %v", err)
+		return fmt.Errorf("create web server: %w", err)
 	}
 
 	httpServer := &http.Server{
@@ -50,20 +60,24 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	rootCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
 	go service.RunHubLoop(rootCtx)
 	go service.RunSchedulerLoop(rootCtx)
 
+	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("listening on %s", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("http server failed: %v", err)
+			serverErr <- fmt.Errorf("http server failed: %w", err)
 		}
+		close(serverErr)
 	}()
 
-	<-rootCtx.Done()
+	select {
+	case <-rootCtx.Done():
+	case err := <-serverErr:
+		return err
+	}
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer shutdownCancel()
 
@@ -73,4 +87,5 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown http server: %v", err)
 	}
+	return nil
 }
