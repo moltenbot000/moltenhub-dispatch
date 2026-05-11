@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 )
 
 type fakeHubClient struct {
+	mu                    sync.Mutex
 	bindResponse          hub.BindResponse
 	bindRequests          []hub.BindRequest
 	updateMetadataCalls   []hub.UpdateMetadataRequest
@@ -44,6 +46,14 @@ type fakeHubClient struct {
 	publishErr            error
 }
 
+type fakeHubClientCallCounts struct {
+	updateMetadata int
+	pull           int
+	connect        int
+	ping           int
+	baseURL        int
+}
+
 type fakeRealtimeSession struct {
 	messages   []hub.PullResponse
 	receiveErr error
@@ -52,11 +62,15 @@ type fakeRealtimeSession struct {
 }
 
 func (f *fakeHubClient) BindAgent(_ context.Context, req hub.BindRequest) (hub.BindResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.bindRequests = append(f.bindRequests, req)
 	return f.bindResponse, nil
 }
 
 func (f *fakeHubClient) UpdateMetadata(_ context.Context, _ string, req hub.UpdateMetadataRequest) (map[string]any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.expectedMetadataURL != "" && f.currentBaseURL != f.expectedMetadataURL {
 		return nil, &hub.APIError{
 			StatusCode: 401,
@@ -72,6 +86,8 @@ func (f *fakeHubClient) UpdateMetadata(_ context.Context, _ string, req hub.Upda
 }
 
 func (f *fakeHubClient) GetCapabilities(_ context.Context, _ string) (map[string]any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.capabilitiesCalls++
 	if f.capabilitiesErr != nil && (f.capabilitiesErrOnCall == 0 || f.capabilitiesErrOnCall == f.capabilitiesCalls) {
 		return nil, f.capabilitiesErr
@@ -83,6 +99,8 @@ func (f *fakeHubClient) GetCapabilities(_ context.Context, _ string) (map[string
 }
 
 func (f *fakeHubClient) PublishRuntimeMessage(_ context.Context, _ string, req hub.PublishRequest) (hub.PublishResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.publishCalls = append(f.publishCalls, req)
 	if f.publishErr != nil {
 		return hub.PublishResponse{}, f.publishErr
@@ -91,6 +109,8 @@ func (f *fakeHubClient) PublishRuntimeMessage(_ context.Context, _ string, req h
 }
 
 func (f *fakeHubClient) PullRuntimeMessage(_ context.Context, _ string, _ time.Duration) (hub.PullResponse, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.pullCalls++
 	if f.expectedPullURL != "" && f.currentBaseURL != f.expectedPullURL {
 		return hub.PullResponse{}, false, &hub.APIError{
@@ -111,6 +131,8 @@ func (f *fakeHubClient) NackRuntimeMessage(_ context.Context, _ string, _ string
 }
 
 func (f *fakeHubClient) MarkOffline(_ context.Context, _ string, req hub.OfflineRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.expectedOfflineURL != "" && f.currentBaseURL != f.expectedOfflineURL {
 		return &hub.APIError{
 			StatusCode: 401,
@@ -123,11 +145,15 @@ func (f *fakeHubClient) MarkOffline(_ context.Context, _ string, req hub.Offline
 }
 
 func (f *fakeHubClient) SetBaseURL(baseURL string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.currentBaseURL = baseURL
 	f.baseURLCalls = append(f.baseURLCalls, baseURL)
 }
 
 func (f *fakeHubClient) ConnectRuntimeMessages(_ context.Context, _ string, _ string) (hub.RealtimeSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.connectCalls++
 	if len(f.baseURLCalls) == 0 {
 		f.baseURLCalls = append(f.baseURLCalls, f.currentBaseURL)
@@ -142,6 +168,8 @@ func (f *fakeHubClient) ConnectRuntimeMessages(_ context.Context, _ string, _ st
 }
 
 func (f *fakeHubClient) CheckPing(_ context.Context) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.pingCalls++
 	if len(f.pingErrSequence) > 0 {
 		err := f.pingErrSequence[0]
@@ -157,6 +185,24 @@ func (f *fakeHubClient) CheckPing(_ context.Context) (string, error) {
 		return strings.TrimSpace(f.pingDetail), nil
 	}
 	return "https://na.hub.molten.bot/ping status=204", nil
+}
+
+func (f *fakeHubClient) callCounts() fakeHubClientCallCounts {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return fakeHubClientCallCounts{
+		updateMetadata: len(f.updateMetadataCalls),
+		pull:           f.pullCalls,
+		connect:        f.connectCalls,
+		ping:           f.pingCalls,
+		baseURL:        len(f.baseURLCalls),
+	}
+}
+
+func (f *fakeHubClient) updateMetadataRequests() []hub.UpdateMetadataRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]hub.UpdateMetadataRequest(nil), f.updateMetadataCalls...)
 }
 
 func (f *fakeRealtimeSession) Receive(_ context.Context) (hub.PullResponse, error) {
@@ -3712,7 +3758,7 @@ func TestRunHubLoopFallsBackToHTTPLongPollWhenWebsocketUnavailable(t *testing.T)
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if fake.pullCalls > 0 {
+		if fake.callCounts().pull > 0 {
 			break
 		}
 		select {
@@ -3774,7 +3820,8 @@ func TestRunHubLoopRetriesWebsocketUpgradeDuringHTTPFallbackWindow(t *testing.T)
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if fake.connectCalls >= 2 && fake.pullCalls > 0 {
+		counts := fake.callCounts()
+		if counts.connect >= 2 && counts.pull > 0 {
 			break
 		}
 		select {
@@ -3829,10 +3876,11 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	deadline := time.After(2 * time.Second)
 	metadataObserved := false
 	for {
-		if len(fake.updateMetadataCalls) > 0 {
+		counts := fake.callCounts()
+		if counts.updateMetadata > 0 {
 			metadataObserved = true
 		}
-		if metadataObserved && fake.pullCalls > 0 {
+		if metadataObserved && counts.pull > 0 {
 			break
 		}
 		select {
@@ -3847,7 +3895,8 @@ func TestRunHubLoopMarksPresenceOnlineBeforeDispatching(t *testing.T) {
 	cancel()
 	<-done
 
-	metadata := fake.updateMetadataCalls[0].Metadata
+	metadataCalls := fake.updateMetadataRequests()
+	metadata := metadataCalls[0].Metadata
 	presence, ok := metadata["presence"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected presence metadata, got %#v", metadata["presence"])
@@ -3936,7 +3985,7 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) 
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if fake.pullCalls > 0 {
+		if fake.callCounts().pull > 0 {
 			break
 		}
 		select {
@@ -3995,7 +4044,7 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeSessionCanceled(t *testin
 
 	deadline := time.After(2 * time.Second)
 	for {
-		if fake.pullCalls > 0 {
+		if fake.callCounts().pull > 0 {
 			break
 		}
 		select {
@@ -4043,7 +4092,7 @@ func TestRunHubLoopMarksPresenceWebsocketWhenRealtimeConnects(t *testing.T) {
 	sawWebsocketPresence := false
 	deadline := time.After(2 * time.Second)
 	for {
-		for _, call := range fake.updateMetadataCalls {
+		for _, call := range fake.updateMetadataRequests() {
 			presence, _ := call.Metadata["presence"].(map[string]any)
 			if presence["transport"] == ConnectionTransportWebSocket {
 				sawWebsocketPresence = true
