@@ -34,6 +34,11 @@ func TestSplitLinesTrimsAndPreservesOrder(t *testing.T) {
 }
 
 func TestUnmarshalJSONPayloadAcceptsPromptWhitespace(t *testing.T) {
+	var clean map[string]any
+	if err := UnmarshalJSONPayload([]byte(`{"prompt":"review logs"}`), &clean); err != nil {
+		t.Fatalf("UnmarshalJSONPayload clean JSON: %v", err)
+	}
+
 	raw := []byte("{\"prompt\":\"review\tlogs\nthen retry\"}")
 	var payload map[string]any
 
@@ -154,8 +159,14 @@ func TestNormalizeEmptyAndFallbackBranches(t *testing.T) {
 	if got := MapByKey(map[string]any{"nested": map[string]any{}}, "nested"); got != nil {
 		t.Fatalf("MapByKey empty nested = %#v, want nil", got)
 	}
+	if got := MapByKey(map[string]any{"nested": map[string]any{"name": "agent"}}, " "); got != nil {
+		t.Fatalf("MapByKey blank key = %#v, want nil", got)
+	}
 	if got := MapByKey([]any{map[string]any{"nested": map[string]any{"name": "agent"}}}, "nested"); got["name"] != "agent" {
 		t.Fatalf("MapByKey slice = %#v, want nested map", got)
+	}
+	if got := StringFromAny(map[string]any{"outer": map[string]any{"name": "nested"}}, "name"); got != "nested" {
+		t.Fatalf("StringFromAny arbitrary nested map = %q, want nested", got)
 	}
 	if got := StringSliceFromAny("skills"); got != nil {
 		t.Fatalf("StringSliceFromAny unsupported = %#v, want nil", got)
@@ -166,7 +177,7 @@ func TestNormalizeEmptyAndFallbackBranches(t *testing.T) {
 }
 
 func TestParseDurationRejectsInvalidValues(t *testing.T) {
-	for _, raw := range []string{"", "every", "not-a-duration", "1x"} {
+	for _, raw := range []string{"", "every", "not-a-duration", "1x", "bad-dayd"} {
 		if _, err := ParseDuration(raw); err == nil {
 			t.Fatalf("ParseDuration(%q) expected error", raw)
 		}
@@ -175,11 +186,11 @@ func TestParseDurationRejectsInvalidValues(t *testing.T) {
 
 func TestUnmarshalJSONPayloadEscapesControlBytesAndPreservesRetryErrors(t *testing.T) {
 	var payload map[string]string
-	raw := []byte{'{', '"', 'p', '"', ':', '"', 'a', 0x01, 'b', '"', '}'}
+	raw := []byte{'{', '"', 'p', '"', ':', '"', 'a', '\\', 'n', '\r', 0x01, 'b', '"', '}'}
 	if err := UnmarshalJSONPayload(raw, &payload); err != nil {
 		t.Fatalf("UnmarshalJSONPayload control byte: %v", err)
 	}
-	if got := payload["p"]; got != "a\x01b" {
+	if got := payload["p"]; got != "a\n\r\x01b" {
 		t.Fatalf("payload = %q, want control byte string", got)
 	}
 
