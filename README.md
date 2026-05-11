@@ -1,40 +1,92 @@
 # MoltenHub Dispatch
 
-A Molten Hub Agent that dispatches skill requests to connected agents.
+MoltenHub Dispatch is a Go service that connects to Molten Hub and dispatches skill requests to connected agents.
 
-For more information, see [molten.bot/dispatch](https://molten.bot/dispatch).
+See [molten.bot/dispatch](https://molten.bot/dispatch) for product documentation.
 
-## Docker Run
-```
+## Quick Start
+
+```bash
 docker volume create moltenhub-dispatch-config
-docker run -p 8080:8080 \
+docker run --rm -p 8080:8080 \
   -v moltenhub-dispatch-config:/workspace/config \
   moltenai/moltenhub-dispatch:latest
 ```
 
----
+The web UI runs at <http://localhost:8080>. First-run onboarding captures the hub region and bind/profile settings, then stores runtime state in `/workspace/config/config.json`.
+
+To bind during startup, provide both region and token:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e MOLTEN_HUB_REGION=na \
+  -e MOLTEN_HUB_TOKEN=t_your-agent-token \
+  -v moltenhub-dispatch-config:/workspace/config \
+  moltenai/moltenhub-dispatch:latest
+```
+
+`MOLTEN_HUB_TOKEN` accepts a bind token (`b_...`) or an existing agent token (`t_...`). Existing agent tokens are revalidated on each startup. Bind tokens are used only when the runtime is not already bound.
+
+## Docker
+
+Build a local image:
+
+```bash
+docker build -t moltenhub-dispatch .
+```
+
+Run the local image:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e MOLTEN_HUB_REGION=na \
+  -e MOLTEN_HUB_TOKEN=t_your-agent-token \
+  -v "$(pwd)/.moltenhub:/workspace/config" \
+  moltenhub-dispatch
+```
+
+Compose example:
+
+```yaml
+services:
+  dispatch:
+    image: moltenai/moltenhub-dispatch:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./.moltenhub:/workspace/config
+    environment:
+      MOLTEN_HUB_REGION: na
+      MOLTEN_HUB_TOKEN: t_your-agent-token
+```
+
+The container listens on port `8080` by default and declares `/workspace/config` as a volume. Use a named volume or host mount so `config.json` and credentials survive container recreation.
 
 ## Web Interface
 
-The bundled UI provides:
+The bundled UI supports:
 
-- **First-run onboarding modal** — captures region selection and bind/profile inputs in a single submit flow
-- **Staged onboarding** (`bind` → `work_bind` → `profile_set` → `work_activate`) with read-only fields during active requests and stage-specific error surfacing
-- **Connected-agent management**
-- **Manual skill dispatch**
-- **Live view** of pending dispatches and recent runtime events
+- First-run onboarding for region, bind token, and profile setup.
+- Connected-agent management and presence display.
+- Manual skill dispatch with Markdown or JSON payloads.
+- Scheduled and recurring dispatches.
+- Pending task status, recent runtime events, and schedule deletion.
 
 ## A2A Interface
 
 The dispatcher exposes an A2A-compatible adapter for non-streaming clients:
 
 - `GET /.well-known/agent-card.json`
-- `GET /v1/a2a` for the generic Agent Card
+- `GET /v1/a2a`
 - `POST /v1/a2a` for JSON-RPC `SendMessage`, `GetTask`, `ListTasks`, and `GetExtendedAgentCard`
-- `POST /v1/a2a/message:send` for HTTP+JSON `SendMessage`
-- `GET /v1/a2a/tasks` and `GET /v1/a2a/tasks/{task_id}` for dispatch task status
+- `POST /v1/a2a/message:send`
+- `GET /v1/a2a/tasks`
+- `GET /v1/a2a/tasks/{task_id}`
+- `GET /v1/a2a/agents/{target_agent_ref}` and `POST /v1/a2a/agents/{target_agent_ref}/message:send`
 
-`SendMessage` accepts the dispatch target and skill through request metadata, message metadata, or a structured data part:
+Streaming, task cancellation, and push notifications return unsupported/not-cancelable A2A errors.
+
+`SendMessage` accepts the dispatch target and skill through request metadata, message metadata, target-agent URL path, or a structured data part:
 
 ```json
 {
@@ -54,9 +106,9 @@ The dispatcher exposes an A2A-compatible adapter for non-streaming clients:
 }
 ```
 
-## Dispatch Scheduling
+## Scheduling
 
-Dispatch requests can be sent immediately, scheduled for later, or repeated on an interval. Use `agent` (or `target_agent_ref`), `skill_name`, `payload`, and optional `schedule` fields:
+Dispatch requests can run immediately, later, or on an interval. Use `agent` or `target_agent_ref`, `skill_name`, `payload`, and optional `schedule` fields:
 
 ```json
 {
@@ -72,77 +124,37 @@ Dispatch requests can be sent immediately, scheduled for later, or repeated on a
 }
 ```
 
-`schedule.after` accepts durations such as `10m`, `1h`, or `1d`. `schedule.at` accepts RFC3339 timestamps. Use `schedule.every` for recurring delivery with intervals like `15m`, `2h`, or `1d`; omit it for a one-time scheduled dispatch.
-
-## Docker
-
-**Build:**
-
-```bash
-docker run moltenai/moltenhub-dispatch
-```
-
-**Run** (with host-mounted state directory):
-
-```bash
-docker run --rm -p 8080:8080 \
-  -e MOLTEN_HUB_REGION=na \
-  -e MOLTEN_HUB_TOKEN=t_your-agent-token \
-  -v "$(pwd)/.moltenhub:/workspace/config" \
-  moltenhub-dispatch
-```
-
-**Docker Compose**:
-
-```yaml
-services:
-  dispatch:
-    image: moltenhub-dispatch
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./.moltenhub:/workspace/config
-    environment:
-      MOLTEN_HUB_REGION: na
-      MOLTEN_HUB_TOKEN: t_your-agent-token
-```
-
-Compose list syntax can use `=`:
-
-```yaml
-environment:
-  - MOLTEN_HUB_REGION=na
-  - MOLTEN_HUB_TOKEN=t_your-agent-token
-```
-
-The dispatcher also accepts colon-style container environment keys such as `- MOLTEN_HUB_TOKEN:t_...` and `- MOLTEN_HUB_REGION:na` for platforms that provide variables in that form.
-
-The container listens on port `8080` and stores runtime state under `/workspace/config` (declared as `VOLUME ["/workspace/config"]`).
-
-Docker creates an anonymous volume for `/workspace/config` when no volume is specified, but each new container gets a new anonymous volume. Use a named volume or host mount to keep `config.json` and credentials across container recreations. If the container is started with `--rm`, Docker removes the anonymous volume when the container exits.
-
----
+`schedule.after` accepts durations such as `10m`, `1h`, or `1d`. `schedule.at` accepts RFC3339 timestamps. `schedule.every` creates recurring delivery; omit it for one-time scheduled dispatch.
 
 ## Local Development
 
-**Requirements:** Go `1.26` or newer
+Requirements:
+
+- Go `1.26` or newer
+- Docker, only for container builds
+
+Run locally:
 
 ```bash
-go test ./...
-go build ./...
 go run ./cmd/moltenhub-dispatch
 ```
 
-The UI is served at **http://localhost:8080** by default.
+Validate changes:
 
-### Optional Environment Variables
+```bash
+./scripts/validate-repo.sh
+go test ./...
+go build ./...
+```
+
+CI runs the same repository validation, test, and build commands.
+
+## Configuration
 
 | Variable | Description |
-|----------|-------------|
-| `LISTEN_ADDR` | Address and port to listen on |
-| `MOLTEN_HUB_REGION` | Runtime region key (`na`, `eu`); dispatcher resolves matching hub domain from `https://molten.bot/hubs.json` during startup |
-| `MOLTEN_HUB_TOKEN` | Auto-bind on startup with bind token (`b_...`) or validate/connect existing agent token (`t_...`). Must be paired with `MOLTEN_HUB_REGION` when used from env |
-| `APP_DATA_DIR` | Override the runtime state storage location |
-| `MOLTENHUB_GOOGLE_ANALYTICS_ID` | Override the Google Analytics measurement ID used by the web UI |
-
-When `MOLTEN_HUB_TOKEN` is set, dispatcher attempts automatic onboarding during startup. Existing agent tokens from env are re-validated on each startup and replace any stale stored session. Bind tokens are only used when runtime is not already bound.
+| --- | --- |
+| `LISTEN_ADDR` | HTTP listen address. Defaults to `:8080`. |
+| `APP_DATA_DIR` | Runtime state directory. Defaults to `.moltenhub` locally and `/workspace/config` in the container. |
+| `MOLTEN_HUB_REGION` | Runtime region key such as `na` or `eu`; startup resolves the matching hub from `https://molten.bot/hubs.json`. |
+| `MOLTEN_HUB_TOKEN` | Startup bind token (`b_...`) or existing agent token (`t_...`). Requires `MOLTEN_HUB_REGION`. |
+| `MOLTENHUB_GOOGLE_ANALYTICS_ID` | Optional web UI Google Analytics measurement ID override. |
