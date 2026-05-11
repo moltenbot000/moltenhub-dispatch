@@ -90,15 +90,15 @@
     </section>
 
     <div id="sub-actions" {{if not .SubActions.Visible}}hidden{{end}}>
-      <section class="grid manual-dispatch-grid">
-        <article class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
+      <section class="manual-dispatch-grid">
+        <article class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell">
+          <div class="panel-header prompt-titlebar">
             <div class="panel-header-copy">
               <span class="panel-section-title">Dispatch</span>
               <p class="panel-section-copy">Send work to connected agent. Auto-load first skill. Paste markdown or JSON payload.</p>
             </div>
           </div>
-          <form id="manual-dispatch-form" method="post" action="/dispatch" class="prompt-form grid gap-2.5 p-3">
+          <form id="manual-dispatch-form" method="post" action="/dispatch" class="prompt-form manual-dispatch-form">
             <div class="prompt-compose-stack">
               <input id="target-agent-ref-input" type="hidden" name="target_agent_ref">
               <div class="prompt-grid manual-dispatch-selection-grid">
@@ -232,9 +232,9 @@
         </article>
       </section>
 
-      <section class="grid">
-        <article class="panel prompt-wrap brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel bg-[linear-gradient(170deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          <div class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]">
+      <section class="activity-section-grid">
+        <article class="panel prompt-wrap brand-login-card-shell">
+          <div class="panel-header prompt-titlebar">
             <div class="panel-header-copy">
               <p class="eyebrow dispatch-panel-eyebrow">Activity</p>
               <h2 class="panel-section-title">Recent Activity</h2>

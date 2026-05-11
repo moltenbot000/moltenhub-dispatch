@@ -967,7 +967,7 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if strings.Contains(body, "Format is detected automatically.") {
 		t.Fatalf("did not expect removed payload format hint copy, body=%s", body)
 	}
-	if !strings.Contains(body, `class="grid manual-dispatch-grid"`) {
+	if !strings.Contains(body, `class="manual-dispatch-grid"`) {
 		t.Fatalf("expected manual dispatch section to render full-width grid class, body=%s", body)
 	}
 	if !strings.Contains(body, `id="manual-dispatch-form"`) {
@@ -982,14 +982,33 @@ func TestHandleIndexShowsBoundProfileState(t *testing.T) {
 	if !strings.Contains(body, `class="prompt-grid manual-dispatch-selection-grid"`) {
 		t.Fatalf("expected manual dispatch selection row to reuse studio prompt grid layout, body=%s", body)
 	}
-	if !strings.Contains(body, `class="panel-header prompt-titlebar flex items-center justify-between gap-2 border-b border-hub-border px-3.5 py-3 text-[0.92rem] font-semibold uppercase tracking-[0.03em]"`) {
+	if !strings.Contains(body, `class="panel-header prompt-titlebar"`) {
 		t.Fatalf("expected manual dispatch panel header to reuse studio titlebar layout, body=%s", body)
 	}
-	if !strings.Contains(body, `class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel`) {
+	if !strings.Contains(body, `class="panel prompt-wrap dispatch-workbench-panel brand-login-card-shell"`) {
 		t.Fatalf("expected manual dispatch panel shell to reuse studio prompt-wrap layout, body=%s", body)
 	}
-	if !strings.Contains(body, `class="panel prompt-wrap brand-login-card-shell min-h-[220px] overflow-visible rounded-2xl border border-hub-border bg-hub-panel`) {
+	if !strings.Contains(body, `class="panel prompt-wrap brand-login-card-shell"`) {
 		t.Fatalf("expected activity panel shell to reuse studio prompt-wrap layout, body=%s", body)
+	}
+	for _, stale := range []string{
+		`class="grid`,
+		`min-h-[220px]`,
+		`overflow-visible`,
+		`rounded-2xl`,
+		`bg-[linear-gradient`,
+		`text-[0.92rem]`,
+		`px-3.5`,
+		`py-3`,
+		`gap-2.5`,
+		`border-hub-border`,
+		`bg-hub-panel`,
+		`font-semibold`,
+		`tracking-[0.03em]`,
+	} {
+		if strings.Contains(body, stale) {
+			t.Fatalf("did not expect page-local style utility %q in template, body=%s", stale, body)
+		}
 	}
 	if !strings.Contains(body, `<h2 class="panel-section-title">Recent Activity</h2>`) {
 		t.Fatalf("expected activity panel heading to reuse studio section title treatment, body=%s", body)
@@ -2999,6 +3018,9 @@ func TestHandleStylesEnsuresHiddenModalBackdropsStayHidden(t *testing.T) {
 	}
 	if !strings.Contains(body, `grid-template-columns: minmax(0, 1fr);`) {
 		t.Fatalf("expected manual dispatch section to force a single full-width column, body=%s", body)
+	}
+	if !strings.Contains(body, `.activity-section-grid,`) || !strings.Contains(body, `.manual-dispatch-form {`) {
+		t.Fatalf("expected moved page layout utilities to live in global styles, body=%s", body)
 	}
 	if !strings.Contains(body, `.manual-dispatch-targets-grid {`) {
 		t.Fatalf("expected horizontal manual dispatch target layout rule, body=%s", body)
