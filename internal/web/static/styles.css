@@ -3603,6 +3603,12 @@ p,
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.activity-section-grid,
+.manual-dispatch-grid {
+  display: grid;
+  gap: 20px;
+}
+
 .manual-dispatch-grid {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -3632,6 +3638,10 @@ p,
   flex-wrap: nowrap;
   align-items: stretch;
   justify-content: flex-end;
+}
+
+.manual-dispatch-form {
+  gap: 20px;
 }
 
 .manual-dispatch-selection-grid {
