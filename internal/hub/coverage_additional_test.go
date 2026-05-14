@@ -427,7 +427,12 @@ func TestAdditionalRealtimeHelpers(t *testing.T) {
 		t.Fatalf("nil ctx timeout = %v", got)
 	}
 
-	session := &websocketSession{queue: []PullResponse{{DeliveryID: "queued"}}}
+	session := &websocketSession{
+		deliveries: make(chan PullResponse, 1),
+		readErr:    make(chan error, 1),
+		closed:     make(chan struct{}),
+	}
+	session.deliveries <- PullResponse{DeliveryID: "queued"}
 	if message, err := session.Receive(context.Background()); err != nil || message.DeliveryID != "queued" {
 		t.Fatalf("queued receive = %#v err %v", message, err)
 	}

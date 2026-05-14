@@ -42,6 +42,8 @@ type fakeHubClient struct {
 	pingCalls             int
 	connectErr            error
 	connectSession        hub.RealtimeSession
+	connectSessions       []hub.RealtimeSession
+	connectSessionKeys    []string
 	connectCalls          int
 	publishErr            error
 }
@@ -151,12 +153,18 @@ func (f *fakeHubClient) SetBaseURL(baseURL string) {
 	f.baseURLCalls = append(f.baseURLCalls, baseURL)
 }
 
-func (f *fakeHubClient) ConnectRuntimeMessages(_ context.Context, _ string, _ string) (hub.RealtimeSession, error) {
+func (f *fakeHubClient) ConnectRuntimeMessages(_ context.Context, _ string, sessionKey string) (hub.RealtimeSession, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.connectCalls++
+	f.connectSessionKeys = append(f.connectSessionKeys, sessionKey)
 	if len(f.baseURLCalls) == 0 {
 		f.baseURLCalls = append(f.baseURLCalls, f.currentBaseURL)
+	}
+	if len(f.connectSessions) > 0 && f.connectErr == nil {
+		session := f.connectSessions[0]
+		f.connectSessions = f.connectSessions[1:]
+		return session, nil
 	}
 	if f.connectSession != nil && f.connectErr == nil {
 		return f.connectSession, nil
@@ -4012,6 +4020,76 @@ func TestRunHubLoopFallsBackToHTTPLongPollAfterRealtimeDisconnect(t *testing.T) 
 	}
 	if state.Connection.Transport != ConnectionTransportHTTPLong {
 		t.Fatalf("expected http long-poll transport after realtime disconnect fallback, got %#v", state.Connection)
+	}
+}
+
+func TestRunHubLoopReconnectsAfterKeepaliveCloseWithStableSessionKeyAndNoDuplicateAckOrPublish(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	service.hubPingRetryDelay = 2 * time.Millisecond
+	service.hubPingCheckTimeout = 250 * time.Millisecond
+	service.wsFallbackWindow = 250 * time.Millisecond
+	service.wsUpgradeRetryDelay = 10 * time.Millisecond
+	firstSession := &fakeRealtimeSession{
+		messages: []hub.PullResponse{{
+			DeliveryID: "delivery-1",
+			OpenClawMessage: hub.OpenClawMessage{
+				Type: "ack",
+			},
+		}},
+		receiveErr: errors.New("websocket session closed after pong timeout"),
+	}
+	secondSession := &fakeRealtimeSession{receiveErr: errors.New("websocket session closed after pong timeout")}
+	fake.connectSessions = []hub.RealtimeSession{firstSession, secondSession}
+	fake.pingDetail = "https://na.hub.molten.bot/ping status=204"
+	fake.pullOK = false
+
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.Session.APIBase = "https://na.hub.molten.bot/v1"
+		state.Settings.SessionKey = "stable-session"
+		state.Settings.PollInterval = 10 * time.Millisecond
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.RunHubLoop(ctx)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if fake.callCounts().connect >= 2 {
+			break
+		}
+		select {
+		case <-deadline:
+			cancel()
+			<-done
+			t.Fatalf("expected websocket reconnect after realtime close; connect_calls=%d", fake.connectCalls)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-done
+
+	if got := firstSession.acked; len(got) != 1 || got[0] != "delivery-1" {
+		t.Fatalf("expected one ack for first delivery, got %#v", got)
+	}
+	if len(fake.publishCalls) != 0 {
+		t.Fatalf("expected no duplicate publish behavior for ack-only delivery, got %d publishes", len(fake.publishCalls))
+	}
+	for _, key := range fake.connectSessionKeys {
+		if key != "stable-session" {
+			t.Fatalf("expected stable session key on reconnect, got keys %#v", fake.connectSessionKeys)
+		}
 	}
 }
 

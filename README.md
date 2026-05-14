@@ -149,6 +149,12 @@ go build ./...
 
 CI runs the same repository validation, test, and build commands.
 
+## Runtime WebSocket
+
+Runtime clients that connect to `/v1/runtime/messages/ws` must keep reading frames for the lifetime of the connection. Molten Hub sends WebSocket ping control frames as a keepalive; clients must reply with pong frames before the server pong timeout. Libraries such as `golang.org/x/net/websocket` send pongs while the read path is active, so an idle client still needs a continuous read loop.
+
+Reconnects should use bounded exponential backoff with jitter, reuse the same `session_key` for the runtime session, and avoid logging bearer tokens, bind tokens, message payload secrets, or raw WebSocket URLs containing credentials. On graceful shutdown, call `/v1/runtime/messages/offline` once with the current `session_key` and shutdown reason.
+
 ## Configuration
 
 | Variable | Description |

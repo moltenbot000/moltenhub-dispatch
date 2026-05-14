@@ -28,11 +28,14 @@ type RealtimeSession interface {
 }
 
 type websocketSession struct {
-	conn      *websocket.Conn
-	mu        sync.Mutex
-	queue     []PullResponse
-	closeOnce sync.Once
-	closed    chan struct{}
+	conn       *websocket.Conn
+	writeMu    sync.Mutex
+	pendingMu  sync.Mutex
+	pending    map[string]chan realtimeEnvelope
+	deliveries chan PullResponse
+	readErr    chan error
+	closeOnce  sync.Once
+	closed     chan struct{}
 }
 
 type realtimeEnvelope struct {
@@ -85,8 +88,11 @@ func (c *Client) ConnectRuntimeMessages(ctx context.Context, token, sessionKey s
 		}
 
 		session := &websocketSession{
-			conn:   conn,
-			closed: make(chan struct{}),
+			conn:       conn,
+			pending:    make(map[string]chan realtimeEnvelope),
+			deliveries: make(chan PullResponse, 32),
+			readErr:    make(chan error, 1),
+			closed:     make(chan struct{}),
 		}
 		handshakeCtx, cancelHandshake := context.WithTimeout(ctx, boundedTimeout(ctx, websocketHandshakeTimeout))
 		first, err := session.readEnvelope(handshakeCtx)
@@ -99,7 +105,9 @@ func (c *Client) ConnectRuntimeMessages(ctx context.Context, token, sessionKey s
 			_ = session.Close()
 			return nil, fmt.Errorf("unexpected websocket handshake message type %q", first.Type)
 		}
+		_ = session.conn.SetReadDeadline(time.Time{})
 		session.bindContext(ctx)
+		session.startReadLoop()
 		session.startHeartbeat(ctx)
 		return session, nil
 	}
@@ -138,27 +146,19 @@ func (c *Client) runtimeWebsocketEndpointCandidates() []string {
 }
 
 func (s *websocketSession) Receive(ctx context.Context) (PullResponse, error) {
-	s.mu.Lock()
-	if len(s.queue) > 0 {
-		message := s.queue[0]
-		s.queue = s.queue[1:]
-		s.mu.Unlock()
-		return message, nil
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	s.mu.Unlock()
-
 	for {
-		envelope, err := s.readEnvelope(ctx)
-		if err != nil {
+		select {
+		case <-ctx.Done():
+			return PullResponse{}, ctx.Err()
+		case message := <-s.deliveries:
+			return message, nil
+		case err := <-s.readErr:
 			return PullResponse{}, err
-		}
-		switch {
-		case strings.EqualFold(envelope.Type, "delivery"):
-			return decodePullResponsePayload(envelope.Result, "realtime delivery")
-		case strings.EqualFold(envelope.Type, "__close__"):
+		case <-s.closed:
 			return PullResponse{}, fmt.Errorf("hub websocket session closed")
-		case strings.EqualFold(envelope.Type, "__error__"):
-			return PullResponse{}, fmt.Errorf("hub websocket error: %s", envelope.Error.Message)
 		}
 	}
 }
@@ -186,8 +186,14 @@ func (s *websocketSession) respond(ctx context.Context, action, deliveryID strin
 	if strings.TrimSpace(deliveryID) == "" {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	requestID := action + ":" + deliveryID
+	responseCh := s.registerPending(requestID)
+	defer s.unregisterPending(requestID)
+
 	if err := s.writeEnvelope(ctx, map[string]any{
 		"type":        action,
 		"request_id":  requestID,
@@ -197,24 +203,10 @@ func (s *websocketSession) respond(ctx context.Context, action, deliveryID strin
 	}
 
 	for {
-		envelope, err := s.readEnvelope(ctx)
-		if err != nil {
-			return err
-		}
-		switch {
-		case strings.EqualFold(envelope.Type, "delivery"):
-			message, decodeErr := decodePullResponsePayload(envelope.Result, "realtime delivery")
-			if decodeErr != nil {
-				return decodeErr
-			}
-			s.mu.Lock()
-			s.queue = append(s.queue, message)
-			s.mu.Unlock()
-		case strings.EqualFold(envelope.Type, "__close__"):
-			return fmt.Errorf("hub websocket session closed")
-		case strings.EqualFold(envelope.Type, "__error__"):
-			return fmt.Errorf("hub websocket error: %s", envelope.Error.Message)
-		case strings.EqualFold(envelope.Type, "response") && strings.TrimSpace(envelope.RequestID) == requestID:
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case envelope := <-responseCh:
 			if envelope.OK {
 				return nil
 			}
@@ -227,16 +219,20 @@ func (s *websocketSession) respond(ctx context.Context, action, deliveryID strin
 				return fmt.Errorf("hub websocket %s failed: %s", action, message)
 			}
 			return fmt.Errorf("hub websocket %s failed (%s): %s", action, code, message)
+		case err := <-s.readErr:
+			return err
+		case <-s.closed:
+			return fmt.Errorf("hub websocket session closed")
 		}
 	}
 }
 
 func (s *websocketSession) writeEnvelope(ctx context.Context, payload any) error {
-	if err := s.applyDeadline(ctx); err != nil {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if err := s.applyWriteDeadline(ctx); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := websocket.JSON.Send(s.conn, payload); err != nil {
 		return fmt.Errorf("send websocket payload: %w", err)
 	}
@@ -244,7 +240,7 @@ func (s *websocketSession) writeEnvelope(ctx context.Context, payload any) error
 }
 
 func (s *websocketSession) readEnvelope(ctx context.Context) (realtimeEnvelope, error) {
-	if err := s.applyDeadline(ctx); err != nil {
+	if err := s.applyReadDeadline(ctx); err != nil {
 		return realtimeEnvelope{}, err
 	}
 	var envelope realtimeEnvelope
@@ -254,11 +250,95 @@ func (s *websocketSession) readEnvelope(ctx context.Context) (realtimeEnvelope, 
 	return envelope, nil
 }
 
-func (s *websocketSession) applyDeadline(ctx context.Context) error {
+func (s *websocketSession) applyReadDeadline(ctx context.Context) error {
 	if deadline, ok := ctx.Deadline(); ok {
-		return s.conn.SetDeadline(deadline)
+		return s.conn.SetReadDeadline(deadline)
 	}
-	return s.conn.SetDeadline(time.Time{})
+	return s.conn.SetReadDeadline(time.Time{})
+}
+
+func (s *websocketSession) applyWriteDeadline(ctx context.Context) error {
+	if deadline, ok := ctx.Deadline(); ok {
+		return s.conn.SetWriteDeadline(deadline)
+	}
+	return s.conn.SetWriteDeadline(time.Time{})
+}
+
+func (s *websocketSession) startReadLoop() {
+	if s == nil {
+		return
+	}
+	go func() {
+		for {
+			envelope, err := s.readEnvelope(context.Background())
+			if err != nil {
+				s.failRead(fmt.Errorf("receive websocket payload: %w", err))
+				return
+			}
+			switch {
+			case strings.EqualFold(envelope.Type, "delivery"):
+				message, decodeErr := decodePullResponsePayload(envelope.Result, "realtime delivery")
+				if decodeErr != nil {
+					s.failRead(decodeErr)
+					return
+				}
+				select {
+				case s.deliveries <- message:
+				case <-s.closed:
+					return
+				}
+			case strings.EqualFold(envelope.Type, "__close__"):
+				s.failRead(fmt.Errorf("hub websocket session closed"))
+				return
+			case strings.EqualFold(envelope.Type, "__error__"):
+				s.failRead(fmt.Errorf("hub websocket error: %s", envelope.Error.Message))
+				return
+			case strings.EqualFold(envelope.Type, "response"):
+				s.deliverResponse(envelope)
+			}
+		}
+	}()
+}
+
+func (s *websocketSession) registerPending(requestID string) chan realtimeEnvelope {
+	ch := make(chan realtimeEnvelope, 1)
+	s.pendingMu.Lock()
+	s.pending[requestID] = ch
+	s.pendingMu.Unlock()
+	return ch
+}
+
+func (s *websocketSession) unregisterPending(requestID string) {
+	s.pendingMu.Lock()
+	delete(s.pending, requestID)
+	s.pendingMu.Unlock()
+}
+
+func (s *websocketSession) deliverResponse(envelope realtimeEnvelope) {
+	requestID := strings.TrimSpace(envelope.RequestID)
+	if requestID == "" {
+		return
+	}
+	s.pendingMu.Lock()
+	ch := s.pending[requestID]
+	s.pendingMu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- envelope:
+	default:
+	}
+}
+
+func (s *websocketSession) failRead(err error) {
+	if err != nil {
+		select {
+		case s.readErr <- err:
+		default:
+		}
+	}
+	_ = s.Close()
 }
 
 func (s *websocketSession) bindContext(ctx context.Context) {
@@ -299,11 +379,11 @@ func (s *websocketSession) startHeartbeat(ctx context.Context) {
 }
 
 func (s *websocketSession) writePing(ctx context.Context, payload []byte) error {
-	if err := s.applyDeadline(ctx); err != nil {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if err := s.applyWriteDeadline(ctx); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	previousType := s.conn.PayloadType
 	s.conn.PayloadType = websocket.PingFrame
