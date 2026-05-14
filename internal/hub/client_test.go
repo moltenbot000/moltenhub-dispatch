@@ -843,6 +843,56 @@ func TestPublishRuntimeMessageLocalModeUsesOpenClawAndSkipsA2A(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeMessageLocalModeSendsMarkdownStringPayload(t *testing.T) {
+	t.Parallel()
+
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/openclaw/messages/publish" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode publish request: %v", err)
+		}
+		message, ok := body["message"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected message object, got %#v", body["message"])
+		}
+		if got := message["payload_format"]; got != "markdown" {
+			t.Fatalf("payload_format = %#v, want markdown", got)
+		}
+		if got, ok := message["payload"].(string); !ok || got != "are you available?" {
+			t.Fatalf("payload = %T %#v, want markdown string", message["payload"], message["payload"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": map[string]any{"message_id": "message-1", "delivery": "queued"},
+		})
+	}))
+
+	client := hub.NewClient(server.URL)
+	client.SetLocalMode(true)
+	response, err := client.PublishRuntimeMessage(context.Background(), "agent-token", hub.PublishRequest{
+		ToAgentUUID: "worker-1",
+		ClientMsgID: "client-msg-1",
+		Message: hub.OpenClawMessage{
+			Type:          "skill_request",
+			SkillName:     "share_discussion_markdown",
+			RequestID:     "request-1",
+			PayloadFormat: "markdown",
+			Payload:       "are you available?",
+		},
+	})
+	if err != nil {
+		t.Fatalf("publish runtime in local mode: %v", err)
+	}
+	if response.MessageID != "message-1" {
+		t.Fatalf("message id = %q, want message-1", response.MessageID)
+	}
+}
+
 func TestPullRuntimeMessageDecodesA2AWrappedRuntimeDataPart(t *testing.T) {
 	t.Parallel()
 

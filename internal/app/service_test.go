@@ -2153,6 +2153,163 @@ func TestDispatchFromUIPassesA2APreferenceToHubPublish(t *testing.T) {
 	}
 }
 
+func TestDispatchFromUIMarkdownStringPublishesRawPayload(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{
+			testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "share_discussion_markdown"}),
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	task, err := service.DispatchFromUI(context.Background(), DispatchRequest{
+		RequestID:      "ui-req",
+		TargetAgentRef: "worker-a",
+		SkillName:      "share_discussion_markdown",
+		Payload:        "are you available?",
+		PayloadFormat:  "markdown",
+	})
+	if err != nil {
+		t.Fatalf("dispatch from ui: %v", err)
+	}
+
+	if task.DispatchPayloadFormat != "markdown" {
+		t.Fatalf("expected task payload format markdown, got %q", task.DispatchPayloadFormat)
+	}
+	if got := task.DispatchPayload["input"]; got != "are you available?" {
+		t.Fatalf("expected stored dispatch payload to stay normalized, got %#v", task.DispatchPayload)
+	}
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one publish call, got %d", len(fake.publishCalls))
+	}
+	message := fake.publishCalls[0].Message
+	if got := message.PayloadFormat; got != "markdown" {
+		t.Fatalf("expected outbound payload format markdown, got %q", got)
+	}
+	if got, ok := message.Payload.(string); !ok || got != "are you available?" {
+		t.Fatalf("expected outbound payload raw string, got %T %#v", message.Payload, message.Payload)
+	}
+}
+
+func TestDispatchFromUIJSONPublishesNormalizedPayload(t *testing.T) {
+	t.Parallel()
+
+	service, fake := newTestService(t)
+	err := service.store.Update(func(state *AppState) error {
+		state.Session.AgentToken = "agent-token"
+		state.ConnectedAgents = []ConnectedAgent{
+			testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "run_task"}),
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	_, err = service.DispatchFromUI(context.Background(), DispatchRequest{
+		RequestID:      "ui-req",
+		TargetAgentRef: "worker-a",
+		SkillName:      "run_task",
+		Payload:        testDispatchPrompt,
+		PayloadFormat:  "json",
+	})
+	if err != nil {
+		t.Fatalf("dispatch from ui: %v", err)
+	}
+
+	if len(fake.publishCalls) != 1 {
+		t.Fatalf("expected one publish call, got %d", len(fake.publishCalls))
+	}
+	message := fake.publishCalls[0].Message
+	if got := message.PayloadFormat; got != "json" {
+		t.Fatalf("expected outbound payload format json, got %q", got)
+	}
+	payload, ok := message.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected outbound payload map, got %T", message.Payload)
+	}
+	if got := payload["input"]; got != testDispatchPrompt {
+		t.Fatalf("unexpected outbound input payload: %#v", payload)
+	}
+}
+
+func TestDispatchFromUIMarkdownWithRepoOrLogPathsPublishesNormalizedPayload(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		repo     string
+		logPaths []string
+	}{
+		{name: "repo", repo: "/tmp/repo"},
+		{name: "log paths", logPaths: []string{"/tmp/repo/logs/failure.log"}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			service, fake := newTestService(t)
+			err := service.store.Update(func(state *AppState) error {
+				state.Session.AgentToken = "agent-token"
+				state.ConnectedAgents = []ConnectedAgent{
+					testConnectedAgent("worker-a", "Worker A", "worker-uuid", Skill{Name: "share_discussion_markdown"}),
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("seed store: %v", err)
+			}
+
+			_, err = service.DispatchFromUI(context.Background(), DispatchRequest{
+				RequestID:      "ui-req",
+				TargetAgentRef: "worker-a",
+				SkillName:      "share_discussion_markdown",
+				Payload:        "are you available?",
+				PayloadFormat:  "markdown",
+				Repo:           tc.repo,
+				LogPaths:       tc.logPaths,
+			})
+			if err != nil {
+				t.Fatalf("dispatch from ui: %v", err)
+			}
+
+			if len(fake.publishCalls) != 1 {
+				t.Fatalf("expected one publish call, got %d", len(fake.publishCalls))
+			}
+			message := fake.publishCalls[0].Message
+			if got := message.PayloadFormat; got != "markdown" {
+				t.Fatalf("expected outbound payload format markdown, got %q", got)
+			}
+			payload, ok := message.Payload.(map[string]any)
+			if !ok {
+				t.Fatalf("expected outbound payload map, got %T", message.Payload)
+			}
+			if got := payload["input"]; got != "are you available?" {
+				t.Fatalf("unexpected outbound input payload: %#v", payload)
+			}
+			if tc.repo != "" {
+				if got := payload["repo"]; got != tc.repo {
+					t.Fatalf("unexpected outbound repo payload: %#v", payload)
+				}
+			}
+			if len(tc.logPaths) > 0 {
+				logPaths, ok := payload["log_paths"].([]string)
+				if !ok || len(logPaths) != 1 || logPaths[0] != tc.logPaths[0] {
+					t.Fatalf("unexpected outbound log_paths payload: %#v", payload["log_paths"])
+				}
+			}
+		})
+	}
+}
+
 func TestDispatchFromUISchedulesMessageWithoutImmediatePublish(t *testing.T) {
 	t.Parallel()
 

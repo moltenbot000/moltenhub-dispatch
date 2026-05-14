@@ -428,6 +428,20 @@ func (s *Service) publishScheduleAckToCaller(ctx context.Context, state AppState
 	return err
 }
 
+func outboundPayloadForSkillRequest(req DispatchRequest, normalized map[string]any) any {
+	if strings.EqualFold(normalizePayloadFormat(req.PayloadFormat, req.Payload), "markdown") &&
+		strings.TrimSpace(req.Repo) == "" &&
+		len(req.LogPaths) == 0 {
+		if text, ok := req.Payload.(string); ok {
+			return text
+		}
+	}
+	if normalized != nil {
+		return normalized
+	}
+	return nil
+}
+
 func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req DispatchRequest, callerAgentUUID, callerAgentURI string) (PendingTask, hub.PublishRequest) {
 	now := time.Now().UTC()
 	timeout := req.Timeout
@@ -439,10 +453,7 @@ func (s *Service) buildPendingTask(state AppState, target ConnectedAgent, req Di
 	logPath := filepath.Join(state.Settings.DataDir, "logs", taskID+".log")
 
 	payload := normalizePayload(req.Payload, req.Repo, req.LogPaths)
-	var outboundPayload any
-	if payload != nil {
-		outboundPayload = payload
-	}
+	outboundPayload := outboundPayloadForSkillRequest(req, payload)
 	payloadFormat := normalizePayloadFormat(req.PayloadFormat, outboundPayload)
 	task := PendingTask{
 		ID:                     taskID,
