@@ -21,6 +21,9 @@ const (
 )
 
 func (c *Client) canPublishRuntimeViaA2A(req PublishRequest) bool {
+	if c.localMode {
+		return false
+	}
 	if c.a2aEndpointBaseURL() == "" {
 		return false
 	}
@@ -243,6 +246,9 @@ func (c *Client) a2aPublishEndpoint(req PublishRequest) string {
 }
 
 func (c *Client) a2aEndpointBaseURL() string {
+	if c.localMode {
+		return ""
+	}
 	for _, endpoint := range []string{
 		c.endpoints.ManifestURL,
 		c.endpoints.CapabilitiesURL,

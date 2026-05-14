@@ -138,6 +138,13 @@ func boundedTimeout(ctx context.Context, fallback time.Duration) time.Duration {
 }
 
 func (c *Client) runtimeWebsocketEndpointCandidates() []string {
+	if c.localMode {
+		return compactEndpoints(
+			c.endpoints.OpenClawWebSocketURL,
+			websocketEndpointFromPull(c.endpoints.OpenClawPullURL),
+			"/v1/openclaw/messages/ws",
+		)
+	}
 	return compactEndpoints(
 		c.endpoints.RuntimeWebSocketURL,
 		websocketEndpointFromPull(c.endpoints.RuntimePullURL),

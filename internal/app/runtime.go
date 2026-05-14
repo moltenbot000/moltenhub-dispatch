@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	HubRegionNA   = "na"
-	HubRegionEU   = "eu"
-	hubBaseDomain = "hub.molten.bot"
-	hubCatalogURL = "https://molten.bot/hubs.json"
+	HubRegionNA    = "na"
+	HubRegionEU    = "eu"
+	HubRegionLocal = "local"
+	hubBaseDomain  = "hub.molten.bot"
+	hubCatalogURL  = "https://molten.bot/hubs.json"
 )
 
 type HubRuntime struct {
@@ -61,6 +62,32 @@ func DefaultHubRuntime() HubRuntime {
 }
 
 func ResolveHubRuntime(region, hubURL string) (HubRuntime, error) {
+	if strings.EqualFold(strings.TrimSpace(region), HubRegionLocal) {
+		runtimeURL := strings.TrimSpace(hubURL)
+		if runtimeURL == "" {
+			runtimeURL = defaultLocalHubURL
+		}
+		runtimeURL = normalizeLocalHubRuntimeURL(runtimeURL)
+		if runtimeURL == "" {
+			return HubRuntime{}, fmt.Errorf("unsupported local hub runtime URL %q", strings.TrimSpace(hubURL))
+		}
+		return HubRuntime{
+			ID:          HubRegionLocal,
+			Label:       "Local",
+			Description: "Local Hub",
+			HubURL:      runtimeURL,
+		}, nil
+	}
+	if localHubModeFromEnv() {
+		if runtimeURL := normalizeLocalHubRuntimeURL(hubURL); runtimeURL != "" {
+			return HubRuntime{
+				ID:          HubRegionLocal,
+				Label:       "Local",
+				Description: "Local Hub",
+				HubURL:      runtimeURL,
+			}, nil
+		}
+	}
 	if runtime, ok := hubRuntimeByID(region); ok {
 		return runtime, nil
 	}
@@ -94,6 +121,11 @@ func hubRuntimeByURL(hubURL string) (HubRuntime, bool) {
 }
 
 func normalizeHubRuntimeURL(raw string) string {
+	if localHubModeFromEnv() {
+		if normalized := normalizeLocalHubRuntimeURL(raw); normalized != "" {
+			return normalized
+		}
+	}
 	normalized := NormalizeHubEndpointURL(raw)
 	if normalized == "" {
 		return ""
@@ -135,6 +167,52 @@ func NormalizeHubEndpointURL(raw string) string {
 	parsed.Scheme = "https"
 	parsed.Host = host
 	parsed.User = nil
+	return strings.TrimRight(parsed.String(), "/")
+}
+
+func NormalizeLocalHubEndpointURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(parsed.Scheme)) {
+	case "http", "https":
+	default:
+		return ""
+	}
+	if parsed.User != nil {
+		return ""
+	}
+	parsed.Scheme = strings.ToLower(strings.TrimSpace(parsed.Scheme))
+	parsed.User = nil
+	return strings.TrimRight(parsed.String(), "/")
+}
+
+func normalizeConfiguredHubEndpointURL(raw string) string {
+	if localHubModeFromEnv() {
+		return NormalizeLocalHubEndpointURL(raw)
+	}
+	return NormalizeHubEndpointURL(raw)
+}
+
+func normalizeLocalHubRuntimeURL(raw string) string {
+	normalized := NormalizeLocalHubEndpointURL(raw)
+	if normalized == "" {
+		return ""
+	}
+	parsed, err := url.Parse(normalized)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	parsed.Path = ""
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
 	return strings.TrimRight(parsed.String(), "/")
 }
 

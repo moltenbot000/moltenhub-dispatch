@@ -41,7 +41,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	if result.AgentToken == "" {
 		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing agent token"))
 	}
-	if rawAPIBase := strings.TrimSpace(result.APIBase); rawAPIBase != "" && NormalizeHubEndpointURL(rawAPIBase) == "" {
+	if rawAPIBase := strings.TrimSpace(result.APIBase); rawAPIBase != "" && normalizeConfiguredHubEndpointURL(rawAPIBase) == "" {
 		return WrapOnboardingError(OnboardingStepBind, fmt.Errorf("bind response returned unsupported api_base %q", rawAPIBase))
 	}
 	runtimeEndpoints := runtimeEndpointsFromBind(result)
@@ -50,8 +50,8 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}
 	runtimeEndpoints = sanitizeRuntimeEndpoints(runtimeEndpoints)
 	result.APIBase = coalesceTrimmed(
-		NormalizeHubEndpointURL(strings.TrimSpace(result.APIBase)),
-		NormalizeHubEndpointURL(runtimeAPIBaseFromSession(Session{
+		normalizeConfiguredHubEndpointURL(strings.TrimSpace(result.APIBase)),
+		normalizeConfiguredHubEndpointURL(runtimeAPIBaseFromSession(Session{
 			APIBase:             strings.TrimSpace(result.APIBase),
 			BaseURL:             strings.TrimSpace(result.APIBase),
 			ManifestURL:         runtimeEndpoints.ManifestURL,
@@ -66,7 +66,7 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 			RuntimeOfflineURL:   runtimeEndpoints.RuntimeOfflineURL,
 			OfflineURL:          runtimeEndpoints.RuntimeOfflineURL,
 		})),
-		NormalizeHubEndpointURL(defaultAPIBaseForHub(runtime.HubURL)),
+		configuredAPIBaseForHub(runtime.HubURL),
 	)
 	if result.APIBase == "" {
 		return WrapOnboardingError(OnboardingStepBind, errors.New("bind response missing supported api_base"))
@@ -79,29 +79,35 @@ func (s *Service) BindAndRegister(ctx context.Context, profile BindProfile) erro
 	}
 
 	if err := s.storeConnectedSession(runtime, Session{
-		BoundAt:             time.Now().UTC(),
-		APIBase:             result.APIBase,
-		AgentToken:          result.AgentToken,
-		BaseURL:             result.APIBase,
-		BindToken:           result.AgentToken,
-		AgentUUID:           result.AgentUUID,
-		AgentURI:            result.AgentURI,
-		Handle:              agentProfile.Handle,
-		HandleFinalized:     handleRequestedDuringBind,
-		DisplayName:         agentProfile.DisplayName,
-		Emoji:               agentProfile.Emoji,
-		ProfileBio:          agentProfile.ProfileMarkdown,
-		ManifestURL:         runtimeEndpoints.ManifestURL,
-		MetadataURL:         runtimeEndpoints.MetadataURL,
-		Capabilities:        runtimeEndpoints.CapabilitiesURL,
-		RuntimePullURL:      runtimeEndpoints.RuntimePullURL,
-		RuntimePushURL:      runtimeEndpoints.RuntimePushURL,
-		RuntimeAckURL:       runtimeEndpoints.RuntimeAckURL,
-		RuntimeNackURL:      runtimeEndpoints.RuntimeNackURL,
-		RuntimeStatusURL:    runtimeEndpoints.RuntimeStatusURL,
-		RuntimeWebSocketURL: runtimeEndpoints.RuntimeWebSocketURL,
-		RuntimeOfflineURL:   runtimeEndpoints.RuntimeOfflineURL,
-		OfflineURL:          runtimeEndpoints.RuntimeOfflineURL,
+		BoundAt:              time.Now().UTC(),
+		APIBase:              result.APIBase,
+		AgentToken:           result.AgentToken,
+		BaseURL:              result.APIBase,
+		BindToken:            result.AgentToken,
+		AgentUUID:            result.AgentUUID,
+		AgentURI:             result.AgentURI,
+		Handle:               agentProfile.Handle,
+		HandleFinalized:      handleRequestedDuringBind,
+		DisplayName:          agentProfile.DisplayName,
+		Emoji:                agentProfile.Emoji,
+		ProfileBio:           agentProfile.ProfileMarkdown,
+		ManifestURL:          runtimeEndpoints.ManifestURL,
+		MetadataURL:          runtimeEndpoints.MetadataURL,
+		Capabilities:         runtimeEndpoints.CapabilitiesURL,
+		RuntimePullURL:       runtimeEndpoints.RuntimePullURL,
+		RuntimePushURL:       runtimeEndpoints.RuntimePushURL,
+		RuntimeAckURL:        runtimeEndpoints.RuntimeAckURL,
+		RuntimeNackURL:       runtimeEndpoints.RuntimeNackURL,
+		RuntimeStatusURL:     runtimeEndpoints.RuntimeStatusURL,
+		RuntimeWebSocketURL:  runtimeEndpoints.RuntimeWebSocketURL,
+		RuntimeOfflineURL:    runtimeEndpoints.RuntimeOfflineURL,
+		OpenClawPullURL:      runtimeEndpoints.OpenClawPullURL,
+		OpenClawPushURL:      runtimeEndpoints.OpenClawPushURL,
+		OpenClawAckURL:       runtimeEndpoints.OpenClawAckURL,
+		OpenClawNackURL:      runtimeEndpoints.OpenClawNackURL,
+		OpenClawStatusURL:    runtimeEndpoints.OpenClawStatusURL,
+		OpenClawWebSocketURL: runtimeEndpoints.OpenClawWebSocketURL,
+		OfflineURL:           coalesceTrimmed(runtimeEndpoints.OpenClawOfflineURL, runtimeEndpoints.RuntimeOfflineURL),
 	}); err != nil {
 		return WrapOnboardingError(OnboardingStepBind, err)
 	}
@@ -140,7 +146,7 @@ func (s *Service) connectExistingAgent(ctx context.Context, runtime HubRuntime, 
 		return WrapOnboardingError(OnboardingStepBind, errors.New("agent token is required"))
 	}
 
-	apiBase := NormalizeHubEndpointURL(defaultAPIBaseForHub(runtime.HubURL))
+	apiBase := configuredAPIBaseForHub(runtime.HubURL)
 	if apiBase == "" {
 		return WrapOnboardingError(OnboardingStepBind, fmt.Errorf("runtime config missing supported api_base for %q", runtime.HubURL))
 	}

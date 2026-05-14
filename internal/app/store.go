@@ -18,6 +18,10 @@ const (
 	defaultDataDir                  = ".moltenhub"
 	defaultGoogleAnalyticsMeasureID = "G-BY33RFG2WB"
 	moltenHubRegionEnvVar           = "MOLTEN_HUB_REGION"
+	moltenHubURLEnvVar              = "MOLTEN_HUB_URL"
+	moltenHubAPIBaseEnvVar          = "MOLTEN_HUB_API_BASE"
+	moltenHubLocalModeEnvVar        = "MOLTEN_HUB_LOCAL_MODE"
+	defaultLocalHubURL              = "http://moltenhub:8080"
 )
 
 type Store struct {
@@ -311,17 +315,17 @@ func normalizeSessionAliases(session *Session) {
 	session.RuntimeStatusURL = runtimeEndpoints.RuntimeStatusURL
 	session.RuntimeWebSocketURL = runtimeEndpoints.RuntimeWebSocketURL
 	session.RuntimeOfflineURL = runtimeEndpoints.RuntimeOfflineURL
-	session.OpenClawPullURL = ""
-	session.OpenClawPushURL = ""
-	session.OpenClawAckURL = ""
-	session.OpenClawNackURL = ""
-	session.OpenClawStatusURL = ""
-	session.OpenClawWebSocketURL = ""
-	session.OfflineURL = runtimeEndpoints.RuntimeOfflineURL
+	session.OpenClawPullURL = runtimeEndpoints.OpenClawPullURL
+	session.OpenClawPushURL = runtimeEndpoints.OpenClawPushURL
+	session.OpenClawAckURL = runtimeEndpoints.OpenClawAckURL
+	session.OpenClawNackURL = runtimeEndpoints.OpenClawNackURL
+	session.OpenClawStatusURL = runtimeEndpoints.OpenClawStatusURL
+	session.OpenClawWebSocketURL = runtimeEndpoints.OpenClawWebSocketURL
+	session.OfflineURL = coalesceTrimmed(runtimeEndpoints.OpenClawOfflineURL, runtimeEndpoints.RuntimeOfflineURL)
 
-	session.APIBase = NormalizeHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))
+	session.APIBase = normalizeConfiguredHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))
 	if session.APIBase == "" {
-		session.APIBase = NormalizeHubEndpointURL(runtimeAPIBaseFromSession(*session))
+		session.APIBase = normalizeConfiguredHubEndpointURL(runtimeAPIBaseFromSession(*session))
 	}
 	session.BaseURL = session.APIBase
 }
@@ -459,6 +463,22 @@ func defaultRuntimeFromEnv() HubRuntime {
 }
 
 func runtimeFromEnv() (HubRuntime, error, bool) {
+	if localHubModeFromEnv() {
+		hubURL := defaultLocalHubURL
+		if value, ok := envValue(moltenHubURLEnvVar); ok {
+			hubURL = value
+		}
+		normalized := normalizeLocalHubRuntimeURL(hubURL)
+		if normalized == "" {
+			return HubRuntime{}, fmt.Errorf("%s=%q: unsupported local Hub URL", moltenHubURLEnvVar, hubURL), true
+		}
+		return HubRuntime{
+			ID:          HubRegionLocal,
+			Label:       "Local",
+			Description: "Local Hub",
+			HubURL:      normalized,
+		}, nil, true
+	}
 	region, ok := envValue(moltenHubRegionEnvVar)
 	if !ok {
 		return HubRuntime{}, nil, false
@@ -468,6 +488,29 @@ func runtimeFromEnv() (HubRuntime, error, bool) {
 		return HubRuntime{}, fmt.Errorf("%s=%q: %w", moltenHubRegionEnvVar, region, err), true
 	}
 	return runtime, nil, true
+}
+
+func localHubModeFromEnv() bool {
+	value, ok := envValue(moltenHubLocalModeEnvVar)
+	if !ok {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on", "local":
+		return true
+	default:
+		return false
+	}
+}
+
+func configuredAPIBaseForHub(hubURL string) string {
+	if localHubModeFromEnv() {
+		if value, ok := envValue(moltenHubAPIBaseEnvVar); ok {
+			return NormalizeLocalHubEndpointURL(value)
+		}
+		return NormalizeLocalHubEndpointURL(defaultAPIBaseForHub(hubURL))
+	}
+	return NormalizeHubEndpointURL(defaultAPIBaseForHub(hubURL))
 }
 
 func applyPersistedConfig(state *AppState, persisted persistedConfig) {

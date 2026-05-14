@@ -34,6 +34,12 @@ func decodePullResponsePayload(raw json.RawMessage, source string) (PullResponse
 		return PullResponse{}, fmt.Errorf("decode %s envelope: %w", source, err)
 	}
 	if !ok {
+		message, ok, err = decodeQueueMessagePayload(delivery.Message)
+		if err != nil {
+			return PullResponse{}, fmt.Errorf("decode %s message payload: %w", source, err)
+		}
+	}
+	if !ok {
 		message, ok, err = decodeOpenClawMessage(delivery.Message)
 		if err != nil {
 			return PullResponse{}, fmt.Errorf("decode %s message: %w", source, err)
@@ -57,6 +63,46 @@ func decodePullResponsePayload(raw json.RawMessage, source string) (PullResponse
 		ToAgentURI:      strings.TrimSpace(delivery.ToAgentURI),
 		OpenClawMessage: message,
 	}, nil
+}
+
+func decodeQueueMessagePayload(raw json.RawMessage) (OpenClawMessage, bool, error) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || !strings.HasPrefix(trimmed, "{") {
+		return OpenClawMessage{}, false, nil
+	}
+	var wrapped struct {
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return OpenClawMessage{}, false, err
+	}
+	payload := bytesTrimJSON(wrapped.Payload)
+	if len(payload) == 0 || string(payload) == "null" {
+		return OpenClawMessage{}, false, nil
+	}
+	if payload[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(payload, &encoded); err != nil {
+			return OpenClawMessage{}, false, err
+		}
+		encoded = strings.TrimSpace(encoded)
+		if encoded == "" {
+			return OpenClawMessage{}, false, nil
+		}
+		if !strings.HasPrefix(encoded, "{") {
+			return OpenClawMessage{}, false, nil
+		}
+		payload = json.RawMessage(encoded)
+	}
+	return decodeOpenClawMessage(payload)
+}
+
+func bytesTrimJSON(raw json.RawMessage) json.RawMessage {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" {
+		return nil
+	}
+	return json.RawMessage(trimmed)
 }
 
 func decodeOpenClawMessage(raw json.RawMessage) (OpenClawMessage, bool, error) {
