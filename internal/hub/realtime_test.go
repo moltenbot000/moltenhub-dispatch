@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -438,9 +439,128 @@ func TestConnectRuntimeMessagesStartsHeartbeatPing(t *testing.T) {
 	}
 }
 
+func TestConnectRuntimeMessagesPongsServerPingWithoutReceive(t *testing.T) {
+	t.Parallel()
+
+	pongSeen := make(chan []byte, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, rw := hijackWebsocketForTest(t, w, r)
+		defer conn.Close()
+		if err := writeWebsocketTextFrame(rw, `{"type":"session_ready"}`); err != nil {
+			t.Fatalf("write session_ready: %v", err)
+		}
+		if err := writeWebsocketControlFrame(rw, websocket.PingFrame, []byte("server-ping")); err != nil {
+			t.Fatalf("write ping: %v", err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("SetReadDeadline() error = %v", err)
+		}
+		opcode, payload, err := readClientFrame(rw.Reader)
+		if err != nil {
+			t.Fatalf("read client frame: %v", err)
+		}
+		if opcode == websocket.PongFrame {
+			pongSeen <- payload
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
+	if err != nil {
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
+	}
+	defer session.Close()
+
+	select {
+	case payload := <-pongSeen:
+		if string(payload) != "server-ping" {
+			t.Fatalf("pong payload = %q, want server-ping", string(payload))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("client pong not observed")
+	}
+}
+
+func TestConnectRuntimeMessagesKeepsIdleConnectionReadingUntilDelivery(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, rw := hijackWebsocketForTest(t, w, r)
+		defer conn.Close()
+		if err := writeWebsocketTextFrame(rw, `{"type":"session_ready"}`); err != nil {
+			t.Fatalf("write session_ready: %v", err)
+		}
+		for i := 0; i < 3; i++ {
+			if err := writeWebsocketControlFrame(rw, websocket.PingFrame, []byte("idle")); err != nil {
+				t.Fatalf("write ping: %v", err)
+			}
+			if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+				t.Fatalf("SetReadDeadline() error = %v", err)
+			}
+			opcode, _, err := readClientFrame(rw.Reader)
+			if err != nil {
+				t.Fatalf("read pong: %v", err)
+			}
+			if opcode != websocket.PongFrame {
+				t.Fatalf("client opcode = %d, want %d (pong)", opcode, websocket.PongFrame)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		delivery := `{"type":"delivery","result":{"delivery_id":"delivery-1","message":{"kind":"ack"}}}`
+		if err := writeWebsocketTextFrame(rw, delivery); err != nil {
+			t.Fatalf("write delivery: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	session, err := client.ConnectRuntimeMessages(context.Background(), "agent-token", "main")
+	if err != nil {
+		t.Fatalf("ConnectRuntimeMessages() error = %v", err)
+	}
+	defer session.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	message, err := session.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Receive() error = %v", err)
+	}
+	if message.DeliveryID != "delivery-1" {
+		t.Fatalf("delivery_id = %q, want delivery-1", message.DeliveryID)
+	}
+}
+
 func websocketAcceptKey(key string) string {
 	sum := sha1.Sum([]byte(strings.TrimSpace(key) + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
 	return base64.StdEncoding.EncodeToString(sum[:])
+}
+
+func hijackWebsocketForTest(t *testing.T, w http.ResponseWriter, r *http.Request) (net.Conn, *bufio.ReadWriter) {
+	t.Helper()
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		t.Fatal("response writer does not support hijacking")
+	}
+	conn, rw, err := hijacker.Hijack()
+	if err != nil {
+		t.Fatalf("Hijack() error = %v", err)
+	}
+
+	key := strings.TrimSpace(r.Header.Get("Sec-WebSocket-Key"))
+	if key == "" {
+		t.Fatal("missing Sec-WebSocket-Key")
+	}
+
+	fmt.Fprintf(rw, "HTTP/1.1 101 Switching Protocols\r\n")
+	fmt.Fprintf(rw, "Upgrade: websocket\r\n")
+	fmt.Fprintf(rw, "Connection: Upgrade\r\n")
+	fmt.Fprintf(rw, "Sec-WebSocket-Accept: %s\r\n\r\n", websocketAcceptKey(key))
+	if err := rw.Flush(); err != nil {
+		t.Fatalf("flush handshake: %v", err)
+	}
+	return conn, rw
 }
 
 func writeWebsocketTextFrame(w *bufio.ReadWriter, payload string) error {
@@ -461,38 +581,62 @@ func writeWebsocketTextFrame(w *bufio.ReadWriter, payload string) error {
 	return w.Flush()
 }
 
+func writeWebsocketControlFrame(w *bufio.ReadWriter, opcode byte, payload []byte) error {
+	if len(payload) > 125 {
+		return fmt.Errorf("websocket control frame too large: %d", len(payload))
+	}
+	frame := []byte{0x80 | (opcode & 0x0f), byte(len(payload))}
+	frame = append(frame, payload...)
+	if _, err := w.Write(frame); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
 func readClientFrameOpcode(r *bufio.Reader) (byte, error) {
+	opcode, _, err := readClientFrame(r)
+	return opcode, err
+}
+
+func readClientFrame(r *bufio.Reader) (byte, []byte, error) {
 	first, err := r.ReadByte()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	second, err := r.ReadByte()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	payloadLen := int(second & 0x7f)
 	switch payloadLen {
 	case 126:
-		if _, err := ioReadFullDiscard(r, 2); err != nil {
-			return 0, err
+		extended := make([]byte, 2)
+		if _, err := io.ReadFull(r, extended); err != nil {
+			return 0, nil, err
 		}
+		payloadLen = int(extended[0])<<8 | int(extended[1])
 	case 127:
 		if _, err := ioReadFullDiscard(r, 8); err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 	}
 
 	if second&0x80 == 0 {
-		return 0, fmt.Errorf("client frame missing mask bit")
+		return 0, nil, fmt.Errorf("client frame missing mask bit")
 	}
-	if _, err := ioReadFullDiscard(r, 4); err != nil {
-		return 0, err
+	mask := make([]byte, 4)
+	if _, err := io.ReadFull(r, mask); err != nil {
+		return 0, nil, err
 	}
-	if _, err := ioReadFullDiscard(r, payloadLen); err != nil {
-		return 0, err
+	payload := make([]byte, payloadLen)
+	if _, err := io.ReadFull(r, payload); err != nil {
+		return 0, nil, err
 	}
-	return first & 0x0f, nil
+	for i := range payload {
+		payload[i] ^= mask[i%4]
+	}
+	return first & 0x0f, payload, nil
 }
 
 func ioReadFullDiscard(r *bufio.Reader, n int) ([]byte, error) {

@@ -20,6 +20,7 @@ const (
 	hubPingRequestTimeout   = 6 * time.Second
 	wsFallbackWindow        = 30 * time.Second
 	wsUpgradeRetryWindow    = 5 * time.Second
+	wsUpgradeMaxRetryWindow = 30 * time.Second
 	hubDisconnectGrace      = 30 * time.Second
 )
 

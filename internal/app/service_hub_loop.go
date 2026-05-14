@@ -172,7 +172,8 @@ func (s *Service) runHTTPFallbackWindow(ctx context.Context, realtime realtimeHu
 	if wsRetryDelay <= 0 {
 		wsRetryDelay = wsUpgradeRetryWindow
 	}
-	nextWSAttempt := time.Now().Add(wsRetryDelay)
+	wsRetryAttempt := 0
+	nextWSAttempt := time.Now().Add(websocketReconnectDelay(wsRetryDelay, wsUpgradeMaxRetryWindow, wsRetryAttempt))
 
 	for {
 		if ctx.Err() != nil {
@@ -201,7 +202,6 @@ func (s *Service) runHTTPFallbackWindow(ctx context.Context, realtime realtimeHu
 				return err
 			}
 			if fallback {
-				s.noteRealtimeFallback(err)
 				if err := s.ensurePresenceOnline(ctx, ConnectionTransportHTTPLong); err != nil {
 					if isUnauthorizedHubError(err) {
 						return err
@@ -209,11 +209,13 @@ func (s *Service) runHTTPFallbackWindow(ctx context.Context, realtime realtimeHu
 					if !sleepWithContext(ctx, s.pollInterval()) {
 						return ctx.Err()
 					}
-					nextWSAttempt = time.Now().Add(wsRetryDelay)
+					wsRetryAttempt++
+					nextWSAttempt = time.Now().Add(websocketReconnectDelay(wsRetryDelay, wsUpgradeMaxRetryWindow, wsRetryAttempt))
 					continue
 				}
 			}
-			nextWSAttempt = time.Now().Add(wsRetryDelay)
+			wsRetryAttempt++
+			nextWSAttempt = time.Now().Add(websocketReconnectDelay(wsRetryDelay, wsUpgradeMaxRetryWindow, wsRetryAttempt))
 		}
 		if time.Now().After(deadline) {
 			return nil
@@ -222,6 +224,30 @@ func (s *Service) runHTTPFallbackWindow(ctx context.Context, realtime realtimeHu
 			return ctx.Err()
 		}
 	}
+}
+
+func websocketReconnectDelay(base, max time.Duration, attempt int) time.Duration {
+	if base <= 0 {
+		base = wsUpgradeRetryWindow
+	}
+	if max <= 0 {
+		max = wsUpgradeMaxRetryWindow
+	}
+	delay := base
+	for i := 0; i < attempt && delay < max; i++ {
+		delay *= 2
+		if delay > max {
+			delay = max
+		}
+	}
+	if delay <= 0 {
+		return base
+	}
+	jitterRange := delay / 4
+	if jitterRange <= 0 {
+		return delay
+	}
+	return delay + time.Duration(time.Now().UnixNano()%int64(jitterRange))
 }
 
 func (s *Service) waitForHubReachable(ctx context.Context) error {
