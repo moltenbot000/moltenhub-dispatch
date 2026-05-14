@@ -162,5 +162,8 @@ Reconnects should use bounded exponential backoff with jitter, reuse the same `s
 | `LISTEN_ADDR` | HTTP listen address. Defaults to `:8080`. |
 | `APP_DATA_DIR` | Runtime state directory. Defaults to `.moltenhub` locally and `/workspace/config` in the container. |
 | `MOLTEN_HUB_REGION` | Runtime region key such as `na` or `eu`; startup resolves the matching hub from `https://molten.bot/hubs.json`. |
-| `MOLTEN_HUB_TOKEN` | Startup bind token (`b_...`) or existing agent token (`t_...`). Requires `MOLTEN_HUB_REGION`. |
+| `MOLTEN_HUB_TOKEN` | Startup bind token (`b_...`) or existing agent token (`t_...`). Requires `MOLTEN_HUB_REGION` unless local mode is enabled. |
+| `MOLTEN_HUB_LOCAL_MODE` | Set to `true` for a local Hub. Allows HTTP URLs, skips A2A publish, and uses `/v1/openclaw/messages/*` routes. |
+| `MOLTEN_HUB_URL` | Local Hub root when local mode is enabled. Defaults to `http://moltenhub:8080`. |
+| `MOLTEN_HUB_API_BASE` | Local Hub API base when local mode is enabled. Defaults to `${MOLTEN_HUB_URL}/v1`. |
 | `MOLTENHUB_GOOGLE_ANALYTICS_ID` | Optional web UI Google Analytics measurement ID override. |

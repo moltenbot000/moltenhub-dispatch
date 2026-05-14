@@ -169,6 +169,12 @@ func TestRuntimeURLHelpersCoverUnknownBranches(t *testing.T) {
 	if got := normalizeHubRuntimeURL("https://runtime.eu.hub.molten.bot/v1/runtime/messages/ws"); got != "https://eu.hub.molten.bot" {
 		t.Fatalf("normalizeHubRuntimeURL runtime endpoint = %q", got)
 	}
+	if runtime, err := ResolveHubRuntime(HubRegionLocal, "http://moltenhub:8080/v1"); err != nil || runtime.HubURL != "http://moltenhub:8080" {
+		t.Fatalf("ResolveHubRuntime local = %#v, %v", runtime, err)
+	}
+	if got := NormalizeLocalHubEndpointURL("http://moltenhub:8080/v1/openclaw/messages/pull"); got != "http://moltenhub:8080/v1/openclaw/messages/pull" {
+		t.Fatalf("NormalizeLocalHubEndpointURL = %q, want http endpoint", got)
+	}
 	if got, ok := runtimeFromHost("runtime.eu.hub.molten.bot"); !ok || got.ID != HubRegionEU {
 		t.Fatalf("runtimeFromHost runtime host = %#v", got)
 	}

@@ -801,6 +801,48 @@ func TestPublishRuntimeMessageDoesNotFallbackToOpenClawCompatibility(t *testing.
 	}
 }
 
+func TestPublishRuntimeMessageLocalModeUsesOpenClawAndSkipsA2A(t *testing.T) {
+	t.Parallel()
+
+	var sawOpenClaw bool
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/a2a", "/v1/runtime/messages/publish":
+			t.Fatalf("unexpected non-local route: %s", r.URL.Path)
+		case "/v1/openclaw/messages/publish":
+			sawOpenClaw = true
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":     true,
+			"result": map[string]any{"message_id": "message-1", "delivery": "queued"},
+		})
+	}))
+
+	client := hub.NewClient(server.URL)
+	client.SetLocalMode(true)
+	response, err := client.PublishRuntimeMessage(context.Background(), "agent-token", hub.PublishRequest{
+		ToAgentUUID: "worker-1",
+		ClientMsgID: "client-msg-1",
+		PreferA2A:   true,
+		Message: hub.OpenClawMessage{
+			Type:      "skill_request",
+			RequestID: "request-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("publish runtime in local mode: %v", err)
+	}
+	if !sawOpenClaw {
+		t.Fatal("expected openclaw publish route")
+	}
+	if response.MessageID != "message-1" {
+		t.Fatalf("message id = %q, want message-1", response.MessageID)
+	}
+}
+
 func TestPullRuntimeMessageDecodesA2AWrappedRuntimeDataPart(t *testing.T) {
 	t.Parallel()
 
@@ -1318,6 +1360,49 @@ func TestPullRuntimeMessageDoesNotFallbackToOpenClawCompatibilityWhenRuntimeRout
 	}
 	if !sawRuntime || sawOpenClaw {
 		t.Fatalf("expected runtime only, sawRuntime=%v sawOpenClaw=%v", sawRuntime, sawOpenClaw)
+	}
+}
+
+func TestPullRuntimeMessageLocalModeUsesOpenClawAndDecodesQueuePayload(t *testing.T) {
+	t.Parallel()
+
+	var sawOpenClaw bool
+	server := newLoopbackServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/runtime/messages/pull":
+			t.Fatalf("unexpected runtime route")
+		case "/v1/openclaw/messages/pull":
+			sawOpenClaw = true
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"delivery_id": "delivery-1",
+				"message": map[string]any{
+					"id":      "queue-message-1",
+					"payload": `{"protocol":"runtime.envelope.v1","type":"skill_result","request_id":"request-1","payload":{"ok":true}}`,
+				},
+			},
+		})
+	}))
+
+	client := hub.NewClient(server.URL)
+	client.SetLocalMode(true)
+	pull, ok, err := client.PullRuntimeMessage(context.Background(), "agent-token", 5*time.Second)
+	if err != nil {
+		t.Fatalf("pull runtime in local mode: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected pull message")
+	}
+	if !sawOpenClaw {
+		t.Fatal("expected openclaw pull route")
+	}
+	if got := pull.OpenClawMessage.Type; got != "skill_result" {
+		t.Fatalf("message type = %q, want skill_result", got)
 	}
 }
 

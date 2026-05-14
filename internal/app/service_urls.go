@@ -10,17 +10,23 @@ import (
 
 func runtimeEndpointsFromBind(result hub.BindResponse) hub.RuntimeEndpoints {
 	return runtimeEndpointsFromSession(Session{
-		ManifestURL:         result.Endpoints.Manifest,
-		Capabilities:        result.Endpoints.Capabilities,
-		MetadataURL:         result.Endpoints.Metadata,
-		RuntimePullURL:      result.Endpoints.RuntimePull,
-		RuntimePushURL:      result.Endpoints.RuntimePush,
-		RuntimeAckURL:       result.Endpoints.RuntimeAck,
-		RuntimeNackURL:      result.Endpoints.RuntimeNack,
-		RuntimeStatusURL:    result.Endpoints.RuntimeStatus,
-		RuntimeWebSocketURL: result.Endpoints.RuntimeWebSocket,
-		RuntimeOfflineURL:   result.Endpoints.RuntimeOffline,
-		OfflineURL:          result.Endpoints.RuntimeOffline,
+		ManifestURL:          result.Endpoints.Manifest,
+		Capabilities:         result.Endpoints.Capabilities,
+		MetadataURL:          result.Endpoints.Metadata,
+		RuntimePullURL:       result.Endpoints.RuntimePull,
+		RuntimePushURL:       result.Endpoints.RuntimePush,
+		RuntimeAckURL:        result.Endpoints.RuntimeAck,
+		RuntimeNackURL:       result.Endpoints.RuntimeNack,
+		RuntimeStatusURL:     result.Endpoints.RuntimeStatus,
+		RuntimeWebSocketURL:  result.Endpoints.RuntimeWebSocket,
+		RuntimeOfflineURL:    result.Endpoints.RuntimeOffline,
+		OpenClawPullURL:      result.Endpoints.OpenClawPull,
+		OpenClawPushURL:      result.Endpoints.OpenClawPush,
+		OpenClawAckURL:       result.Endpoints.OpenClawAck,
+		OpenClawNackURL:      result.Endpoints.OpenClawNack,
+		OpenClawStatusURL:    result.Endpoints.OpenClawStatus,
+		OpenClawWebSocketURL: result.Endpoints.OpenClawWebSocket,
+		OfflineURL:           coalesceTrimmed(result.Endpoints.Offline, result.Endpoints.RuntimeOffline),
 	})
 }
 
@@ -111,33 +117,45 @@ func runtimeAPIBaseFromEndpoint(raw string) string {
 
 func runtimeEndpointsFromSession(session Session) hub.RuntimeEndpoints {
 	return hub.RuntimeEndpoints{
-		ManifestURL:         strings.TrimSpace(session.ManifestURL),
-		CapabilitiesURL:     strings.TrimSpace(session.Capabilities),
-		MetadataURL:         strings.TrimSpace(session.MetadataURL),
-		RuntimePullURL:      strings.TrimSpace(session.RuntimePullURL),
-		RuntimePushURL:      strings.TrimSpace(session.RuntimePushURL),
-		RuntimeAckURL:       strings.TrimSpace(session.RuntimeAckURL),
-		RuntimeNackURL:      strings.TrimSpace(session.RuntimeNackURL),
-		RuntimeStatusURL:    strings.TrimSpace(session.RuntimeStatusURL),
-		RuntimeWebSocketURL: strings.TrimSpace(session.RuntimeWebSocketURL),
-		RuntimeOfflineURL:   strings.TrimSpace(session.RuntimeOfflineURL),
-		OpenClawOfflineURL:  strings.TrimSpace(session.RuntimeOfflineURL),
+		ManifestURL:          strings.TrimSpace(session.ManifestURL),
+		CapabilitiesURL:      strings.TrimSpace(session.Capabilities),
+		MetadataURL:          strings.TrimSpace(session.MetadataURL),
+		RuntimePullURL:       strings.TrimSpace(session.RuntimePullURL),
+		RuntimePushURL:       strings.TrimSpace(session.RuntimePushURL),
+		RuntimeAckURL:        strings.TrimSpace(session.RuntimeAckURL),
+		RuntimeNackURL:       strings.TrimSpace(session.RuntimeNackURL),
+		RuntimeStatusURL:     strings.TrimSpace(session.RuntimeStatusURL),
+		RuntimeWebSocketURL:  strings.TrimSpace(session.RuntimeWebSocketURL),
+		RuntimeOfflineURL:    strings.TrimSpace(session.RuntimeOfflineURL),
+		OpenClawPullURL:      strings.TrimSpace(session.OpenClawPullURL),
+		OpenClawPushURL:      strings.TrimSpace(session.OpenClawPushURL),
+		OpenClawAckURL:       strings.TrimSpace(session.OpenClawAckURL),
+		OpenClawNackURL:      strings.TrimSpace(session.OpenClawNackURL),
+		OpenClawStatusURL:    strings.TrimSpace(session.OpenClawStatusURL),
+		OpenClawWebSocketURL: strings.TrimSpace(session.OpenClawWebSocketURL),
+		OpenClawOfflineURL:   strings.TrimSpace(coalesceTrimmed(session.OfflineURL, session.RuntimeOfflineURL)),
 	}
 }
 
 func sanitizeRuntimeEndpoints(endpoints hub.RuntimeEndpoints) hub.RuntimeEndpoints {
 	return hub.RuntimeEndpoints{
-		ManifestURL:         NormalizeHubEndpointURL(endpoints.ManifestURL),
-		CapabilitiesURL:     NormalizeHubEndpointURL(endpoints.CapabilitiesURL),
-		MetadataURL:         NormalizeHubEndpointURL(endpoints.MetadataURL),
-		RuntimePullURL:      NormalizeHubEndpointURL(endpoints.RuntimePullURL),
-		RuntimePushURL:      NormalizeHubEndpointURL(endpoints.RuntimePushURL),
-		RuntimeAckURL:       NormalizeHubEndpointURL(endpoints.RuntimeAckURL),
-		RuntimeNackURL:      NormalizeHubEndpointURL(endpoints.RuntimeNackURL),
-		RuntimeStatusURL:    NormalizeHubEndpointURL(endpoints.RuntimeStatusURL),
-		RuntimeWebSocketURL: NormalizeHubEndpointURL(endpoints.RuntimeWebSocketURL),
-		RuntimeOfflineURL:   NormalizeHubEndpointURL(endpoints.RuntimeOfflineURL),
-		OpenClawOfflineURL:  NormalizeHubEndpointURL(endpoints.RuntimeOfflineURL),
+		ManifestURL:          normalizeConfiguredHubEndpointURL(endpoints.ManifestURL),
+		CapabilitiesURL:      normalizeConfiguredHubEndpointURL(endpoints.CapabilitiesURL),
+		MetadataURL:          normalizeConfiguredHubEndpointURL(endpoints.MetadataURL),
+		RuntimePullURL:       normalizeConfiguredHubEndpointURL(endpoints.RuntimePullURL),
+		RuntimePushURL:       normalizeConfiguredHubEndpointURL(endpoints.RuntimePushURL),
+		RuntimeAckURL:        normalizeConfiguredHubEndpointURL(endpoints.RuntimeAckURL),
+		RuntimeNackURL:       normalizeConfiguredHubEndpointURL(endpoints.RuntimeNackURL),
+		RuntimeStatusURL:     normalizeConfiguredHubEndpointURL(endpoints.RuntimeStatusURL),
+		RuntimeWebSocketURL:  normalizeConfiguredHubEndpointURL(endpoints.RuntimeWebSocketURL),
+		RuntimeOfflineURL:    normalizeConfiguredHubEndpointURL(endpoints.RuntimeOfflineURL),
+		OpenClawPullURL:      normalizeConfiguredHubEndpointURL(endpoints.OpenClawPullURL),
+		OpenClawPushURL:      normalizeConfiguredHubEndpointURL(endpoints.OpenClawPushURL),
+		OpenClawAckURL:       normalizeConfiguredHubEndpointURL(endpoints.OpenClawAckURL),
+		OpenClawNackURL:      normalizeConfiguredHubEndpointURL(endpoints.OpenClawNackURL),
+		OpenClawStatusURL:    normalizeConfiguredHubEndpointURL(endpoints.OpenClawStatusURL),
+		OpenClawWebSocketURL: normalizeConfiguredHubEndpointURL(endpoints.OpenClawWebSocketURL),
+		OpenClawOfflineURL:   normalizeConfiguredHubEndpointURL(coalesceTrimmed(endpoints.OpenClawOfflineURL, endpoints.RuntimeOfflineURL)),
 	}
 }
 
@@ -165,7 +183,7 @@ func invalidRuntimeEndpoints(endpoints hub.RuntimeEndpoints) []string {
 		if value == "" {
 			continue
 		}
-		if NormalizeHubEndpointURL(value) == "" {
+		if normalizeConfiguredHubEndpointURL(value) == "" {
 			invalid = append(invalid, fmt.Sprintf("%s=%q", field.name, value))
 		}
 	}
@@ -173,9 +191,9 @@ func invalidRuntimeEndpoints(endpoints hub.RuntimeEndpoints) []string {
 }
 
 func hubConnectionTarget(apiBase, fallback string) (string, string) {
-	baseURL := NormalizeHubEndpointURL(apiBase)
+	baseURL := normalizeConfiguredHubEndpointURL(apiBase)
 	if baseURL == "" {
-		baseURL = NormalizeHubEndpointURL(fallback)
+		baseURL = normalizeConfiguredHubEndpointURL(fallback)
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	if baseURL == "" {

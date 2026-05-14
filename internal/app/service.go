@@ -71,6 +71,10 @@ type runtimeEndpointSetter interface {
 	SetRuntimeEndpoints(endpoints hub.RuntimeEndpoints)
 }
 
+type localModeSetter interface {
+	SetLocalMode(enabled bool)
+}
+
 func NewService(store *Store, hubClient HubClient) *Service {
 	snapshot := store.Snapshot()
 	service := &Service{
@@ -122,9 +126,15 @@ func (s *Service) ConsumeFlash() (FlashMessage, error) {
 
 func (s *Service) configureHubClient(state AppState) {
 	baseURL := runtimeAPIBaseFromSession(state.Session)
+	if localHubModeFromEnv() {
+		if apiBase, ok := envValue(moltenHubAPIBaseEnvVar); ok {
+			baseURL = apiBase
+		}
+	}
 	if baseURL == "" {
 		baseURL = strings.TrimSpace(state.Settings.HubURL)
 	}
+	s.setHubLocalMode(localHubModeFromEnv())
 	s.setHubBaseURL(baseURL)
 	s.setRuntimeEndpoints(runtimeEndpointsFromSession(state.Session))
 }
@@ -146,7 +156,7 @@ func (s *Service) storeConnectedSession(runtime HubRuntime, session Session) err
 		session.BoundAt = now
 	}
 	session.HubURL = runtime.HubURL
-	session.APIBase = NormalizeHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))
+	session.APIBase = normalizeConfiguredHubEndpointURL(coalesceTrimmed(session.APIBase, session.BaseURL))
 	session.BaseURL = session.APIBase
 	session.OfflineMarked = false
 
@@ -167,12 +177,18 @@ func (s *Service) storeConnectedSession(runtime HubRuntime, session Session) err
 }
 
 func (s *Service) setHubBaseURL(baseURL string) {
-	baseURL = NormalizeHubEndpointURL(baseURL)
+	baseURL = normalizeConfiguredHubEndpointURL(baseURL)
 	if baseURL == "" {
 		return
 	}
 	if setter, ok := s.hub.(baseURLSetter); ok {
 		setter.SetBaseURL(baseURL)
+	}
+}
+
+func (s *Service) setHubLocalMode(enabled bool) {
+	if setter, ok := s.hub.(localModeSetter); ok {
+		setter.SetLocalMode(enabled)
 	}
 }
 

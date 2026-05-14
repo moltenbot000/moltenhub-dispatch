@@ -21,6 +21,7 @@ type Client struct {
 	httpClient *http.Client
 	userAgent  string
 	endpoints  RuntimeEndpoints
+	localMode  bool
 }
 
 type APIError struct {
@@ -194,6 +195,10 @@ func (c *Client) SetHTTPClient(client *http.Client) {
 	}
 }
 
+func (c *Client) SetLocalMode(enabled bool) {
+	c.localMode = enabled
+}
+
 func (c *Client) BindAgent(ctx context.Context, req BindRequest) (BindResponse, error) {
 	bindToken := strings.TrimSpace(req.BindToken)
 	if bindToken == "" {
@@ -269,7 +274,7 @@ func (c *Client) GetCapabilities(ctx context.Context, token string) (map[string]
 }
 
 func (c *Client) PublishRuntimeMessage(ctx context.Context, token string, req PublishRequest) (PublishResponse, error) {
-	if req.PreferA2A {
+	if !c.localMode && req.PreferA2A {
 		out, err := c.publishRuntimeA2A(ctx, token, req)
 		if err == nil {
 			return out, nil
@@ -278,7 +283,7 @@ func (c *Client) PublishRuntimeMessage(ctx context.Context, token string, req Pu
 			return PublishResponse{}, fmt.Errorf("a2a publish: %w", err)
 		}
 	}
-	if c.canPublishRuntimeViaA2A(req) {
+	if !c.localMode && c.canPublishRuntimeViaA2A(req) {
 		out, err := c.publishRuntimeViaA2A(ctx, token, req)
 		if err == nil {
 			return out, nil
@@ -339,16 +344,23 @@ func (c *Client) PullRuntimeMessage(ctx context.Context, token string, timeout t
 			return PullResponse{}, false, err
 		}
 
+		rawBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return PullResponse{}, false, fmt.Errorf("read pull response: %w", err)
+		}
 		envelope := struct {
 			OK     bool            `json:"ok"`
 			Result json.RawMessage `json:"result"`
 		}{}
-		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-			resp.Body.Close()
+		if err := json.Unmarshal(rawBody, &envelope); err != nil {
 			return PullResponse{}, false, fmt.Errorf("decode pull response: %w", err)
 		}
-		resp.Body.Close()
-		result, err := decodePullResponsePayload(envelope.Result, "pull response")
+		resultPayload := envelope.Result
+		if len(bytes.TrimSpace(resultPayload)) == 0 {
+			resultPayload = rawBody
+		}
+		result, err := decodePullResponsePayload(resultPayload, "pull response")
 		if err != nil {
 			return PullResponse{}, false, err
 		}
@@ -428,6 +440,12 @@ func (c *Client) runtimeEndpoint(override, fallback string) string {
 }
 
 func (c *Client) publishRuntimeEndpointCandidates() []string {
+	if c.localMode {
+		return compactEndpoints(
+			c.endpoints.OpenClawPushURL,
+			"/v1/openclaw/messages/publish",
+		)
+	}
 	return compactEndpoints(
 		c.endpoints.RuntimePushURL,
 		"/v1/runtime/messages/publish",
@@ -435,6 +453,12 @@ func (c *Client) publishRuntimeEndpointCandidates() []string {
 }
 
 func (c *Client) pullRuntimeEndpointCandidates() []string {
+	if c.localMode {
+		return compactEndpoints(
+			c.endpoints.OpenClawPullURL,
+			"/v1/openclaw/messages/pull",
+		)
+	}
 	return compactEndpoints(
 		c.endpoints.RuntimePullURL,
 		"/v1/runtime/messages/pull",
@@ -442,6 +466,12 @@ func (c *Client) pullRuntimeEndpointCandidates() []string {
 }
 
 func (c *Client) offlineRuntimeEndpointCandidates() []string {
+	if c.localMode {
+		return compactEndpoints(
+			c.endpoints.OpenClawOfflineURL,
+			"/v1/openclaw/messages/offline",
+		)
+	}
 	return compactEndpoints(
 		c.endpoints.RuntimeOfflineURL,
 		"/v1/runtime/messages/offline",
@@ -460,10 +490,23 @@ func (c *Client) runtimeDeliveryEndpointCandidates(action string) []string {
 	switch action {
 	case "ack":
 		runtimeActionURL = c.endpoints.RuntimeAckURL
+		if c.localMode {
+			runtimeActionURL = c.endpoints.OpenClawAckURL
+		}
 	case "nack":
 		runtimeActionURL = c.endpoints.RuntimeNackURL
+		if c.localMode {
+			runtimeActionURL = c.endpoints.OpenClawNackURL
+		}
 	}
 
+	if c.localMode {
+		return compactEndpoints(
+			runtimeActionURL,
+			deliveryEndpointFromPull(c.endpoints.OpenClawPullURL, action),
+			"/v1/openclaw/messages/"+action,
+		)
+	}
 	return compactEndpoints(
 		runtimeActionURL,
 		deliveryEndpointFromPull(c.endpoints.RuntimePullURL, action),

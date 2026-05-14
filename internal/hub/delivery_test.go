@@ -114,3 +114,30 @@ func TestDecodePullResponsePayloadWithA2AStringMessage(t *testing.T) {
 		t.Fatalf("payload = %#v, want Hub still connected.", response.OpenClawMessage.Payload)
 	}
 }
+
+func TestDecodePullResponsePayloadWithQueueMessagePayloadString(t *testing.T) {
+	t.Parallel()
+
+	raw := json.RawMessage(`{
+		"delivery_id": "delivery-1",
+		"message": {
+			"id": "queue-message-1",
+			"payload": "{\"protocol\":\"runtime.envelope.v1\",\"type\":\"skill_result\",\"request_id\":\"request-1\",\"payload\":{\"ok\":true}}"
+		}
+	}`)
+
+	response, err := decodePullResponsePayload(raw, "pull response")
+	if err != nil {
+		t.Fatalf("decode pull response: %v", err)
+	}
+	if response.OpenClawMessage.Type != "skill_result" {
+		t.Fatalf("type = %q, want skill_result", response.OpenClawMessage.Type)
+	}
+	if response.OpenClawMessage.RequestID != "request-1" {
+		t.Fatalf("request_id = %q, want request-1", response.OpenClawMessage.RequestID)
+	}
+	payload, ok := response.OpenClawMessage.Payload.(map[string]any)
+	if !ok || payload["ok"] != true {
+		t.Fatalf("payload = %#v, want ok true", response.OpenClawMessage.Payload)
+	}
+}
