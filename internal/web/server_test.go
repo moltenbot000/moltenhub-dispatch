@@ -3362,7 +3362,7 @@ func TestHandleIndexHidesSubActionsUntilBoundAndConnected(t *testing.T) {
 	}
 }
 
-func TestHandleIndexShowsOnboardingErrorWhenTokenExistsButHubStatusIsOffline(t *testing.T) {
+func TestHandleIndexKeepsBoundConsoleVisibleWhenHubStatusIsOffline(t *testing.T) {
 	t.Parallel()
 
 	server, err := New(&stubService{
@@ -3391,20 +3391,20 @@ func TestHandleIndexShowsOnboardingErrorWhenTokenExistsButHubStatusIsOffline(t *
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="false"`) {
-		t.Fatalf("expected forced onboarding modal while hub is offline, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="true"`) || !strings.Contains(body, `hidden`) {
+		t.Fatalf("expected profile modal to stay hidden while hub is offline, body=%s", body)
 	}
-	if !strings.Contains(body, `inert aria-hidden="true"`) {
-		t.Fatalf("expected app shell to be inert while hub is offline, body=%s", body)
+	if strings.Contains(body, `data-bound="true"`+"\n"+`    data-connected-agent-count="1"`+"\n"+`    inert aria-hidden="true"`) {
+		t.Fatalf("did not expect bound app shell to be inert while hub is offline, body=%s", body)
 	}
-	if !strings.Contains(body, `class="onboarding-message is-error"`) || !strings.Contains(body, `publish failed`) {
-		t.Fatalf("expected hub connection error in onboarding status, body=%s", body)
+	if !strings.Contains(body, `Sub-actions stay hidden while the Hub connection is offline or unavailable.`) {
+		t.Fatalf("expected offline dispatch guidance in main console, body=%s", body)
 	}
 	if !strings.Contains(body, `action="/profile"`) || !strings.Contains(body, `id="agent-disconnect-submit"`) {
 		t.Fatalf("expected bound profile form with disconnect option while token is present, body=%s", body)
 	}
-	if strings.Contains(body, `id="agent-profile-modal-close"`) {
-		t.Fatalf("did not expect close control while forced onboarding is blocking the app, body=%s", body)
+	if !strings.Contains(body, `id="agent-profile-modal-close"`) {
+		t.Fatalf("expected profile modal to remain closeable when opened from settings, body=%s", body)
 	}
 }
 
@@ -3939,8 +3939,8 @@ func TestHandleBindShowsEditProfileAfterSessionBecomesBound(t *testing.T) {
 	if strings.Contains(body, `name="bind_token"`) {
 		t.Fatalf("did not expect bind token field after session became bound, body=%s", body)
 	}
-	if !strings.Contains(body, "Connect to Hub") || !strings.Contains(body, `class="onboarding-message is-error"`) {
-		t.Fatalf("expected forced connection error after bound session is still offline, body=%s", body)
+	if !strings.Contains(body, `id="onboarding-modal-backdrop"`) || !strings.Contains(body, `aria-hidden="true"`) || !strings.Contains(body, `hidden`) {
+		t.Fatalf("expected profile modal to stay hidden after bound session is still offline, body=%s", body)
 	}
 	if !strings.Contains(body, `id="bind-form"`) || !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `action="/profile"`) {
 		t.Fatalf("expected bound profile form after session became bound, body=%s", body)
@@ -4733,8 +4733,11 @@ func TestHandleIndexSyncsShellInteractivityFromLiveHubStatus(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `data-bound="true"`) || !strings.Contains(body, `inert aria-hidden="true"`) {
-		t.Fatalf("expected initial disconnected bound shell to be inert, body=%s", body)
+	if !strings.Contains(body, `data-bound="true"`) {
+		t.Fatalf("expected bound shell marker, body=%s", body)
+	}
+	if strings.Contains(body, `data-bound="true"`+"\n"+`    data-connected-agent-count="1"`+"\n"+`    inert aria-hidden="true"`) {
+		t.Fatalf("did not expect initial disconnected bound shell to be inert, body=%s", body)
 	}
 	if !strings.Contains(body, `const syncShellInteractivity = (connected = isHubConnectedState()) => {`) {
 		t.Fatalf("expected live status shell interactivity helper, body=%s", body)
@@ -4745,8 +4748,8 @@ func TestHandleIndexSyncsShellInteractivityFromLiveHubStatus(t *testing.T) {
 	if !strings.Contains(body, `shell.setAttribute("aria-hidden", "false");`) {
 		t.Fatalf("expected live hub connection to expose shell to interaction, body=%s", body)
 	}
-	if !strings.Contains(body, `onboardingModalBackdrop.dataset.connectionBlocker = "false";`) {
-		t.Fatalf("expected live hub connection to close startup connection blocker, body=%s", body)
+	if strings.Contains(body, `onboardingModalBackdrop.dataset.connectionBlocker = "true";`+"\n"+`        onboardingModalBackdrop.hidden = false;`) {
+		t.Fatalf("did not expect live hub sync to open profile modal as a connection blocker, body=%s", body)
 	}
 	if !strings.Contains(body, `syncShellInteractivity(connected);`) {
 		t.Fatalf("expected hub status rendering to sync shell interactivity, body=%s", body)

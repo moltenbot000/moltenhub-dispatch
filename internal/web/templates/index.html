@@ -29,7 +29,7 @@
     class="shell"
     data-bound="{{if .State.Session.AgentToken}}true{{else}}false{{end}}"
     data-connected-agent-count="{{len .State.ConnectedAgents}}"
-    {{if not .Connection.HubConnected}}inert aria-hidden="true"{{end}}
+    {{if not .State.Session.AgentToken}}inert aria-hidden="true"{{end}}
   >
     <header class="page-header">
       <div class="brand-lockup">
@@ -418,20 +418,20 @@
     id="onboarding-modal-backdrop"
     role="dialog"
     aria-modal="true"
-    aria-hidden="{{if .Connection.HubConnected}}true{{else}}false{{end}}"
+    aria-hidden="{{if .State.Session.AgentToken}}true{{else}}false{{end}}"
     aria-labelledby="onboarding-modal-title"
     aria-describedby="onboarding-modal-summary"
-    {{if .Connection.HubConnected}}hidden{{end}}
+    {{if .State.Session.AgentToken}}hidden{{end}}
   >
     <section class="onboarding-modal form-surface">
       <div class="onboarding-modal-shell">
         <header class="onboarding-modal-sidebar">
           <div class="onboarding-modal-header">
             <p class="eyebrow">Molten Hub Dispatch</p>
-            <h2 id="onboarding-modal-title">{{if and .State.Session.AgentToken .Connection.HubConnected}}Agent Profile{{else}}Connect to Hub{{end}}</h2>
-            <p id="onboarding-modal-summary">{{if .State.Session.AgentToken}}{{if .Connection.HubConnected}}Update how this agent appears in Molten Hub.{{else}}Molten Hub is not connected.{{end}}{{else}}Get your agent token from Molten Hub.{{end}}</p>
+            <h2 id="onboarding-modal-title">{{if .State.Session.AgentToken}}Agent Profile{{else}}Connect to Hub{{end}}</h2>
+            <p id="onboarding-modal-summary">{{if .State.Session.AgentToken}}Update how this agent appears in Molten Hub.{{else}}Get your agent token from Molten Hub.{{end}}</p>
           </div>
-          {{if not (and .State.Session.AgentToken .Connection.HubConnected)}}
+          {{if not .State.Session.AgentToken}}
           <a class="onboarding-signin-link" href="https://app.molten.bot/signin?target=hub" target="_blank" rel="noopener noreferrer">
             <span>Agent Token</span>
             <i data-lucide="external-link" aria-hidden="true"></i>
@@ -498,7 +498,7 @@
               <i data-lucide="unlink" aria-hidden="true"></i>
             </button>
             {{end}}
-            {{if and .State.Session.AgentToken .Connection.HubConnected}}
+            {{if .State.Session.AgentToken}}
             <button type="button" class="settings-modal-close onboarding-modal-close" id="agent-profile-modal-close" aria-label="Close agent profile" title="Close">
               <i data-lucide="x" aria-hidden="true"></i>
             </button>
@@ -2158,7 +2158,7 @@
       const syncShellInteractivity = (connected = isHubConnectedState()) => {
         const usable = Boolean(connected);
         if (shell instanceof HTMLElement) {
-          if (bound && usable) {
+          if (bound) {
             shell.inert = false;
             shell.removeAttribute("inert");
             shell.setAttribute("aria-hidden", "false");
@@ -2171,19 +2171,12 @@
         if (!(onboardingModalBackdrop instanceof HTMLElement) || !bound) {
           return;
         }
-        if (usable) {
-          if (onboardingModalBackdrop.dataset.connectionBlocker === "true" || !(agentSettingsModalClose instanceof HTMLButtonElement)) {
-            onboardingModalBackdrop.hidden = true;
-            onboardingModalBackdrop.setAttribute("aria-hidden", "true");
-            onboardingModalBackdrop.dataset.connectionBlocker = "false";
-            document.body.classList.remove("onboarding-modal-open");
-          }
-          return;
+        if (usable && onboardingModalBackdrop.dataset.connectionBlocker === "true") {
+          onboardingModalBackdrop.hidden = true;
+          onboardingModalBackdrop.setAttribute("aria-hidden", "true");
+          onboardingModalBackdrop.dataset.connectionBlocker = "false";
+          document.body.classList.remove("onboarding-modal-open");
         }
-        onboardingModalBackdrop.dataset.connectionBlocker = "true";
-        onboardingModalBackdrop.hidden = false;
-        onboardingModalBackdrop.setAttribute("aria-hidden", "false");
-        document.body.classList.add("onboarding-modal-open");
       };
 
       const syncSubActions = (state = latestHubConnectionState) => {
